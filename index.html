@@ -171,12 +171,12 @@ const LEAD_SHEETS = {
 };
 
 const KPI_TARGETS = {
-  linkCTR: 0.009,
+  linkCTR: 0.90,    // 0.90% — values are already in percentage form
   linkCPC: 3.00,
   cpm: 20.00,
   frequency: 2.50,
   surveyPct: 2.00,
-  osaPct: 20
+  osaPct: 20         // 20% — values normalized to percentage form during parsing
 };
 
 let allAccounts = [];
@@ -190,6 +190,14 @@ let currentManager = null;
 function getTodayStr() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Normalize percentage values: if value is between 0 and 1 (exclusive), multiply by 100
+// This handles sheets that store 15% as 0.15 vs 15
+function normPct(v) {
+  if (v === null || v === undefined) return null;
+  if (v > 0 && v < 1) return v * 100;
+  return v;
 }
 
 async function fetchSheetData(sheetName, gid) {
@@ -290,7 +298,7 @@ function parseSheetData(data, podName) {
       continue;
     }
 
-    const hasAdAccountId = cellC && String(cellC).replace(/\s/g,'').length > 10 && /^\d+$/.test(String(cellC).replace(/\s/g,''));
+    const hasAdAccountId = cellC && String(cellC).replace(/\s/g,'').length > 5 && /^\d+$/.test(String(cellC).replace(/\s/g,''));
 
     const cellBStr = String(cellB).trim();
     const cellBLower = cellBStr.toLowerCase();
@@ -308,7 +316,7 @@ function parseSheetData(data, podName) {
 
       const bookedGoal = getNum(row, 5);
       const gregGoal = getNum(row, 6);
-      const cplGoal = getNum(row, 11);
+      const cpaGoal = getNum(row, 11);
       const dailyBudget = getNum(row, 13);
       const monthlyBudget = getNum(row, 14);
 
@@ -319,7 +327,7 @@ function parseSheetData(data, podName) {
         section: currentSection,
         manager: currentMgr || 'Unassigned',
         isPaused: isPausedStatus,
-        bookedGoal, gregGoal, cplGoal, dailyBudget, monthlyBudget,
+        bookedGoal, gregGoal, cpaGoal, dailyBudget, monthlyBudget,
         cycles: []
       });
       continue;
@@ -340,19 +348,19 @@ function parseSheetData(data, podName) {
         bookedGoal: getNum(row, 5),
         gregGoal: getNum(row, 6),
         totalLeads: getNum(row, 7),
-        osaPct: getNum(row, 8),
+        osaPct: normPct(getNum(row, 8)),        // NORMALIZED: handles 0.15 → 15
         bookedAppts: getNum(row, 9),
         estBookedAppts: getNum(row, 10),
-        cplGoal: getNum(row, 11),
-        cpl: getNum(row, 12),
+        cpaGoal: getNum(row, 11),
+        cpa: getNum(row, 12),
         dailyBudget: getNum(row, 13),
         monthlyBudget: getNum(row, 14),
         amountSpent: getNum(row, 15),
-        linkCTR: getNum(row, 16),
+        linkCTR: getNum(row, 16),               // Already in % form (1.04 = 1.04%)
         linkCPC: getNum(row, 17),
         cpm: getNum(row, 18),
         frequency: getNum(row, 19),
-        surveyPct: getNum(row, 20),
+        surveyPct: normPct(getNum(row, 20)),     // NORMALIZED
         accountManager: rowMgr || currentMgr,
         notes: row.c[22] ? (row.c[22].v || '') : '',
         goodToBill: row.c[23] ? (row.c[23].v || '') : '',
@@ -383,18 +391,32 @@ function getDate(row, idx) {
   const v = cell.v;
   if (!v) return null;
 
-  if (cell.f) {
-    const d = new Date(cell.f);
-    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
-    return cell.f;
-  }
-
+  // Try parsing Date() format first (most reliable from gviz)
   if (typeof v === 'string' && v.includes('Date(')) {
     const m = v.match(/Date\((\d+),(\d+),(\d+)/);
     if (m) return `${m[1]}-${String(Number(m[2])+1).padStart(2,'0')}-${m[3].padStart(2,'0')}`;
   }
 
-  if (typeof v === 'string') return v;
+  // Try formatted value
+  if (cell.f) {
+    const d = new Date(cell.f);
+    if (!isNaN(d.getTime())) return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    return cell.f;
+  }
+
+  // Try raw string value
+  if (typeof v === 'string') {
+    const d = new Date(v);
+    if (!isNaN(d.getTime())) return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    return v;
+  }
+
+  // Numeric (Excel serial date) — convert
+  if (typeof v === 'number') {
+    const d = new Date((v - 25569) * 86400 * 1000);
+    if (!isNaN(d.getTime())) return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
   return String(v);
 }
 
@@ -415,6 +437,21 @@ async function loadAllData() {
   allAccounts = [...podResults[0].accounts, ...podResults[1].accounts];
   allCycles = [...podResults[0].cycles, ...podResults[1].cycles];
   allLeads = [...leadResults[0], ...leadResults[1]];
+
+  // Debug: log account count and manager distribution
+  console.log(`Total accounts parsed: ${allAccounts.length}, Total cycles: ${allCycles.length}`);
+  const mgrCounts = {};
+  allAccounts.forEach(a => {
+    const m = a.manager || 'Unassigned';
+    mgrCounts[m] = (mgrCounts[m] || 0) + 1;
+  });
+  console.log('Manager distribution (account-level):', mgrCounts);
+  const cycleMgrCounts = {};
+  allCycles.forEach(c => {
+    const m = c.accountManager || c.manager || 'Unassigned';
+    cycleMgrCounts[m] = (cycleMgrCounts[m] || 0) + 1;
+  });
+  console.log('Manager distribution (cycle-level):', cycleMgrCounts);
 
   // Populate account dropdown
   const sel = document.getElementById('account-select');
@@ -478,6 +515,10 @@ function fmtPct(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return n.toFixed(0) + '%';
 }
+function fmtPctDec(n, decimals = 2) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return n.toFixed(decimals) + '%';
+}
 function fmtDate(dateStr) {
   if (!dateStr || dateStr === '—') return '—';
   const d = new Date(dateStr);
@@ -490,13 +531,14 @@ function osaColor(v) {
   if (v === null || v === undefined) return 'text-dark-400';
   return v < KPI_TARGETS.osaPct ? 'metric-good' : 'metric-bad';
 }
-function cplColor(v, goal) {
+function cpaColor(v, goal) {
   if (v === null || v === undefined) return 'text-dark-400';
   if (!goal) return 'metric-neutral';
   return v <= goal ? 'metric-good' : 'metric-bad';
 }
 function ctrColor(v) {
   if (v === null || v === undefined || v === 0) return 'text-dark-400';
+  // v is already in percentage form (1.04 = 1.04%), compare to target also in % form
   return v >= KPI_TARGETS.linkCTR ? 'metric-good' : 'metric-bad';
 }
 function cpcColor(v) {
@@ -571,20 +613,18 @@ function onTrackBadge(cycle) {
 // ═══════════════════════════════════════════════
 // MANAGER & ALERTS LOGIC
 // ═══════════════════════════════════════════════
+// FIX: Check ALL cycles and account-level manager, not just active cycle
 function getAccountsByManager(mgrName) {
-  const today = getTodayStr();
+  const mgrLower = mgrName.toLowerCase();
   return allAccounts.filter(a => {
-    const acctCycles = a.cycles || [];
-    // Find active cycle (containing today)
-    const activeCycle = acctCycles.find(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today);
-    if (!activeCycle) {
-      // No active cycle — check account-level manager and include as inactive
-      const m = (a.manager || '').toLowerCase();
-      return m === mgrName.toLowerCase() || m.includes(mgrName.toLowerCase());
-    }
-    // Use the active cycle's account manager
-    const mgr = (activeCycle.accountManager || activeCycle.manager || a.manager || '').toLowerCase();
-    return mgr === mgrName.toLowerCase() || mgr.includes(mgrName.toLowerCase());
+    // Check account-level manager
+    const acctMgr = (a.manager || '').toLowerCase();
+    if (acctMgr === mgrLower || acctMgr.includes(mgrLower)) return true;
+    // Check ANY cycle for this manager name
+    return (a.cycles || []).some(c => {
+      const mgr = (c.accountManager || c.manager || '').toLowerCase();
+      return mgr === mgrLower || mgr.includes(mgrLower);
+    });
   });
 }
 
@@ -597,10 +637,10 @@ function getAlertAccountsForManager(mgrName) {
     const issues = [];
 
     if (active.osaPct !== null && active.osaPct >= KPI_TARGETS.osaPct && active.totalLeads > 5) issues.push({ type: 'danger', msg: `High OSA: ${fmtPct(active.osaPct)}` });
-    if (acct.cplGoal && active.cpl && active.cpl > acct.cplGoal * 1.5) issues.push({ type: 'danger', msg: `CPL ${fmtDollar(active.cpl,2)} far exceeds goal ${fmtDollar(acct.cplGoal,2)}` });
-    else if (acct.cplGoal && active.cpl && active.cpl > acct.cplGoal * 1.15) issues.push({ type: 'warning', msg: `CPL ${fmtDollar(active.cpl,2)} above goal ${fmtDollar(acct.cplGoal,2)}` });
+    if (acct.cpaGoal && active.cpa && active.cpa > acct.cpaGoal * 1.5) issues.push({ type: 'danger', msg: `CPA ${fmtDollar(active.cpa,2)} far exceeds goal ${fmtDollar(acct.cpaGoal,2)}` });
+    else if (acct.cpaGoal && active.cpa && active.cpa > acct.cpaGoal * 1.15) issues.push({ type: 'warning', msg: `CPA ${fmtDollar(active.cpa,2)} above goal ${fmtDollar(acct.cpaGoal,2)}` });
     if (active.totalLeads !== null && active.totalLeads === 0) issues.push({ type: 'danger', msg: 'Zero leads this cycle' });
-    if (active.linkCTR !== null && active.linkCTR > 0 && active.linkCTR < KPI_TARGETS.linkCTR) issues.push({ type: 'warning', msg: `Low CTR: ${(active.linkCTR * 100).toFixed(2)}%` });
+    if (active.linkCTR !== null && active.linkCTR > 0 && active.linkCTR < KPI_TARGETS.linkCTR) issues.push({ type: 'warning', msg: `Low CTR: ${fmtPctDec(active.linkCTR)}` });
     if (active.frequency !== null && active.frequency > 4) issues.push({ type: 'warning', msg: `High frequency: ${active.frequency.toFixed(1)}` });
 
     // On-track check
@@ -619,7 +659,7 @@ function getAllAlerts() {
     if (!active) return;
     const issues = [];
     if (active.osaPct !== null && active.osaPct >= KPI_TARGETS.osaPct && active.totalLeads > 5) issues.push({ type: 'danger', msg: `High OSA: ${fmtPct(active.osaPct)}` });
-    if (acct.cplGoal && active.cpl && active.cpl > acct.cplGoal * 1.5) issues.push({ type: 'danger', msg: `CPL ${fmtDollar(active.cpl,2)} far exceeds goal` });
+    if (acct.cpaGoal && active.cpa && active.cpa > acct.cpaGoal * 1.5) issues.push({ type: 'danger', msg: `CPA ${fmtDollar(active.cpa,2)} far exceeds goal` });
     if (active.totalLeads !== null && active.totalLeads === 0) issues.push({ type: 'danger', msg: 'Zero leads this cycle' });
     const track = isOnTrack(active);
     if (track === false) issues.push({ type: 'warning', msg: `Off track: Est. ${fmt(active.estBookedAppts)} / ${fmt(active.bookedGoal)} goal` });
@@ -694,7 +734,7 @@ function renderDashboard() {
   const inactive = allAccounts.filter(a => !hasActiveCycle(a));
   const alerts = getAllAlerts();
 
-  let totalLeads = 0, totalSpent = 0, totalBooked = 0, cplValues = [], osaValues = [];
+  let totalLeads = 0, totalSpent = 0, totalBooked = 0, cpaValues = [], osaValues = [];
 
   active.forEach(a => {
     const c = getActiveCycle(a.name, a.adAccountId);
@@ -702,40 +742,40 @@ function renderDashboard() {
     if (c.totalLeads) totalLeads += c.totalLeads;
     if (c.amountSpent) totalSpent += c.amountSpent;
     if (c.bookedAppts) totalBooked += c.bookedAppts;
-    if (c.cpl && c.cpl > 0) cplValues.push(c.cpl);
+    if (c.cpa && c.cpa > 0) cpaValues.push(c.cpa);
     if (c.osaPct !== null) osaValues.push(c.osaPct);
   });
 
-  const avgCPL = cplValues.length ? cplValues.reduce((a,b)=>a+b,0)/cplValues.length : 0;
+  const avgCPA = cpaValues.length ? cpaValues.reduce((a,b)=>a+b,0)/cpaValues.length : 0;
   const avgOSA = osaValues.length ? osaValues.reduce((a,b)=>a+b,0)/osaValues.length : 0;
 
   const managers = ['Cole', 'Jonathan', 'Tyler'];
   function mgrStats(name) {
     const accts = getAccountsByManager(name).filter(a => hasActiveCycle(a));
-    let leads=0, spent=0, booked=0, cpls=[], alertCount=0;
+    let leads=0, spent=0, booked=0, cpas=[], alertCount=0;
     accts.forEach(a => {
       const c = getActiveCycle(a.name, a.adAccountId);
       if (!c) return;
       if (c.totalLeads) leads += c.totalLeads;
       if (c.amountSpent) spent += c.amountSpent;
       if (c.bookedAppts) booked += c.bookedAppts;
-      if (c.cpl && c.cpl > 0) cpls.push(c.cpl);
+      if (c.cpa && c.cpa > 0) cpas.push(c.cpa);
     });
     alertCount = getAlertAccountsForManager(name).length;
-    return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.length, alertCount };
+    return { leads, spent, booked, avgCPA: cpas.length ? cpas.reduce((a,b)=>a+b,0)/cpas.length : 0, count: accts.length, alertCount };
   }
 
   function podStats(accts) {
-    let leads=0, spent=0, booked=0, cpls=[];
+    let leads=0, spent=0, booked=0, cpas=[];
     accts.filter(a => hasActiveCycle(a)).forEach(a => {
       const c = getActiveCycle(a.name, a.adAccountId);
       if (!c) return;
       if (c.totalLeads) leads += c.totalLeads;
       if (c.amountSpent) spent += c.amountSpent;
       if (c.bookedAppts) booked += c.bookedAppts;
-      if (c.cpl && c.cpl > 0) cpls.push(c.cpl);
+      if (c.cpa && c.cpa > 0) cpas.push(c.cpa);
     });
-    return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.filter(a => hasActiveCycle(a)).length };
+    return { leads, spent, booked, avgCPA: cpas.length ? cpas.reduce((a,b)=>a+b,0)/cpas.length : 0, count: accts.filter(a => hasActiveCycle(a)).length };
   }
   const p1 = podStats(getAccountsByPod('Pod 1 - RoofIgnite'));
   const p2 = podStats(getAccountsByPod('Pod 2 - RoofIgnite'));
@@ -758,8 +798,8 @@ function renderDashboard() {
         <div class="text-xs text-dark-300 mt-1">${fmt(totalBooked)} booked</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Avg CPL</div>
-        <div class="text-2xl font-bold text-white">${fmtDollar(avgCPL, 2)}</div>
+        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Avg CPA</div>
+        <div class="text-2xl font-bold text-white">${fmtDollar(avgCPA, 2)}</div>
         <div class="text-xs text-dark-300 mt-1">across active</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
@@ -793,7 +833,7 @@ function renderDashboard() {
           <div class="grid grid-cols-3 gap-3">
             <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(s.leads)}</div></div>
             <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(s.booked)}</div></div>
-            <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(s.avgCPL,2)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase">Avg CPA</div><div class="text-white font-semibold">${fmtDollar(s.avgCPA,2)}</div></div>
           </div>
         </div>`;
       }).join('')}
@@ -809,7 +849,7 @@ function renderDashboard() {
         <div class="grid grid-cols-3 gap-3">
           <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p2.leads)}</div></div>
           <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p2.booked)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(p2.avgCPL,2)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPA</div><div class="text-white font-semibold">${fmtDollar(p2.avgCPA,2)}</div></div>
         </div>
       </div>
       <div class="glass rounded-xl p-5">
@@ -820,7 +860,7 @@ function renderDashboard() {
         <div class="grid grid-cols-3 gap-3">
           <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p1.leads)}</div></div>
           <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p1.booked)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(p1.avgCPL,2)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPA</div><div class="text-white font-semibold">${fmtDollar(p1.avgCPA,2)}</div></div>
         </div>
       </div>
     </div>
@@ -839,8 +879,8 @@ function renderDashboard() {
 
     <div class="grid grid-cols-2 gap-4">
       <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">CPL Distribution (Active Cycle)</h3>
-        <div class="chart-container"><canvas id="chart-cpl-dist"></canvas></div>
+        <h3 class="text-white font-semibold mb-3">CPA Distribution (Active Cycle)</h3>
+        <div class="chart-container"><canvas id="chart-cpa-dist"></canvas></div>
       </div>
       <div class="glass rounded-xl p-5">
         <h3 class="text-white font-semibold mb-3">OSA Rate by Account</h3>
@@ -883,25 +923,25 @@ function renderDashboard() {
     </div>
   `).join('') || '<div class="text-dark-400 text-sm text-center py-4">All clear!</div>';
 
-  renderCPLDistChart();
+  renderCPADistChart();
   renderOSAChart();
 }
 
-function renderCPLDistChart() {
-  const ctx = document.getElementById('chart-cpl-dist');
+function renderCPADistChart() {
+  const ctx = document.getElementById('chart-cpa-dist');
   if (!ctx) return;
   const active = allAccounts.filter(a => hasActiveCycle(a));
   const data = active.map(a => {
     const c = getActiveCycle(a.name, a.adAccountId);
-    return c && c.cpl > 0 ? { name: a.name, cpl: c.cpl, goal: a.cplGoal || c.cplGoal } : null;
-  }).filter(Boolean).sort((a,b) => a.cpl - b.cpl).slice(0, 20);
+    return c && c.cpa > 0 ? { name: a.name, cpa: c.cpa, goal: a.cpaGoal || c.cpaGoal } : null;
+  }).filter(Boolean).sort((a,b) => a.cpa - b.cpa).slice(0, 20);
 
   new Chart(ctx, {
     type: 'bar',
     data: {
       labels: data.map(d => d.name.length > 15 ? d.name.substring(0,15)+'...' : d.name),
-      datasets: [{ label: 'CPL', data: data.map(d => d.cpl),
-        backgroundColor: data.map(d => d.goal && d.cpl > d.goal ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)'), borderRadius: 4 }]
+      datasets: [{ label: 'CPA', data: data.map(d => d.cpa),
+        backgroundColor: data.map(d => d.goal && d.cpa > d.goal ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)'), borderRadius: 4 }]
     },
     options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
@@ -1019,8 +1059,8 @@ function renderAccountTable(active, inactive, mgrName) {
               <th class="text-right py-3 px-4 font-medium">OSA %</th>
               <th class="text-right py-3 px-4 font-medium">Est. Bkd</th>
               <th class="text-right py-3 px-4 font-medium">Goal</th>
-              <th class="text-right py-3 px-4 font-medium">CPL</th>
-              <th class="text-right py-3 px-4 font-medium">CPL Goal</th>
+              <th class="text-right py-3 px-4 font-medium">CPA</th>
+              <th class="text-right py-3 px-4 font-medium">CPA Goal</th>
               <th class="text-right py-3 px-4 font-medium">Spent</th>
               <th class="text-right py-3 px-4 font-medium">CTR</th>
               <th class="text-right py-3 px-4 font-medium">CPC</th>
@@ -1031,7 +1071,7 @@ function renderAccountTable(active, inactive, mgrName) {
           <tbody>
             ${active.map(a => {
               const c = getActiveCycle(a.name, a.adAccountId);
-              const cplGoal = a.cplGoal || (c && c.cplGoal);
+              const cpaGoal = a.cpaGoal || (c && c.cpaGoal);
               return `
                 <tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                   <td class="py-3 px-4">
@@ -1044,10 +1084,10 @@ function renderAccountTable(active, inactive, mgrName) {
                   <td class="py-3 px-4 text-right"><span class="${c ? osaColor(c.osaPct) : 'text-dark-400'}">${c ? fmtPct(c.osaPct) : '—'}</span></td>
                   <td class="py-3 px-4 text-right text-white">${c ? fmt(c.estBookedAppts) : '—'}</td>
                   <td class="py-3 px-4 text-right text-dark-400">${c ? fmt(c.bookedGoal) : '—'}</td>
-                  <td class="py-3 px-4 text-right"><span class="${c ? cplColor(c.cpl, cplGoal) : 'text-dark-400'}">${c ? fmtDollar(c.cpl,2) : '—'}</span></td>
-                  <td class="py-3 px-4 text-right text-dark-400">${cplGoal ? fmtDollar(cplGoal,2) : '—'}</td>
+                  <td class="py-3 px-4 text-right"><span class="${c ? cpaColor(c.cpa, cpaGoal) : 'text-dark-400'}">${c ? fmtDollar(c.cpa,2) : '—'}</span></td>
+                  <td class="py-3 px-4 text-right text-dark-400">${cpaGoal ? fmtDollar(cpaGoal,2) : '—'}</td>
                   <td class="py-3 px-4 text-right text-white">${c ? fmtDollar(c.amountSpent,2) : '—'}</td>
-                  <td class="py-3 px-4 text-right"><span class="${c ? ctrColor(c.linkCTR) : 'text-dark-400'}">${c && c.linkCTR ? (c.linkCTR*100).toFixed(2)+'%' : '—'}</span></td>
+                  <td class="py-3 px-4 text-right"><span class="${c ? ctrColor(c.linkCTR) : 'text-dark-400'}">${c && c.linkCTR ? fmtPctDec(c.linkCTR) : '—'}</span></td>
                   <td class="py-3 px-4 text-right"><span class="${c ? cpcColor(c.linkCPC) : 'text-dark-400'}">${c ? fmtDollar(c.linkCPC,2) : '—'}</span></td>
                   <td class="py-3 px-4 text-right"><span class="${c ? freqColor(c.frequency) : 'text-dark-400'}">${c && c.frequency ? c.frequency.toFixed(1) : '—'}</span></td>
                   <td class="py-3 px-4 text-center">${onTrackBadge(c)}</td>
@@ -1079,7 +1119,7 @@ function renderAccountDetail(name, adAccountId) {
 
   const cycles = acct.cycles || [];
   const activeCyc = getActiveCycle(name, adAccountId);
-  const cplGoal = acct.cplGoal || (activeCyc && activeCyc.cplGoal);
+  const cpaGoal = acct.cpaGoal || (activeCyc && activeCyc.cpaGoal);
   const isActive = hasActiveCycle(acct);
 
   el.innerHTML = `
@@ -1112,9 +1152,9 @@ function renderAccountDetail(name, adAccountId) {
         <div class="text-xs text-dark-400">Goal: ${fmt(activeCyc.bookedGoal)} (80% = ${activeCyc.bookedGoal ? fmt(Math.ceil(activeCyc.bookedGoal * 0.8)) : '—'})</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">CPL</div>
-        <div class="text-xl font-bold ${cplColor(activeCyc.cpl, cplGoal)} mt-1">${fmtDollar(activeCyc.cpl,2)}</div>
-        <div class="text-xs text-dark-400">Goal: ${fmtDollar(cplGoal,2)}</div>
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider">CPA</div>
+        <div class="text-xl font-bold ${cpaColor(activeCyc.cpa, cpaGoal)} mt-1">${fmtDollar(activeCyc.cpa,2)}</div>
+        <div class="text-xs text-dark-400">Goal: ${fmtDollar(cpaGoal,2)}</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Amount Spent</div>
@@ -1132,8 +1172,8 @@ function renderAccountDetail(name, adAccountId) {
     <!-- Trend Charts -->
     <div class="grid grid-cols-2 gap-4 mb-6">
       <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">CPL Trend</h3>
-        <div class="chart-container"><canvas id="chart-acct-cpl"></canvas></div>
+        <h3 class="text-white font-semibold mb-3">CPA Trend</h3>
+        <div class="chart-container"><canvas id="chart-acct-cpa"></canvas></div>
       </div>
       <div class="glass rounded-xl p-5">
         <h3 class="text-white font-semibold mb-3">Leads & Bookings</h3>
@@ -1159,8 +1199,8 @@ function renderAccountDetail(name, adAccountId) {
               <th class="text-right py-2.5 px-3 font-medium">OSA %</th>
               <th class="text-right py-2.5 px-3 font-medium">Booked</th>
               <th class="text-right py-2.5 px-3 font-medium">Est. Bkd</th>
-              <th class="text-right py-2.5 px-3 font-medium">CPL Goal</th>
-              <th class="text-right py-2.5 px-3 font-medium">CPL</th>
+              <th class="text-right py-2.5 px-3 font-medium">CPA Goal</th>
+              <th class="text-right py-2.5 px-3 font-medium">CPA</th>
               <th class="text-right py-2.5 px-3 font-medium">Spent</th>
               <th class="text-right py-2.5 px-3 font-medium">CTR</th>
               <th class="text-right py-2.5 px-3 font-medium">CPC</th>
@@ -1173,7 +1213,7 @@ function renderAccountDetail(name, adAccountId) {
             ${cycles.map((c) => {
               const today = getTodayStr();
               const isActiveCyc = c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today;
-              const cGoal = acct.cplGoal || c.cplGoal;
+              const cGoal = acct.cpaGoal || c.cpaGoal;
               return `
               <tr class="table-row border-b border-dark-700/50 ${isActiveCyc ? 'bg-brand-500/5' : ''}">
                 <td class="py-2.5 px-3 text-white font-medium whitespace-nowrap">${c.cycle} ${isActiveCyc ? '<span class="badge badge-blue ml-1">Active</span>' : ''}</td>
@@ -1184,10 +1224,10 @@ function renderAccountDetail(name, adAccountId) {
                 <td class="py-2.5 px-3 text-right"><span class="${osaColor(c.osaPct)}">${fmtPct(c.osaPct)}</span></td>
                 <td class="py-2.5 px-3 text-right text-white">${fmt(c.bookedAppts)}</td>
                 <td class="py-2.5 px-3 text-right text-white">${fmt(c.estBookedAppts)}</td>
-                <td class="py-2.5 px-3 text-right text-dark-400">${fmtDollar(c.cplGoal,2)}</td>
-                <td class="py-2.5 px-3 text-right"><span class="${cplColor(c.cpl, cGoal)}">${fmtDollar(c.cpl,2)}</span></td>
+                <td class="py-2.5 px-3 text-right text-dark-400">${fmtDollar(c.cpaGoal,2)}</td>
+                <td class="py-2.5 px-3 text-right"><span class="${cpaColor(c.cpa, cGoal)}">${fmtDollar(c.cpa,2)}</span></td>
                 <td class="py-2.5 px-3 text-right text-white">${fmtDollar(c.amountSpent,2)}</td>
-                <td class="py-2.5 px-3 text-right"><span class="${ctrColor(c.linkCTR)}">${c.linkCTR ? (c.linkCTR*100).toFixed(2)+'%' : '—'}</span></td>
+                <td class="py-2.5 px-3 text-right"><span class="${ctrColor(c.linkCTR)}">${c.linkCTR ? fmtPctDec(c.linkCTR) : '—'}</span></td>
                 <td class="py-2.5 px-3 text-right"><span class="${cpcColor(c.linkCPC)}">${fmtDollar(c.linkCPC,2)}</span></td>
                 <td class="py-2.5 px-3 text-right"><span class="${cpmColor(c.cpm)}">${fmtDollar(c.cpm,2)}</span></td>
                 <td class="py-2.5 px-3 text-right"><span class="${freqColor(c.frequency)}">${c.frequency ? c.frequency.toFixed(2) : '—'}</span></td>
@@ -1207,7 +1247,7 @@ function renderAccountDetail(name, adAccountId) {
   `;
 
   if (cycles.length > 1) {
-    renderAccountCPLChart(cycles, acct.cplGoal);
+    renderAccountCPAChart(cycles, acct.cpaGoal);
     renderAccountLeadsChart(cycles);
   }
 
@@ -1339,8 +1379,8 @@ function renderLeadBreakdown(acct, cycles) {
   `;
 }
 
-function renderAccountCPLChart(cycles, goalCPL) {
-  const ctx = document.getElementById('chart-acct-cpl');
+function renderAccountCPAChart(cycles, goalCPA) {
+  const ctx = document.getElementById('chart-acct-cpa');
   if (!ctx) return;
   const labels = cycles.map(c => c.cycle.replace('Cycle ','C'));
   new Chart(ctx, {
@@ -1348,8 +1388,8 @@ function renderAccountCPLChart(cycles, goalCPL) {
     data: {
       labels,
       datasets: [
-        { label: 'CPL', data: cycles.map(c => c.cpl), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#f97316' },
-        ...(goalCPL ? [{ label: 'Goal', data: cycles.map(() => goalCPL), borderColor: 'rgba(148,163,184,0.4)', borderDash: [5,5], pointRadius: 0, fill: false }] : [])
+        { label: 'CPA', data: cycles.map(c => c.cpa), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#f97316' },
+        ...(goalCPA ? [{ label: 'Goal', data: cycles.map(() => goalCPA), borderColor: 'rgba(148,163,184,0.4)', borderDash: [5,5], pointRadius: 0, fill: false }] : [])
       ]
     },
     options: { responsive: true, maintainAspectRatio: false,
