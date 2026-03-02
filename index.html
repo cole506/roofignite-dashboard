@@ -1498,45 +1498,150 @@ function renderBilling() {
   const el = document.getElementById('view-billing');
   el.classList.remove('hidden');
 
+  const today = getTodayStr();
+  const todayMs = new Date(today).getTime();
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+
+  // Gather billing data from ALL cycles (not just active ones)
   const billingData = [];
-  allAccounts.filter(a => hasActiveCycle(a)).forEach(a => {
-    const c = getActiveCycle(a.name, a.adAccountId);
-    if (!c) return;
-    billingData.push({ account: a, cycle: c.cycle, spent: c.amountSpent,
-      goodToBill: c.goodToBill, billed: c.billed, billingNotes: c.billingNotes,
-      monthlyBudget: a.monthlyBudget || c.monthlyBudget });
+  allAccounts.forEach(a => {
+    const cycles = (a.cycles || []).length ? a.cycles : [];
+    // If no cycles, check the account itself
+    if (!cycles.length) return;
+    cycles.forEach(c => {
+      const endMs = c.cycleEndDate ? new Date(c.cycleEndDate).getTime() : null;
+      const startMs = c.cycleStartDate ? new Date(c.cycleStartDate).getTime() : null;
+      const cycleEnded = endMs ? endMs < todayMs : false;
+      const dueSoon = endMs ? (!cycleEnded && (endMs - todayMs) <= weekMs && (endMs - todayMs) >= 0) : false;
+      const isActive = startMs && endMs ? (startMs <= todayMs && endMs >= todayMs) : false;
+      const gtb = (c.goodToBill || '').trim().toLowerCase();
+      const bld = (c.billed || '').trim().toLowerCase();
+
+      billingData.push({
+        account: a,
+        cycle: c.cycle,
+        cycleEndDate: c.cycleEndDate,
+        spent: c.amountSpent,
+        goodToBill: c.goodToBill || '',
+        billed: c.billed || '',
+        billingNotes: c.billingNotes || '',
+        monthlyBudget: a.monthlyBudget || c.monthlyBudget,
+        cycleEnded,
+        dueSoon,
+        isActive,
+        // Billing states
+        isBilled: gtb === 'yes' && bld === 'yes',
+        isReadyToBill: gtb === 'yes' && bld !== 'yes' && cycleEnded,
+        isOverdue: cycleEnded && bld !== 'yes' && (gtb === 'no' || gtb === 'try again' || gtb === ''),
+        isDueSoon: dueSoon && bld !== 'yes',
+        isRetry: gtb === 'try again',
+      });
+    });
   });
 
-  const readyToBill = billingData.filter(b => b.goodToBill === 'Yes' && b.billed !== 'Yes');
-  const billed = billingData.filter(b => b.billed === 'Yes');
-  const notReady = billingData.filter(b => b.goodToBill !== 'Yes' && b.billed !== 'Yes');
-  const totalBilled = billed.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  // Categorize — priority order (a cycle only appears in one bucket)
+  const overdue = billingData.filter(b => b.isOverdue && b.cycleEnded);
+  const readyToBill = billingData.filter(b => b.isReadyToBill && !b.isBilled);
+  const dueSoon = billingData.filter(b => b.isDueSoon && !b.isBilled && !b.isReadyToBill && !b.isOverdue);
+  const billed = billingData.filter(b => b.isBilled);
+
+  const totalOverdue = overdue.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
   const totalReady = readyToBill.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  const totalDueSoon = dueSoon.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  const totalBilled = billed.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+
+  function daysUntil(dateStr) {
+    if (!dateStr) return '';
+    const diff = Math.ceil((new Date(dateStr).getTime() - todayMs) / (24*60*60*1000));
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff < 0) return Math.abs(diff) + 'd overdue';
+    return diff + 'd away';
+  }
+
+  function billingRow(b, statusHtml) {
+    return `<tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(b.account.name)}',adAccountId:'${b.account.adAccountId}'})">
+      <td class="py-3 px-4 text-white font-medium">${b.account.name}</td>
+      <td class="py-3 px-4 text-dark-300">${b.cycle}</td>
+      <td class="py-3 px-4 text-dark-300">${b.cycleEndDate || '—'}</td>
+      <td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td>
+      <td class="py-3 px-4">${statusHtml}</td>
+      <td class="py-3 px-4 text-dark-400 text-xs max-w-[200px] truncate">${b.billingNotes}</td>
+    </tr>`;
+  }
+
+  function sectionTable(items, rowMapper) {
+    return `<table class="w-full text-sm">
+      <thead><tr class="border-b border-dark-600 text-dark-400 text-xs uppercase">
+        <th class="py-2 px-4 text-left">Account</th><th class="py-2 px-4 text-left">Cycle</th>
+        <th class="py-2 px-4 text-left">Cycle End</th><th class="py-2 px-4 text-right">Budget</th>
+        <th class="py-2 px-4 text-left">Status</th><th class="py-2 px-4 text-left">Notes</th>
+      </tr></thead><tbody>${items.map(rowMapper).join('')}</tbody></table>`;
+  }
 
   el.innerHTML = `
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-white">Billing Tracker</h1>
-      <p class="text-dark-300 text-sm mt-1">Active cycle billing status</p>
+      <p class="text-dark-300 text-sm mt-1">Cycle-based billing status</p>
     </div>
-    <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-5 gap-4 mb-6">
+      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Overdue</div><div class="text-2xl font-bold text-red-400">${overdue.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalOverdue)}</div></div>
       <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Ready to Bill</div><div class="text-2xl font-bold text-yellow-400">${readyToBill.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalReady)}</div></div>
+      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Due Soon</div><div class="text-2xl font-bold text-orange-400">${dueSoon.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalDueSoon)}</div></div>
       <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Billed</div><div class="text-2xl font-bold text-green-400">${billed.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalBilled)}</div></div>
-      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Not Ready</div><div class="text-2xl font-bold text-dark-300">${notReady.length}</div></div>
-      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Total Accounts</div><div class="text-2xl font-bold text-white">${billingData.length}</div></div>
+      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Total Cycles</div><div class="text-2xl font-bold text-white">${billingData.length}</div></div>
     </div>
+
+    ${overdue.length ? `
+    <div class="glass rounded-xl overflow-hidden mb-4 border border-red-500/30">
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2 bg-red-500/10">
+        <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+        <h3 class="text-red-400 font-semibold">Overdue — Cycle Ended, Not Billed (${overdue.length})</h3>
+      </div>
+      ${sectionTable(overdue, b => billingRow(b,
+        b.isRetry
+          ? '<span class="badge" style="background:rgba(251,146,60,0.15);color:#fb923c;">Try Again</span>'
+          : '<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;">Not Ready</span>'
+      ))}
+    </div>` : ''}
+
+    ${dueSoon.length ? `
+    <div class="glass rounded-xl overflow-hidden mb-4 border border-orange-500/30">
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2 bg-orange-500/10">
+        <span class="w-2 h-2 rounded-full bg-orange-500"></span>
+        <h3 class="text-orange-400 font-semibold">Billing Due Soon — Within 7 Days (${dueSoon.length})</h3>
+      </div>
+      ${sectionTable(dueSoon, b => billingRow(b,
+        '<span class="text-orange-400 text-xs font-medium">' + daysUntil(b.cycleEndDate) + '</span>'
+      ))}
+    </div>` : ''}
+
     ${readyToBill.length ? `
     <div class="glass rounded-xl overflow-hidden mb-4">
-      <div class="p-4 border-b border-dark-600 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-yellow-500"></span><h3 class="text-white font-semibold">Ready to Bill (${readyToBill.length})</h3></div>
-      <table class="w-full text-sm"><tbody>
-        ${readyToBill.map(b => `<tr class="table-row border-b border-dark-700/50"><td class="py-3 px-4 text-white font-medium">${b.account.name}</td><td class="py-3 px-4 text-dark-300">${b.cycle}</td><td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td><td class="py-3 px-4 text-dark-400">${b.billingNotes || ''}</td></tr>`).join('')}
-      </tbody></table>
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
+        <h3 class="text-yellow-400 font-semibold">Ready to Bill (${readyToBill.length})</h3>
+      </div>
+      ${sectionTable(readyToBill, b => billingRow(b,
+        '<span class="badge" style="background:rgba(250,204,21,0.15);color:#facc15;">Ready</span>'
+      ))}
     </div>` : ''}
-    <div class="glass rounded-xl overflow-hidden">
-      <div class="p-4 border-b border-dark-600 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span><h3 class="text-white font-semibold">Already Billed (${billed.length})</h3></div>
-      <table class="w-full text-sm"><tbody>
-        ${billed.map(b => `<tr class="table-row border-b border-dark-700/50"><td class="py-3 px-4 text-white font-medium">${b.account.name}</td><td class="py-3 px-4 text-dark-300">${b.cycle}</td><td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td><td class="py-3 px-4"><span class="badge badge-green">Billed</span></td></tr>`).join('')}
-      </tbody></table>
-    </div>
+
+    ${billed.length ? `
+    <div class="glass rounded-xl overflow-hidden mb-4">
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-green-500"></span>
+        <h3 class="text-white font-semibold">Billed (${billed.length})</h3>
+      </div>
+      ${sectionTable(billed, b => billingRow(b,
+        '<span class="badge badge-green">Billed</span>'
+      ))}
+    </div>` : ''}
+
+    ${!overdue.length && !readyToBill.length && !dueSoon.length && !billed.length ? `
+    <div class="glass rounded-xl p-8 text-center">
+      <p class="text-dark-400">No billing data available for current cycles.</p>
+    </div>` : ''}
   `;
 }
 
