@@ -359,14 +359,14 @@ function parseSheetData(data, podName) {
 
     if (!cellA && !cellB && !cellC) continue;
 
-    const isSection = cellA && !cellB && !cellC &&
-      (cellA.includes('EXPANSION') || cellA.includes('POD 1') || cellA.includes('Tyler') ||
-       cellA === 'ROOF Ignite' || cellA.includes('TAKEN OVER') || cellA.includes('ContractorsIgnite') ||
-       cellA.includes('KLAUS') || cellA === 'KPI');
-
-    if (isSection) {
-      currentSection = cellA;
-      continue;
+    // Section/label row: has ONLY cellA, nothing in any other column (no B, no C, no data cols)
+    // This catches manager names (Cole, Tyler), sub-headers (RoofIgnite, Pending), section labels (EXPANSION, KPI), etc.
+    if (cellA && !cellB && !cellC) {
+      const hasAnyData = row.c.slice(3).some(c => c && c.v !== null && c.v !== undefined && c.v !== '');
+      if (!hasAnyData) {
+        currentSection = cellA;
+        continue;
+      }
     }
 
     const hasAdAccountId = cellC && String(cellC).replace(/\s/g,'').length > 5 && /^\d+$/.test(String(cellC).replace(/\s/g,''));
@@ -378,9 +378,10 @@ function parseSheetData(data, podName) {
     const isPausedStatus = cellBStr && !isCycleLabel &&
       (cellBStr.toUpperCase() === 'PAUSED' || cellBStr.toUpperCase() === 'PAUSE' || cellBStr.toUpperCase() === 'WINTER');
 
-    if (cellA && hasAdAccountId && !isCycleLabel) {
+    // Account header row: has a name (cellA), no cycle label in cellB (or paused status), and is not a section
+    if (cellA && !isCycleLabel && (!cellBStr || isPausedStatus)) {
       currentAccountName = cellA.trim();
-      currentAdAccountId = String(cellC).replace(/\s/g,'').trim();
+      currentAdAccountId = hasAdAccountId ? String(cellC).replace(/\s/g,'').trim() : '';
 
       const mgr = getStr(row, 'manager');
       if (mgr) currentMgr = mgr;
