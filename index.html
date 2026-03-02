@@ -54,6 +54,9 @@ tailwind.config = {
   .metric-bad { color: #ef4444; }
   .metric-warn { color: #eab308; }
   .metric-neutral { color: #e2e8f0; }
+  .lead-booked { color: #22c55e; }
+  .lead-cancelled { color: #ef4444; }
+  .lead-other { color: #e2e8f0; }
   .tab-btn { padding: 6px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
   .tab-btn.active { background: rgba(249,115,22,0.15); color: #fb923c; font-weight: 600; }
   .tab-btn:not(.active) { color: #94a3b8; }
@@ -83,24 +86,22 @@ tailwind.config = {
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
         Leadership Dashboard
       </button>
-      <button onclick="navigate('alerts')" id="nav-alerts" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-        Alerts & Flags
-        <span id="alert-badge" class="ml-auto badge badge-red hidden">0</span>
-      </button>
 
       <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Managers</div>
       <button onclick="navigate('manager', 'Cole')" id="nav-mgr-cole" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         Cole
+        <span id="alert-badge-cole" class="ml-auto badge badge-red hidden">0</span>
       </button>
       <button onclick="navigate('manager', 'Jonathan')" id="nav-mgr-jonathan" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         Jonathan
+        <span id="alert-badge-jonathan" class="ml-auto badge badge-red hidden">0</span>
       </button>
       <button onclick="navigate('manager', 'Tyler')" id="nav-mgr-tyler" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         Tyler
+        <span id="alert-badge-tyler" class="ml-auto badge badge-red hidden">0</span>
       </button>
 
       <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Pods</div>
@@ -148,7 +149,6 @@ tailwind.config = {
       </div>
     </div>
     <div id="view-dashboard" class="hidden fade-in"></div>
-    <div id="view-alerts" class="hidden fade-in"></div>
     <div id="view-pod" class="hidden fade-in"></div>
     <div id="view-manager" class="hidden fade-in"></div>
     <div id="view-account" class="hidden fade-in"></div>
@@ -171,21 +171,26 @@ const LEAD_SHEETS = {
 };
 
 const KPI_TARGETS = {
-  linkCTR: 0.009,   // >= 0.90% is good
-  linkCPC: 3.00,    // <= $3.00 is good
-  cpm: 20.00,       // <= $20 is good
-  frequency: 2.50,  // <= 2.50 is good
-  surveyPct: 2.00,  // >= 2.00% is good
-  osaPct: 20        // < 20% is good (lower is better for OSA)
+  linkCTR: 0.009,
+  linkCPC: 3.00,
+  cpm: 20.00,
+  frequency: 2.50,
+  surveyPct: 2.00,
+  osaPct: 20
 };
 
 let allAccounts = [];
 let allCycles = [];
-let allLeads = [];  // leads from ALL_ROOF + ALL_CiGN
+let allLeads = [];
 let currentView = 'dashboard';
 let currentPod = null;
 let currentAccount = null;
 let currentManager = null;
+
+function getTodayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
 
 async function fetchSheetData(sheetName, gid) {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}`;
@@ -231,7 +236,6 @@ function parseLeadData(data, source) {
 
     if (!subAccount || !dateRaw) continue;
 
-    // Parse the date
     let dateStr = '';
     if (row.c[1] && row.c[1].v) {
       const v = row.c[1].v;
@@ -276,7 +280,6 @@ function parseSheetData(data, podName) {
 
     if (!cellA && !cellB && !cellC) continue;
 
-    // Detect section headers
     const isSection = cellA && !cellB && !cellC &&
       (cellA.includes('EXPANSION') || cellA.includes('POD 1') || cellA.includes('Tyler') ||
        cellA === 'ROOF Ignite' || cellA.includes('TAKEN OVER') || cellA.includes('ContractorsIgnite') ||
@@ -287,24 +290,19 @@ function parseSheetData(data, podName) {
       continue;
     }
 
-    // Detect account rows: has account name in A, has ad account ID in C (long number)
     const hasAdAccountId = cellC && String(cellC).replace(/\s/g,'').length > 10 && /^\d+$/.test(String(cellC).replace(/\s/g,''));
 
-    // Check if B is a cycle label
     const cellBStr = String(cellB).trim();
     const cellBLower = cellBStr.toLowerCase();
     const isCycleLabel = cellBStr && (cellBLower.startsWith('cycle') || (cellBLower.includes('winter') && cellBLower.includes('cycle')));
 
-    // Check if B is a paused/winter status (NOT a cycle row)
     const isPausedStatus = cellBStr && !isCycleLabel &&
       (cellBStr.toUpperCase() === 'PAUSED' || cellBStr.toUpperCase() === 'PAUSE' || cellBStr.toUpperCase() === 'WINTER');
 
-    // Account summary row: has name in A, ad account ID in C, and B is NOT a cycle label
     if (cellA && hasAdAccountId && !isCycleLabel) {
       currentAccountName = cellA.trim();
       currentAdAccountId = String(cellC).replace(/\s/g,'').trim();
 
-      // Get account manager from column V (index 21)
       const mgr = row.c[21] ? String(row.c[21].v || '').trim() : '';
       if (mgr) currentMgr = mgr;
 
@@ -327,9 +325,7 @@ function parseSheetData(data, podName) {
       continue;
     }
 
-    // Cycle rows: B starts with "Cycle" or contains "Winter Cycle"
     if (isCycleLabel && currentAccountName) {
-      // Get manager from this row if present
       const rowMgr = row.c[21] ? String(row.c[21].v || '').trim() : '';
       if (rowMgr) currentMgr = rowMgr;
 
@@ -387,15 +383,12 @@ function getDate(row, idx) {
   const v = cell.v;
   if (!v) return null;
 
-  // Try formatted value first
   if (cell.f) {
-    // Google might give "1/15/2026" or "2026-01-15"
     const d = new Date(cell.f);
     if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
     return cell.f;
   }
 
-  // Handle Date(year, month, day) format
   if (typeof v === 'string' && v.includes('Date(')) {
     const m = v.match(/Date\((\d+),(\d+),(\d+)/);
     if (m) return `${m[1]}-${String(Number(m[2])+1).padStart(2,'0')}-${m[3].padStart(2,'0')}`;
@@ -426,8 +419,8 @@ async function loadAllData() {
   // Populate account dropdown
   const sel = document.getElementById('account-select');
   sel.innerHTML = '<option value="">Search account...</option>';
-  const activeAccounts = allAccounts.filter(a => !a.isPaused).sort((a,b) => a.name.localeCompare(b.name));
-  const pausedAccounts = allAccounts.filter(a => a.isPaused).sort((a,b) => a.name.localeCompare(b.name));
+  const activeAccounts = allAccounts.filter(a => hasActiveCycle(a)).sort((a,b) => a.name.localeCompare(b.name));
+  const inactiveAccounts = allAccounts.filter(a => !hasActiveCycle(a)).sort((a,b) => a.name.localeCompare(b.name));
 
   activeAccounts.forEach(a => {
     const opt = document.createElement('option');
@@ -435,10 +428,10 @@ async function loadAllData() {
     opt.textContent = a.name;
     sel.appendChild(opt);
   });
-  if (pausedAccounts.length) {
+  if (inactiveAccounts.length) {
     const group = document.createElement('optgroup');
-    group.label = '⏸ Paused';
-    pausedAccounts.forEach(a => {
+    group.label = '⏸ Inactive';
+    inactiveAccounts.forEach(a => {
       const opt = document.createElement('option');
       opt.value = a.name + '|||' + a.adAccountId;
       opt.textContent = a.name;
@@ -450,9 +443,15 @@ async function loadAllData() {
   document.getElementById('data-status').className = 'w-2 h-2 rounded-full bg-green-500';
   document.getElementById('data-status-text').textContent = `${allAccounts.length} accounts · ${allLeads.length} leads`;
 
-  const alertCount = getAlertAccounts().length;
-  const badge = document.getElementById('alert-badge');
-  if (alertCount > 0) { badge.textContent = alertCount; badge.classList.remove('hidden'); }
+  // Update manager alert badges
+  ['Cole', 'Jonathan', 'Tyler'].forEach(mgr => {
+    const alerts = getAlertAccountsForManager(mgr);
+    const badge = document.getElementById('alert-badge-' + mgr.toLowerCase());
+    if (badge && alerts.length > 0) {
+      badge.textContent = alerts.length;
+      badge.classList.remove('hidden');
+    }
+  });
 
   document.getElementById('loading-state').classList.add('hidden');
   navigate('dashboard');
@@ -517,39 +516,119 @@ function surveyColor(v) {
   return v >= KPI_TARGETS.surveyPct ? 'metric-good' : 'metric-bad';
 }
 
-function getLatestCycle(accountName, adAccountId) {
-  const acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
-  if (!acctCycles.length) return null;
-  return acctCycles[acctCycles.length - 1];
+// Lead status color: green=booked, red=cancelled/invalid, white=other
+function leadStatusColor(status) {
+  if (!status) return 'lead-other';
+  const s = status.toLowerCase();
+  if (s.includes('confirmed') || s.includes('manual booked') || s.includes('client handles')) return 'lead-booked';
+  if (s.includes('cancel') || s.includes('invalid')) return 'lead-cancelled';
+  return 'lead-other';
 }
 
-function getAlertAccounts() {
+function isBookedStatus(status) {
+  if (!status) return false;
+  const s = status.toLowerCase();
+  return s.includes('confirmed') || s.includes('manual booked') || s.includes('client handles');
+}
+
+function isCancelledStatus(status) {
+  if (!status) return false;
+  const s = status.toLowerCase();
+  return s.includes('cancel') || s.includes('invalid');
+}
+
+// ═══════════════════════════════════════════════
+// ACTIVE CYCLE LOGIC — cycles containing today
+// ═══════════════════════════════════════════════
+function getActiveCycle(accountName, adAccountId) {
+  const acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
+  if (!acctCycles.length) return null;
+  const today = getTodayStr();
+  const active = acctCycles.find(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today);
+  return active || acctCycles[acctCycles.length - 1]; // fallback to latest
+}
+
+function hasActiveCycle(acct) {
+  const today = getTodayStr();
+  return (acct.cycles || []).some(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today);
+}
+
+// On-track: Est. Booked Appts >= 80% of Booked Appointment Goal
+function isOnTrack(cycle) {
+  if (!cycle) return null;
+  if (cycle.estBookedAppts === null || cycle.bookedGoal === null || !cycle.bookedGoal) return null;
+  return cycle.estBookedAppts >= 0.8 * cycle.bookedGoal;
+}
+
+function onTrackBadge(cycle) {
+  const track = isOnTrack(cycle);
+  if (track === null) return '<span class="badge badge-gray">N/A</span>';
+  return track
+    ? '<span class="w-2 h-2 rounded-full bg-green-500 inline-block" title="On Track"></span>'
+    : '<span class="w-2 h-2 rounded-full bg-red-500 inline-block" title="Off Track"></span>';
+}
+
+// ═══════════════════════════════════════════════
+// MANAGER & ALERTS LOGIC
+// ═══════════════════════════════════════════════
+function getAccountsByManager(mgrName) {
+  const today = getTodayStr();
+  return allAccounts.filter(a => {
+    const acctCycles = a.cycles || [];
+    // Find active cycle (containing today)
+    const activeCycle = acctCycles.find(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today);
+    if (!activeCycle) {
+      // No active cycle — check account-level manager and include as inactive
+      const m = (a.manager || '').toLowerCase();
+      return m === mgrName.toLowerCase() || m.includes(mgrName.toLowerCase());
+    }
+    // Use the active cycle's account manager
+    const mgr = (activeCycle.accountManager || activeCycle.manager || a.manager || '').toLowerCase();
+    return mgr === mgrName.toLowerCase() || mgr.includes(mgrName.toLowerCase());
+  });
+}
+
+function getAlertAccountsForManager(mgrName) {
+  const mgrAccounts = getAccountsByManager(mgrName).filter(a => hasActiveCycle(a));
   const alerts = [];
-  allAccounts.filter(a => !a.isPaused).forEach(acct => {
-    const latest = getLatestCycle(acct.name, acct.adAccountId);
-    if (!latest) return;
+  mgrAccounts.forEach(acct => {
+    const active = getActiveCycle(acct.name, acct.adAccountId);
+    if (!active) return;
     const issues = [];
 
-    if (latest.osaPct !== null && latest.osaPct >= KPI_TARGETS.osaPct && latest.totalLeads > 5) issues.push({ type: 'danger', msg: `High OSA: ${fmtPct(latest.osaPct)}` });
-    if (acct.cplGoal && latest.cpl && latest.cpl > acct.cplGoal * 1.5) issues.push({ type: 'danger', msg: `CPL ${fmtDollar(latest.cpl,2)} far exceeds goal ${fmtDollar(acct.cplGoal,2)}` });
-    else if (acct.cplGoal && latest.cpl && latest.cpl > acct.cplGoal * 1.15) issues.push({ type: 'warning', msg: `CPL ${fmtDollar(latest.cpl,2)} above goal ${fmtDollar(acct.cplGoal,2)}` });
-    if (latest.totalLeads !== null && latest.totalLeads === 0) issues.push({ type: 'danger', msg: 'Zero leads this cycle' });
-    if (latest.linkCTR !== null && latest.linkCTR > 0 && latest.linkCTR < KPI_TARGETS.linkCTR) issues.push({ type: 'warning', msg: `Low CTR: ${(latest.linkCTR * 100).toFixed(2)}%` });
-    if (latest.frequency !== null && latest.frequency > 4) issues.push({ type: 'warning', msg: `High frequency: ${latest.frequency.toFixed(1)}` });
+    if (active.osaPct !== null && active.osaPct >= KPI_TARGETS.osaPct && active.totalLeads > 5) issues.push({ type: 'danger', msg: `High OSA: ${fmtPct(active.osaPct)}` });
+    if (acct.cplGoal && active.cpl && active.cpl > acct.cplGoal * 1.5) issues.push({ type: 'danger', msg: `CPL ${fmtDollar(active.cpl,2)} far exceeds goal ${fmtDollar(acct.cplGoal,2)}` });
+    else if (acct.cplGoal && active.cpl && active.cpl > acct.cplGoal * 1.15) issues.push({ type: 'warning', msg: `CPL ${fmtDollar(active.cpl,2)} above goal ${fmtDollar(acct.cplGoal,2)}` });
+    if (active.totalLeads !== null && active.totalLeads === 0) issues.push({ type: 'danger', msg: 'Zero leads this cycle' });
+    if (active.linkCTR !== null && active.linkCTR > 0 && active.linkCTR < KPI_TARGETS.linkCTR) issues.push({ type: 'warning', msg: `Low CTR: ${(active.linkCTR * 100).toFixed(2)}%` });
+    if (active.frequency !== null && active.frequency > 4) issues.push({ type: 'warning', msg: `High frequency: ${active.frequency.toFixed(1)}` });
 
-    if (issues.length) alerts.push({ account: acct, latest, issues });
+    // On-track check
+    const track = isOnTrack(active);
+    if (track === false) issues.push({ type: 'warning', msg: `Off track: Est. ${fmt(active.estBookedAppts)} / ${fmt(active.bookedGoal)} goal` });
+
+    if (issues.length) alerts.push({ account: acct, active, issues });
+  });
+  return alerts.sort((a, b) => b.issues.filter(i => i.type === 'danger').length - a.issues.filter(i => i.type === 'danger').length);
+}
+
+function getAllAlerts() {
+  const alerts = [];
+  allAccounts.filter(a => hasActiveCycle(a)).forEach(acct => {
+    const active = getActiveCycle(acct.name, acct.adAccountId);
+    if (!active) return;
+    const issues = [];
+    if (active.osaPct !== null && active.osaPct >= KPI_TARGETS.osaPct && active.totalLeads > 5) issues.push({ type: 'danger', msg: `High OSA: ${fmtPct(active.osaPct)}` });
+    if (acct.cplGoal && active.cpl && active.cpl > acct.cplGoal * 1.5) issues.push({ type: 'danger', msg: `CPL ${fmtDollar(active.cpl,2)} far exceeds goal` });
+    if (active.totalLeads !== null && active.totalLeads === 0) issues.push({ type: 'danger', msg: 'Zero leads this cycle' });
+    const track = isOnTrack(active);
+    if (track === false) issues.push({ type: 'warning', msg: `Off track: Est. ${fmt(active.estBookedAppts)} / ${fmt(active.bookedGoal)} goal` });
+    if (issues.length) alerts.push({ account: acct, active, issues });
   });
   return alerts.sort((a, b) => b.issues.filter(i => i.type === 'danger').length - a.issues.filter(i => i.type === 'danger').length);
 }
 
 function getAccountsByPod(podName) { return allAccounts.filter(a => a.pod === podName); }
-
-function getAccountsByManager(mgrName) {
-  return allAccounts.filter(a => {
-    const m = (a.manager || '').toLowerCase();
-    return m === mgrName.toLowerCase() || m.includes(mgrName.toLowerCase());
-  });
-}
 
 function getLeadsForAccount(accountName, startDate, endDate) {
   return allLeads.filter(l => {
@@ -574,10 +653,6 @@ function navigate(view, param) {
     case 'dashboard':
       document.getElementById('nav-dashboard').classList.add('active');
       renderDashboard();
-      break;
-    case 'alerts':
-      document.getElementById('nav-alerts').classList.add('active');
-      renderAlerts();
       break;
     case 'pod':
       currentPod = param;
@@ -615,53 +690,52 @@ function renderDashboard() {
   const el = document.getElementById('view-dashboard');
   el.classList.remove('hidden');
 
-  const active = allAccounts.filter(a => !a.isPaused);
-  const paused = allAccounts.filter(a => a.isPaused);
-  const alerts = getAlertAccounts();
+  const active = allAccounts.filter(a => hasActiveCycle(a));
+  const inactive = allAccounts.filter(a => !hasActiveCycle(a));
+  const alerts = getAllAlerts();
 
   let totalLeads = 0, totalSpent = 0, totalBooked = 0, cplValues = [], osaValues = [];
 
   active.forEach(a => {
-    const latest = getLatestCycle(a.name, a.adAccountId);
-    if (!latest) return;
-    if (latest.totalLeads) totalLeads += latest.totalLeads;
-    if (latest.amountSpent) totalSpent += latest.amountSpent;
-    if (latest.bookedAppts) totalBooked += latest.bookedAppts;
-    if (latest.cpl && latest.cpl > 0) cplValues.push(latest.cpl);
-    if (latest.osaPct !== null) osaValues.push(latest.osaPct);
+    const c = getActiveCycle(a.name, a.adAccountId);
+    if (!c) return;
+    if (c.totalLeads) totalLeads += c.totalLeads;
+    if (c.amountSpent) totalSpent += c.amountSpent;
+    if (c.bookedAppts) totalBooked += c.bookedAppts;
+    if (c.cpl && c.cpl > 0) cplValues.push(c.cpl);
+    if (c.osaPct !== null) osaValues.push(c.osaPct);
   });
 
   const avgCPL = cplValues.length ? cplValues.reduce((a,b)=>a+b,0)/cplValues.length : 0;
   const avgOSA = osaValues.length ? osaValues.reduce((a,b)=>a+b,0)/osaValues.length : 0;
 
-  // Manager stats
   const managers = ['Cole', 'Jonathan', 'Tyler'];
   function mgrStats(name) {
-    const accts = getAccountsByManager(name).filter(a => !a.isPaused);
-    let leads=0, spent=0, booked=0, cpls=[];
+    const accts = getAccountsByManager(name).filter(a => hasActiveCycle(a));
+    let leads=0, spent=0, booked=0, cpls=[], alertCount=0;
     accts.forEach(a => {
-      const l = getLatestCycle(a.name, a.adAccountId);
-      if (!l) return;
-      if (l.totalLeads) leads += l.totalLeads;
-      if (l.amountSpent) spent += l.amountSpent;
-      if (l.bookedAppts) booked += l.bookedAppts;
-      if (l.cpl && l.cpl > 0) cpls.push(l.cpl);
+      const c = getActiveCycle(a.name, a.adAccountId);
+      if (!c) return;
+      if (c.totalLeads) leads += c.totalLeads;
+      if (c.amountSpent) spent += c.amountSpent;
+      if (c.bookedAppts) booked += c.bookedAppts;
+      if (c.cpl && c.cpl > 0) cpls.push(c.cpl);
     });
-    return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.length };
+    alertCount = getAlertAccountsForManager(name).length;
+    return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.length, alertCount };
   }
 
-  // Pod stats
   function podStats(accts) {
     let leads=0, spent=0, booked=0, cpls=[];
-    accts.filter(a=>!a.isPaused).forEach(a => {
-      const l = getLatestCycle(a.name, a.adAccountId);
-      if (!l) return;
-      if (l.totalLeads) leads += l.totalLeads;
-      if (l.amountSpent) spent += l.amountSpent;
-      if (l.bookedAppts) booked += l.bookedAppts;
-      if (l.cpl && l.cpl > 0) cpls.push(l.cpl);
+    accts.filter(a => hasActiveCycle(a)).forEach(a => {
+      const c = getActiveCycle(a.name, a.adAccountId);
+      if (!c) return;
+      if (c.totalLeads) leads += c.totalLeads;
+      if (c.amountSpent) spent += c.amountSpent;
+      if (c.bookedAppts) booked += c.bookedAppts;
+      if (c.cpl && c.cpl > 0) cpls.push(c.cpl);
     });
-    return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.filter(a=>!a.isPaused).length };
+    return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.filter(a => hasActiveCycle(a)).length };
   }
   const p1 = podStats(getAccountsByPod('Pod 1 - RoofIgnite'));
   const p2 = podStats(getAccountsByPod('Pod 2 - RoofIgnite'));
@@ -669,17 +743,17 @@ function renderDashboard() {
   el.innerHTML = `
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-white">Leadership Dashboard</h1>
-      <p class="text-dark-300 text-sm mt-1">Real-time overview &middot; ${active.length} active, ${paused.length} paused &middot; ${allLeads.length} leads tracked</p>
+      <p class="text-dark-300 text-sm mt-1">Real-time overview · ${active.length} active, ${inactive.length} inactive · ${allLeads.length} leads tracked</p>
     </div>
 
     <div class="grid grid-cols-5 gap-4 mb-6">
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Active Accounts</div>
         <div class="text-2xl font-bold text-white">${active.length}</div>
-        <div class="text-xs text-dark-300 mt-1">${paused.length} paused</div>
+        <div class="text-xs text-dark-300 mt-1">${inactive.length} inactive</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Latest Cycle Leads</div>
+        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Active Cycle Leads</div>
         <div class="text-2xl font-bold text-white">${fmt(totalLeads)}</div>
         <div class="text-xs text-dark-300 mt-1">${fmt(totalBooked)} booked</div>
       </div>
@@ -711,7 +785,10 @@ function renderDashboard() {
               <h3 class="text-white font-semibold">${m}</h3>
               <p class="text-dark-400 text-xs">${s.count} active accounts</p>
             </div>
-            <span class="text-brand-400 text-xs hover:text-brand-300">View →</span>
+            <div class="flex items-center gap-2">
+              ${s.alertCount > 0 ? `<span class="badge badge-red">${s.alertCount} alert${s.alertCount>1?'s':''}</span>` : ''}
+              <span class="text-brand-400 text-xs hover:text-brand-300">View →</span>
+            </div>
           </div>
           <div class="grid grid-cols-3 gap-3">
             <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(s.leads)}</div></div>
@@ -751,7 +828,7 @@ function renderDashboard() {
     <!-- Top Performers + Needs Attention -->
     <div class="grid grid-cols-2 gap-4 mb-6">
       <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> Top Performers</h3>
+        <h3 class="text-white font-semibold mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> On Track</h3>
         <div class="space-y-2" id="top-performers"></div>
       </div>
       <div class="glass rounded-xl p-5">
@@ -762,7 +839,7 @@ function renderDashboard() {
 
     <div class="grid grid-cols-2 gap-4">
       <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">CPL Distribution (Latest Cycle)</h3>
+        <h3 class="text-white font-semibold mb-3">CPL Distribution (Active Cycle)</h3>
         <div class="chart-container"><canvas id="chart-cpl-dist"></canvas></div>
       </div>
       <div class="glass rounded-xl p-5">
@@ -772,23 +849,25 @@ function renderDashboard() {
     </div>
   `;
 
-  // Top performers: lowest OSA (best)
-  const performers = active.map(a => {
-    const l = getLatestCycle(a.name, a.adAccountId);
-    return { account: a, latest: l };
-  }).filter(x => x.latest && x.latest.osaPct !== null && x.latest.osaPct > 0 && x.latest.osaPct < KPI_TARGETS.osaPct && x.latest.totalLeads > 5)
-    .sort((a,b) => (a.latest.osaPct||100) - (b.latest.osaPct||100))
-    .slice(0, 5);
+  // On track: estBooked >= 80% of goal
+  const onTrackAccts = active.map(a => {
+    const c = getActiveCycle(a.name, a.adAccountId);
+    return { account: a, cycle: c };
+  }).filter(x => x.cycle && isOnTrack(x.cycle) === true)
+    .sort((a,b) => {
+      const aRatio = a.cycle.estBookedAppts / a.cycle.bookedGoal;
+      const bRatio = b.cycle.estBookedAppts / b.cycle.bookedGoal;
+      return bRatio - aRatio;
+    }).slice(0, 5);
 
-  document.getElementById('top-performers').innerHTML = performers.map(p => `
+  document.getElementById('top-performers').innerHTML = onTrackAccts.map(p => `
     <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer" onclick="navigate('account',{name:'${esc(p.account.name)}',adAccountId:'${p.account.adAccountId}'})">
       <div>
         <div class="text-white text-sm font-medium">${p.account.name}</div>
         <div class="text-dark-400 text-xs">${p.account.manager}</div>
       </div>
       <div class="text-right">
-        <div class="badge badge-green">${fmtPct(p.latest.osaPct)} OSA</div>
-        <div class="text-dark-400 text-xs mt-1">${fmt(p.latest.totalLeads)} leads</div>
+        <div class="badge badge-green">Est. ${fmt(p.cycle.estBookedAppts)} / ${fmt(p.cycle.bookedGoal)} goal</div>
       </div>
     </div>
   `).join('') || '<div class="text-dark-400 text-sm text-center py-4">No data yet</div>';
@@ -811,10 +890,10 @@ function renderDashboard() {
 function renderCPLDistChart() {
   const ctx = document.getElementById('chart-cpl-dist');
   if (!ctx) return;
-  const active = allAccounts.filter(a => !a.isPaused);
+  const active = allAccounts.filter(a => hasActiveCycle(a));
   const data = active.map(a => {
-    const l = getLatestCycle(a.name, a.adAccountId);
-    return l && l.cpl > 0 ? { name: a.name, cpl: l.cpl, goal: a.cplGoal || l.cplGoal } : null;
+    const c = getActiveCycle(a.name, a.adAccountId);
+    return c && c.cpl > 0 ? { name: a.name, cpl: c.cpl, goal: a.cplGoal || c.cplGoal } : null;
   }).filter(Boolean).sort((a,b) => a.cpl - b.cpl).slice(0, 20);
 
   new Chart(ctx, {
@@ -835,10 +914,10 @@ function renderCPLDistChart() {
 function renderOSAChart() {
   const ctx = document.getElementById('chart-osa');
   if (!ctx) return;
-  const active = allAccounts.filter(a => !a.isPaused);
+  const active = allAccounts.filter(a => hasActiveCycle(a));
   const data = active.map(a => {
-    const l = getLatestCycle(a.name, a.adAccountId);
-    return l && l.osaPct !== null ? { name: a.name, osa: l.osaPct } : null;
+    const c = getActiveCycle(a.name, a.adAccountId);
+    return c && c.osaPct !== null ? { name: a.name, osa: c.osaPct } : null;
   }).filter(Boolean).sort((a,b) => a.osa - b.osa).slice(0, 20);
 
   new Chart(ctx, {
@@ -857,63 +936,51 @@ function renderOSAChart() {
 }
 
 // ═══════════════════════════════════════════════
-// RENDER: ALERTS
-// ═══════════════════════════════════════════════
-function renderAlerts() {
-  const el = document.getElementById('view-alerts');
-  el.classList.remove('hidden');
-  const alerts = getAlertAccounts();
-
-  el.innerHTML = `
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-white">Alerts & Flags</h1>
-      <p class="text-dark-300 text-sm mt-1">${alerts.length} accounts need attention</p>
-    </div>
-    <div class="space-y-3">
-      ${alerts.map(a => `
-        <div class="glass rounded-xl p-4 cursor-pointer hover:border-brand-500/30 transition-all" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-3">
-              <div class="text-white font-semibold">${a.account.name}</div>
-              <span class="badge badge-blue">${a.account.pod.replace(' - RoofIgnite','')}</span>
-              <span class="badge badge-gray">${a.account.manager}</span>
-            </div>
-            <div class="text-dark-400 text-xs">${a.latest.cycle}</div>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            ${a.issues.map(i => `<span class="badge ${i.type==='danger'?'badge-red':'badge-yellow'}">${i.msg}</span>`).join('')}
-          </div>
-          <div class="mt-2 grid grid-cols-5 gap-4 text-xs">
-            <div><span class="text-dark-400">Leads:</span> <span class="text-white">${fmt(a.latest.totalLeads)}</span></div>
-            <div><span class="text-dark-400">OSA:</span> <span class="${osaColor(a.latest.osaPct)}">${fmtPct(a.latest.osaPct)}</span></div>
-            <div><span class="text-dark-400">CPL:</span> <span class="text-white">${fmtDollar(a.latest.cpl,2)}</span></div>
-            <div><span class="text-dark-400">Spent:</span> <span class="text-white">${fmtDollar(a.latest.amountSpent,2)}</span></div>
-            <div><span class="text-dark-400">Booked:</span> <span class="text-white">${fmt(a.latest.bookedAppts)}</span></div>
-          </div>
-        </div>
-      `).join('')}
-      ${alerts.length === 0 ? '<div class="glass rounded-xl p-8 text-center text-dark-400">No alerts — all accounts within KPI targets</div>' : ''}
-    </div>
-  `;
-}
-
-// ═══════════════════════════════════════════════
-// RENDER: MANAGER VIEW
+// RENDER: MANAGER VIEW (with alerts)
 // ═══════════════════════════════════════════════
 function renderManagerView(mgrName) {
   const el = document.getElementById('view-manager');
   el.classList.remove('hidden');
 
   const accounts = getAccountsByManager(mgrName);
-  const active = accounts.filter(a => !a.isPaused);
-  const paused = accounts.filter(a => a.isPaused);
+  const active = accounts.filter(a => hasActiveCycle(a));
+  const inactive = accounts.filter(a => !hasActiveCycle(a));
+  const alerts = getAlertAccountsForManager(mgrName);
 
   el.innerHTML = `
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-white">${mgrName}</h1>
-      <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${paused.length} paused</p>
+      <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${inactive.length} inactive</p>
     </div>
-    ${renderAccountTable(active, paused, mgrName)}
+
+    ${alerts.length > 0 ? `
+    <div class="glass rounded-xl p-5 mb-6 border-red-500/20">
+      <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
+        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+        Alerts & Flags <span class="badge badge-red ml-2">${alerts.length}</span>
+      </h3>
+      <div class="space-y-2">
+        ${alerts.map(a => `
+          <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer bg-dark-800/50" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
+            <div class="flex items-center gap-3">
+              <div class="text-white font-medium text-sm">${a.account.name}</div>
+              <span class="badge badge-blue text-[10px]">${a.active.cycle}</span>
+            </div>
+            <div class="flex flex-wrap gap-1 justify-end">
+              ${a.issues.map(i => `<span class="badge ${i.type==='danger'?'badge-red':'badge-yellow'} text-[10px]">${i.msg}</span>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>` : `
+    <div class="glass rounded-xl p-4 mb-6 border-green-500/20">
+      <div class="flex items-center gap-2 text-green-400 text-sm">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        All accounts within KPI targets
+      </div>
+    </div>`}
+
+    ${renderAccountTable(active, inactive, mgrName)}
   `;
 }
 
@@ -925,20 +992,20 @@ function renderPodView(podName) {
   el.classList.remove('hidden');
 
   const accounts = getAccountsByPod(podName);
-  const active = accounts.filter(a => !a.isPaused);
-  const paused = accounts.filter(a => a.isPaused);
+  const active = accounts.filter(a => hasActiveCycle(a));
+  const inactive = accounts.filter(a => !hasActiveCycle(a));
   const podLabel = podName.replace(' - RoofIgnite', '');
 
   el.innerHTML = `
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-white">${podLabel}</h1>
-      <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${paused.length} paused</p>
+      <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${inactive.length} inactive</p>
     </div>
-    ${renderAccountTable(active, paused)}
+    ${renderAccountTable(active, inactive)}
   `;
 }
 
-function renderAccountTable(active, paused, mgrName) {
+function renderAccountTable(active, inactive, mgrName) {
   return `
     <div class="glass rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
@@ -950,46 +1017,47 @@ function renderAccountTable(active, paused, mgrName) {
               <th class="text-left py-3 px-4 font-medium">Dates</th>
               <th class="text-right py-3 px-4 font-medium">Leads</th>
               <th class="text-right py-3 px-4 font-medium">OSA %</th>
-              <th class="text-right py-3 px-4 font-medium">Booked</th>
+              <th class="text-right py-3 px-4 font-medium">Est. Bkd</th>
+              <th class="text-right py-3 px-4 font-medium">Goal</th>
               <th class="text-right py-3 px-4 font-medium">CPL</th>
               <th class="text-right py-3 px-4 font-medium">CPL Goal</th>
               <th class="text-right py-3 px-4 font-medium">Spent</th>
               <th class="text-right py-3 px-4 font-medium">CTR</th>
               <th class="text-right py-3 px-4 font-medium">CPC</th>
               <th class="text-right py-3 px-4 font-medium">Freq</th>
-              <th class="text-center py-3 px-4 font-medium">Status</th>
+              <th class="text-center py-3 px-4 font-medium">Track</th>
             </tr>
           </thead>
           <tbody>
             ${active.map(a => {
-              const l = getLatestCycle(a.name, a.adAccountId);
-              const cplGoal = a.cplGoal || (l && l.cplGoal);
-              const hasIssue = l && ((l.osaPct !== null && l.osaPct >= KPI_TARGETS.osaPct) || (cplGoal && l.cpl && l.cpl > cplGoal));
+              const c = getActiveCycle(a.name, a.adAccountId);
+              const cplGoal = a.cplGoal || (c && c.cplGoal);
               return `
                 <tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                   <td class="py-3 px-4">
                     <div class="text-white font-medium">${a.name}</div>
                     <div class="text-dark-400 text-xs">${a.manager}</div>
                   </td>
-                  <td class="py-3 px-4 text-dark-300">${l ? l.cycle : '—'}</td>
-                  <td class="py-3 px-4 text-dark-400 text-xs whitespace-nowrap">${l ? fmtDate(l.cycleStartDate) + ' – ' + fmtDate(l.cycleEndDate) : '—'}</td>
-                  <td class="py-3 px-4 text-right text-white">${l ? fmt(l.totalLeads) : '—'}</td>
-                  <td class="py-3 px-4 text-right"><span class="${l ? osaColor(l.osaPct) : 'text-dark-400'}">${l ? fmtPct(l.osaPct) : '—'}</span></td>
-                  <td class="py-3 px-4 text-right text-white">${l ? fmt(l.bookedAppts) : '—'}</td>
-                  <td class="py-3 px-4 text-right"><span class="${l ? cplColor(l.cpl, cplGoal) : 'text-dark-400'}">${l ? fmtDollar(l.cpl,2) : '—'}</span></td>
+                  <td class="py-3 px-4 text-dark-300">${c ? c.cycle : '—'}</td>
+                  <td class="py-3 px-4 text-dark-400 text-xs whitespace-nowrap">${c ? fmtDate(c.cycleStartDate) + ' – ' + fmtDate(c.cycleEndDate) : '—'}</td>
+                  <td class="py-3 px-4 text-right text-white">${c ? fmt(c.totalLeads) : '—'}</td>
+                  <td class="py-3 px-4 text-right"><span class="${c ? osaColor(c.osaPct) : 'text-dark-400'}">${c ? fmtPct(c.osaPct) : '—'}</span></td>
+                  <td class="py-3 px-4 text-right text-white">${c ? fmt(c.estBookedAppts) : '—'}</td>
+                  <td class="py-3 px-4 text-right text-dark-400">${c ? fmt(c.bookedGoal) : '—'}</td>
+                  <td class="py-3 px-4 text-right"><span class="${c ? cplColor(c.cpl, cplGoal) : 'text-dark-400'}">${c ? fmtDollar(c.cpl,2) : '—'}</span></td>
                   <td class="py-3 px-4 text-right text-dark-400">${cplGoal ? fmtDollar(cplGoal,2) : '—'}</td>
-                  <td class="py-3 px-4 text-right text-white">${l ? fmtDollar(l.amountSpent,2) : '—'}</td>
-                  <td class="py-3 px-4 text-right"><span class="${l ? ctrColor(l.linkCTR) : 'text-dark-400'}">${l && l.linkCTR ? (l.linkCTR*100).toFixed(2)+'%' : '—'}</span></td>
-                  <td class="py-3 px-4 text-right"><span class="${l ? cpcColor(l.linkCPC) : 'text-dark-400'}">${l ? fmtDollar(l.linkCPC,2) : '—'}</span></td>
-                  <td class="py-3 px-4 text-right"><span class="${l ? freqColor(l.frequency) : 'text-dark-400'}">${l && l.frequency ? l.frequency.toFixed(1) : '—'}</span></td>
-                  <td class="py-3 px-4 text-center">${hasIssue ? '<span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>' : '<span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>'}</td>
+                  <td class="py-3 px-4 text-right text-white">${c ? fmtDollar(c.amountSpent,2) : '—'}</td>
+                  <td class="py-3 px-4 text-right"><span class="${c ? ctrColor(c.linkCTR) : 'text-dark-400'}">${c && c.linkCTR ? (c.linkCTR*100).toFixed(2)+'%' : '—'}</span></td>
+                  <td class="py-3 px-4 text-right"><span class="${c ? cpcColor(c.linkCPC) : 'text-dark-400'}">${c ? fmtDollar(c.linkCPC,2) : '—'}</span></td>
+                  <td class="py-3 px-4 text-right"><span class="${c ? freqColor(c.frequency) : 'text-dark-400'}">${c && c.frequency ? c.frequency.toFixed(1) : '—'}</span></td>
+                  <td class="py-3 px-4 text-center">${onTrackBadge(c)}</td>
                 </tr>
               `;
             }).join('')}
-            ${paused.map(a => `
+            ${inactive.map(a => `
               <tr class="table-row border-b border-dark-700/50 opacity-50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
-                <td class="py-3 px-4"><div class="text-white font-medium">${a.name} <span class="badge badge-gray ml-1">PAUSED</span></div></td>
-                <td class="py-3 px-4 text-dark-400" colspan="12">—</td>
+                <td class="py-3 px-4"><div class="text-white font-medium">${a.name} <span class="badge badge-gray ml-1">INACTIVE</span></div></td>
+                <td class="py-3 px-4 text-dark-400" colspan="13">No active cycle</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1010,8 +1078,9 @@ function renderAccountDetail(name, adAccountId) {
   if (!acct) { el.innerHTML = '<p class="text-dark-400">Account not found</p>'; return; }
 
   const cycles = acct.cycles || [];
-  const latest = cycles.length ? cycles[cycles.length - 1] : null;
-  const cplGoal = acct.cplGoal || (latest && latest.cplGoal);
+  const activeCyc = getActiveCycle(name, adAccountId);
+  const cplGoal = acct.cplGoal || (activeCyc && activeCyc.cplGoal);
+  const isActive = hasActiveCycle(acct);
 
   el.innerHTML = `
     <div class="mb-6">
@@ -1020,45 +1089,45 @@ function renderAccountDetail(name, adAccountId) {
       </button>
       <div class="flex items-center gap-3">
         <h1 class="text-2xl font-bold text-white">${acct.name}</h1>
-        ${acct.isPaused ? '<span class="badge badge-yellow">PAUSED</span>' : '<span class="badge badge-green">Active</span>'}
+        ${isActive ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}
+        ${activeCyc ? onTrackBadge(activeCyc) : ''}
       </div>
-      <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} &middot; Manager: ${acct.manager} &middot; Ad Account: ${acct.adAccountId}</p>
+      <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} · Manager: ${acct.manager} · Ad Account: ${acct.adAccountId}</p>
     </div>
 
-    ${latest ? `
+    ${activeCyc ? `
     <div class="grid grid-cols-6 gap-3 mb-6">
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Total Leads</div>
-        <div class="text-xl font-bold text-white mt-1">${fmt(latest.totalLeads)}</div>
-        <div class="text-xs text-dark-400">Goal: ${fmt(acct.bookedGoal || latest.bookedGoal)}</div>
+        <div class="text-xl font-bold text-white mt-1">${fmt(activeCyc.totalLeads)}</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">OSA Rate</div>
-        <div class="text-xl font-bold ${osaColor(latest.osaPct)} mt-1">${fmtPct(latest.osaPct)}</div>
-        <div class="text-xs text-dark-400">${fmt(latest.bookedAppts)} booked · target &lt;20%</div>
+        <div class="text-xl font-bold ${osaColor(activeCyc.osaPct)} mt-1">${fmtPct(activeCyc.osaPct)}</div>
+        <div class="text-xs text-dark-400">target &lt;20%</div>
+      </div>
+      <div class="glass rounded-xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Est. Booked</div>
+        <div class="text-xl font-bold ${isOnTrack(activeCyc) === true ? 'metric-good' : isOnTrack(activeCyc) === false ? 'metric-bad' : 'text-white'} mt-1">${fmt(activeCyc.estBookedAppts)}</div>
+        <div class="text-xs text-dark-400">Goal: ${fmt(activeCyc.bookedGoal)} (80% = ${activeCyc.bookedGoal ? fmt(Math.ceil(activeCyc.bookedGoal * 0.8)) : '—'})</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">CPL</div>
-        <div class="text-xl font-bold ${cplColor(latest.cpl, cplGoal)} mt-1">${fmtDollar(latest.cpl,2)}</div>
+        <div class="text-xl font-bold ${cplColor(activeCyc.cpl, cplGoal)} mt-1">${fmtDollar(activeCyc.cpl,2)}</div>
         <div class="text-xs text-dark-400">Goal: ${fmtDollar(cplGoal,2)}</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Amount Spent</div>
-        <div class="text-xl font-bold text-white mt-1">${fmtDollar(latest.amountSpent,2)}</div>
-        <div class="text-xs text-dark-400">Budget: ${fmtDollar(acct.monthlyBudget || latest.monthlyBudget)}/mo</div>
-      </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Link CTR</div>
-        <div class="text-xl font-bold ${ctrColor(latest.linkCTR)} mt-1">${latest.linkCTR ? (latest.linkCTR*100).toFixed(2)+'%' : '—'}</div>
-        <div class="text-xs text-dark-400">Target: ≥ 0.90%</div>
+        <div class="text-xl font-bold text-white mt-1">${fmtDollar(activeCyc.amountSpent,2)}</div>
+        <div class="text-xs text-dark-400">Budget: ${fmtDollar(acct.monthlyBudget || activeCyc.monthlyBudget)}/mo</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Frequency</div>
-        <div class="text-xl font-bold ${freqColor(latest.frequency)} mt-1">${latest.frequency ? latest.frequency.toFixed(2) : '—'}</div>
+        <div class="text-xl font-bold ${freqColor(activeCyc.frequency)} mt-1">${activeCyc.frequency ? activeCyc.frequency.toFixed(2) : '—'}</div>
         <div class="text-xs text-dark-400">Target: ≤ 2.50</div>
       </div>
     </div>
-    ` : '<div class="glass rounded-xl p-6 mb-6 text-dark-400 text-center">No cycle data available</div>'}
+    ` : '<div class="glass rounded-xl p-6 mb-6 text-dark-400 text-center">No active cycle</div>'}
 
     <!-- Trend Charts -->
     <div class="grid grid-cols-2 gap-4 mb-6">
@@ -1072,7 +1141,7 @@ function renderAccountDetail(name, adAccountId) {
       </div>
     </div>
 
-    <!-- Lead Breakdown for Current Cycle -->
+    <!-- Lead Breakdown for Active Cycle -->
     <div id="lead-breakdown" class="mb-6"></div>
 
     <!-- Full Cycle History Table -->
@@ -1089,6 +1158,7 @@ function renderAccountDetail(name, adAccountId) {
               <th class="text-right py-2.5 px-3 font-medium">Leads</th>
               <th class="text-right py-2.5 px-3 font-medium">OSA %</th>
               <th class="text-right py-2.5 px-3 font-medium">Booked</th>
+              <th class="text-right py-2.5 px-3 font-medium">Est. Bkd</th>
               <th class="text-right py-2.5 px-3 font-medium">CPL Goal</th>
               <th class="text-right py-2.5 px-3 font-medium">CPL</th>
               <th class="text-right py-2.5 px-3 font-medium">Spent</th>
@@ -1096,23 +1166,24 @@ function renderAccountDetail(name, adAccountId) {
               <th class="text-right py-2.5 px-3 font-medium">CPC</th>
               <th class="text-right py-2.5 px-3 font-medium">CPM</th>
               <th class="text-right py-2.5 px-3 font-medium">Freq</th>
-              <th class="text-right py-2.5 px-3 font-medium">Survey %</th>
-              <th class="text-center py-2.5 px-3 font-medium">Billed</th>
+              <th class="text-center py-2.5 px-3 font-medium">Track</th>
             </tr>
           </thead>
           <tbody>
-            ${cycles.map((c, idx) => {
-              const isLatest = idx === cycles.length - 1;
+            ${cycles.map((c) => {
+              const today = getTodayStr();
+              const isActiveCyc = c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today;
               const cGoal = acct.cplGoal || c.cplGoal;
               return `
-              <tr class="table-row border-b border-dark-700/50 ${isLatest ? 'bg-brand-500/5' : ''}">
-                <td class="py-2.5 px-3 text-white font-medium whitespace-nowrap">${c.cycle} ${isLatest ? '<span class="badge badge-blue ml-1">Current</span>' : ''}</td>
+              <tr class="table-row border-b border-dark-700/50 ${isActiveCyc ? 'bg-brand-500/5' : ''}">
+                <td class="py-2.5 px-3 text-white font-medium whitespace-nowrap">${c.cycle} ${isActiveCyc ? '<span class="badge badge-blue ml-1">Active</span>' : ''}</td>
                 <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleStartDate)}</td>
                 <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleEndDate)}</td>
                 <td class="py-2.5 px-3 text-right text-dark-300">${fmt(c.bookedGoal)}</td>
                 <td class="py-2.5 px-3 text-right text-white font-medium">${fmt(c.totalLeads)}</td>
                 <td class="py-2.5 px-3 text-right"><span class="${osaColor(c.osaPct)}">${fmtPct(c.osaPct)}</span></td>
                 <td class="py-2.5 px-3 text-right text-white">${fmt(c.bookedAppts)}</td>
+                <td class="py-2.5 px-3 text-right text-white">${fmt(c.estBookedAppts)}</td>
                 <td class="py-2.5 px-3 text-right text-dark-400">${fmtDollar(c.cplGoal,2)}</td>
                 <td class="py-2.5 px-3 text-right"><span class="${cplColor(c.cpl, cGoal)}">${fmtDollar(c.cpl,2)}</span></td>
                 <td class="py-2.5 px-3 text-right text-white">${fmtDollar(c.amountSpent,2)}</td>
@@ -1120,8 +1191,7 @@ function renderAccountDetail(name, adAccountId) {
                 <td class="py-2.5 px-3 text-right"><span class="${cpcColor(c.linkCPC)}">${fmtDollar(c.linkCPC,2)}</span></td>
                 <td class="py-2.5 px-3 text-right"><span class="${cpmColor(c.cpm)}">${fmtDollar(c.cpm,2)}</span></td>
                 <td class="py-2.5 px-3 text-right"><span class="${freqColor(c.frequency)}">${c.frequency ? c.frequency.toFixed(2) : '—'}</span></td>
-                <td class="py-2.5 px-3 text-right"><span class="${surveyColor(c.surveyPct)}">${c.surveyPct ? c.surveyPct.toFixed(2)+'%' : '—'}</span></td>
-                <td class="py-2.5 px-3 text-center">${c.billed === 'Yes' ? '<span class="badge badge-green">Yes</span>' : c.goodToBill === 'Yes' ? '<span class="badge badge-yellow">Ready</span>' : '<span class="badge badge-gray">No</span>'}</td>
+                <td class="py-2.5 px-3 text-center">${onTrackBadge(c)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -1129,10 +1199,10 @@ function renderAccountDetail(name, adAccountId) {
       </div>
     </div>
 
-    ${latest && latest.notes ? `
+    ${activeCyc && activeCyc.notes ? `
     <div class="glass rounded-xl p-4 mt-4">
       <h4 class="text-dark-400 text-xs uppercase tracking-wider mb-2">Notes</h4>
-      <p class="text-dark-200 text-sm">${latest.notes}</p>
+      <p class="text-dark-200 text-sm">${activeCyc.notes}</p>
     </div>` : ''}
   `;
 
@@ -1141,7 +1211,6 @@ function renderAccountDetail(name, adAccountId) {
     renderAccountLeadsChart(cycles);
   }
 
-  // Render lead breakdown
   renderLeadBreakdown(acct, cycles);
 }
 
@@ -1149,7 +1218,6 @@ function renderLeadBreakdown(acct, cycles) {
   const container = document.getElementById('lead-breakdown');
   if (!container) return;
 
-  // Find leads matching this account
   const accountLeads = allLeads.filter(l =>
     l.subAccount.toLowerCase().includes(acct.name.toLowerCase()) ||
     acct.name.toLowerCase().includes(l.subAccount.toLowerCase())
@@ -1160,29 +1228,28 @@ function renderLeadBreakdown(acct, cycles) {
     return;
   }
 
-  // Build cycle tabs - show breakdown for each cycle that has matching leads
+  const today = getTodayStr();
   let cycleBreakdowns = [];
   cycles.forEach((c, idx) => {
     if (!c.cycleStartDate || !c.cycleEndDate) return;
     const start = c.cycleStartDate;
     const end = c.cycleEndDate;
     const cycleLeads = accountLeads.filter(l => l.date && l.date >= start && l.date <= end);
-    if (cycleLeads.length > 0 || idx === cycles.length - 1) {
-      cycleBreakdowns.push({ cycle: c, leads: cycleLeads, isLatest: idx === cycles.length - 1 });
+    const isActiveCyc = c.cycleStartDate <= today && c.cycleEndDate >= today;
+    if (cycleLeads.length > 0 || isActiveCyc) {
+      cycleBreakdowns.push({ cycle: c, leads: cycleLeads, isActive: isActiveCyc });
     }
   });
 
-  // Also check for leads that don't match any cycle (use latest cycle's date range for current)
   if (!cycleBreakdowns.length && accountLeads.length > 0) {
-    // Show all leads
-    cycleBreakdowns.push({ cycle: { cycle: 'All Leads' }, leads: accountLeads, isLatest: true });
+    cycleBreakdowns.push({ cycle: { cycle: 'All Leads' }, leads: accountLeads, isActive: true });
   }
 
   if (!cycleBreakdowns.length) { container.innerHTML = ''; return; }
 
-  // Show latest cycle breakdown by default
-  const latest = cycleBreakdowns[cycleBreakdowns.length - 1];
-  const leads = latest.leads;
+  // Show active cycle breakdown by default, fallback to latest
+  const activeBreakdown = cycleBreakdowns.find(b => b.isActive) || cycleBreakdowns[cycleBreakdowns.length - 1];
+  const leads = activeBreakdown.leads;
 
   // Group by date
   const byDate = {};
@@ -1193,10 +1260,10 @@ function renderLeadBreakdown(acct, cycles) {
   });
   const dates = Object.keys(byDate).sort();
 
-  // Group by week (7-day windows from cycle start)
+  // Group by week
   const weeks = { 'Week 1': [], 'Week 2': [], 'Week 3': [], 'Week 4': [], 'Week 5+': [] };
-  if (latest.cycle.cycleStartDate) {
-    const startMs = new Date(latest.cycle.cycleStartDate).getTime();
+  if (activeBreakdown.cycle.cycleStartDate) {
+    const startMs = new Date(activeBreakdown.cycle.cycleStartDate).getTime();
     leads.forEach(l => {
       if (!l.date) return;
       const dayDiff = Math.floor((new Date(l.date).getTime() - startMs) / (86400000));
@@ -1208,32 +1275,32 @@ function renderLeadBreakdown(acct, cycles) {
     });
   }
 
-  // Status breakdown
-  const confirmed = leads.filter(l => l.status && l.status.toLowerCase().includes('confirmed')).length;
-  const cancelled = leads.filter(l => l.status && l.status.toLowerCase().includes('cancel')).length;
-  const callback = leads.filter(l => l.status && (l.status.toLowerCase().includes('call back') || l.status.toLowerCase().includes('callback'))).length;
+  const booked = leads.filter(l => isBookedStatus(l.status)).length;
+  const cancelled = leads.filter(l => isCancelledStatus(l.status)).length;
+  const other = leads.length - booked - cancelled;
 
   container.innerHTML = `
     <div class="glass rounded-xl p-5">
       <div class="flex items-center justify-between mb-4">
-        <h3 class="text-white font-semibold">Lead Breakdown — ${latest.cycle.cycle}</h3>
+        <h3 class="text-white font-semibold">Lead Breakdown — ${activeBreakdown.cycle.cycle}</h3>
         <div class="flex gap-2 text-xs">
-          <span class="badge badge-green">${confirmed} confirmed</span>
-          <span class="badge badge-red">${cancelled} cancelled</span>
-          <span class="badge badge-blue">${callback} callback</span>
-          <span class="badge badge-gray">${leads.length} total</span>
+          <span class="badge badge-green">${booked} booked</span>
+          <span class="badge badge-red">${cancelled} cancelled/invalid</span>
+          <span class="badge badge-gray">${other} other</span>
+          <span class="badge badge-blue">${leads.length} total</span>
         </div>
       </div>
 
       <!-- Week Breakdown -->
       <div class="grid grid-cols-5 gap-3 mb-4">
         ${Object.entries(weeks).filter(([k,v]) => v.length > 0 || k !== 'Week 5+').slice(0,4).map(([week, wLeads]) => {
-          const wConfirmed = wLeads.filter(l => l.status && l.status.toLowerCase().includes('confirmed')).length;
+          const wBooked = wLeads.filter(l => isBookedStatus(l.status)).length;
+          const wCancelled = wLeads.filter(l => isCancelledStatus(l.status)).length;
           return `
           <div class="bg-dark-800/50 rounded-lg p-3">
             <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${week}</div>
             <div class="text-white font-bold text-lg">${wLeads.length}</div>
-            <div class="text-xs text-dark-400">${wConfirmed} confirmed</div>
+            <div class="text-xs"><span class="lead-booked">${wBooked} booked</span> · <span class="lead-cancelled">${wCancelled} canc.</span></div>
           </div>`;
         }).join('')}
         ${weeks['Week 5+'].length > 0 ? `
@@ -1243,32 +1310,27 @@ function renderLeadBreakdown(acct, cycles) {
         </div>` : ''}
       </div>
 
-      <!-- Day-by-Day -->
+      <!-- Day-by-Day with individual leads -->
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead>
             <tr class="border-b border-dark-600 text-dark-400 uppercase tracking-wider">
               <th class="text-left py-2 px-2 font-medium">Date</th>
-              <th class="text-right py-2 px-2 font-medium">Leads</th>
-              <th class="text-right py-2 px-2 font-medium">Confirmed</th>
-              <th class="text-right py-2 px-2 font-medium">Cancelled</th>
-              <th class="text-left py-2 px-2 font-medium">Names</th>
+              <th class="text-left py-2 px-2 font-medium">Name</th>
+              <th class="text-left py-2 px-2 font-medium">Status</th>
+              <th class="text-left py-2 px-2 font-medium">Source</th>
             </tr>
           </thead>
           <tbody>
             ${dates.map(d => {
               const dayLeads = byDate[d];
-              const dConf = dayLeads.filter(l => l.status && l.status.toLowerCase().includes('confirmed')).length;
-              const dCanc = dayLeads.filter(l => l.status && l.status.toLowerCase().includes('cancel')).length;
-              const names = dayLeads.map(l => l.name).filter(Boolean).slice(0, 3).join(', ');
-              return `
+              return dayLeads.map((l, li) => `
               <tr class="border-b border-dark-700/30">
-                <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${fmtDate(d)}</td>
-                <td class="py-1.5 px-2 text-right text-white font-medium">${dayLeads.length}</td>
-                <td class="py-1.5 px-2 text-right metric-good">${dConf || '—'}</td>
-                <td class="py-1.5 px-2 text-right metric-bad">${dCanc || '—'}</td>
-                <td class="py-1.5 px-2 text-dark-400 truncate max-w-[200px]">${names}${dayLeads.length > 3 ? '...' : ''}</td>
-              </tr>`;
+                ${li === 0 ? `<td class="py-1.5 px-2 text-dark-200 whitespace-nowrap align-top" rowspan="${dayLeads.length}">${fmtDate(d)} <span class="text-dark-500">(${dayLeads.length})</span></td>` : ''}
+                <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.name || '—'}</td>
+                <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.status || '—'}</td>
+                <td class="py-1.5 px-2 text-dark-400">${l.source}</td>
+              </tr>`).join('');
             }).join('')}
           </tbody>
         </table>
@@ -1327,12 +1389,12 @@ function renderBilling() {
   el.classList.remove('hidden');
 
   const billingData = [];
-  allAccounts.filter(a => !a.isPaused).forEach(a => {
-    const latest = getLatestCycle(a.name, a.adAccountId);
-    if (!latest) return;
-    billingData.push({ account: a, cycle: latest.cycle, spent: latest.amountSpent,
-      goodToBill: latest.goodToBill, billed: latest.billed, billingNotes: latest.billingNotes,
-      monthlyBudget: a.monthlyBudget || latest.monthlyBudget });
+  allAccounts.filter(a => hasActiveCycle(a)).forEach(a => {
+    const c = getActiveCycle(a.name, a.adAccountId);
+    if (!c) return;
+    billingData.push({ account: a, cycle: c.cycle, spent: c.amountSpent,
+      goodToBill: c.goodToBill, billed: c.billed, billingNotes: c.billingNotes,
+      monthlyBudget: a.monthlyBudget || c.monthlyBudget });
   });
 
   const readyToBill = billingData.filter(b => b.goodToBill === 'Yes' && b.billed !== 'Yes');
@@ -1344,7 +1406,7 @@ function renderBilling() {
   el.innerHTML = `
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-white">Billing Tracker</h1>
-      <p class="text-dark-300 text-sm mt-1">Current cycle billing status</p>
+      <p class="text-dark-300 text-sm mt-1">Active cycle billing status</p>
     </div>
     <div class="grid grid-cols-4 gap-4 mb-6">
       <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Ready to Bill</div><div class="text-2xl font-bold text-yellow-400">${readyToBill.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalReady)}</div></div>
