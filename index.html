@@ -55,6 +55,7 @@ tailwind.config = {
   .metric-warn { color: #eab308; }
   .metric-neutral { color: #e2e8f0; }
   .lead-booked { color: #22c55e; }
+  .lead-client { color: #fbbf24; }
   .lead-cancelled { color: #ef4444; }
   .lead-open { color: #e2e8f0; }
   .filter-badge { display: inline-flex; align-items: center; padding: 4px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; }
@@ -63,6 +64,7 @@ tailwind.config = {
   .filter-badge.fb-green { background: rgba(34,197,94,0.25); color: #22c55e; }
   .filter-badge.fb-red { background: rgba(239,68,68,0.25); color: #ef4444; }
   .filter-badge.fb-white { background: rgba(226,232,240,0.15); color: #e2e8f0; }
+  .filter-badge.fb-yellow { background: rgba(251,191,36,0.2); color: #fbbf24; }
   .filter-badge.fb-blue { background: rgba(59,130,246,0.25); color: #3b82f6; }
   .cycle-row-clickable { cursor: pointer; transition: background 0.15s; }
   .cycle-row-clickable:hover { background: rgba(59,130,246,0.1) !important; }
@@ -684,8 +686,8 @@ function surveyColor(v) {
 // Lead status color: green=booked, red=cancelled/invalid, white=other
 function leadStatusColor(status) {
   if (!status) return 'lead-open';
-  const s = status.toLowerCase().trim();
   if (isBookedStatus(status)) return 'lead-booked';
+  if (isClientHandles(status)) return 'lead-client';
   if (isCancelledStatus(status)) return 'lead-cancelled';
   return 'lead-open';
 }
@@ -693,11 +695,17 @@ function leadStatusColor(status) {
 function isBookedStatus(status) {
   if (!status) return false;
   const s = status.toLowerCase().trim();
-  // "Confirmed" but NOT "Unconfirmed"
+  // "Confirmed" but NOT "Unconfirmed", and NOT "client handles"
+  if (s.includes('client handles')) return false;
   if (s === 'confirmed') return true;
   if (s.includes('confirmed') && !s.includes('unconfirmed')) return true;
-  if (s.includes('manual booked') || s.includes('client handles')) return true;
+  if (s.includes('manual booked')) return true;
   return false;
+}
+
+function isClientHandles(status) {
+  if (!status) return false;
+  return status.toLowerCase().trim().includes('client handles');
 }
 
 function isCancelledStatus(status) {
@@ -706,13 +714,13 @@ function isCancelledStatus(status) {
   return s.includes('cancel') || s.includes('invalid');
 }
 
-// "Open" = anything not booked and not cancelled
+// "Open" = anything not booked, not client handles, and not cancelled
 function isOpenStatus(status) {
-  return !isBookedStatus(status) && !isCancelledStatus(status);
+  return !isBookedStatus(status) && !isClientHandles(status) && !isCancelledStatus(status);
 }
 
 // Active lead filter state for the breakdown table
-let activeLeadFilter = 'all'; // 'all', 'booked', 'cancelled', 'open'
+let activeLeadFilter = 'all'; // 'all', 'booked', 'client', 'cancelled', 'open'
 
 // ═══════════════════════════════════════════════
 // ACTIVE CYCLE LOGIC — cycles containing today
@@ -1446,6 +1454,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
   // Apply filter
   const filtered = activeLeadFilter === 'all' ? leads :
     activeLeadFilter === 'booked' ? leads.filter(l => isBookedStatus(l.status)) :
+    activeLeadFilter === 'client' ? leads.filter(l => isClientHandles(l.status)) :
     activeLeadFilter === 'cancelled' ? leads.filter(l => isCancelledStatus(l.status)) :
     leads.filter(l => isOpenStatus(l.status));
 
@@ -1474,6 +1483,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
   }
 
   const booked = leads.filter(l => isBookedStatus(l.status)).length;
+  const clientH = leads.filter(l => isClientHandles(l.status)).length;
   const cancelled = leads.filter(l => isCancelledStatus(l.status)).length;
   const open = leads.filter(l => isOpenStatus(l.status)).length;
 
@@ -1485,6 +1495,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
         <h3 class="text-white font-semibold text-base">Lead Breakdown — ${activeBreakdown.cycle.cycle}</h3>
         <div class="flex gap-2 flex-wrap">
           <span class="filter-badge fb-green ${fActive('booked')}" onclick="setLeadFilter('booked')">${booked} booked</span>
+          <span class="filter-badge fb-yellow ${fActive('client')}" onclick="setLeadFilter('client')">${clientH} client handles</span>
           <span class="filter-badge fb-red ${fActive('cancelled')}" onclick="setLeadFilter('cancelled')">${cancelled} cancelled</span>
           <span class="filter-badge fb-white ${fActive('open')}" onclick="setLeadFilter('open')">${open} open</span>
           <span class="filter-badge fb-blue ${fActive('all')}" onclick="setLeadFilter('all')">${leads.length} total</span>
@@ -1495,13 +1506,14 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
       <div class="grid grid-cols-5 gap-3 mb-4">
         ${Object.entries(weeks).filter(([k,v]) => v.length > 0 || k !== 'Week 5+').slice(0,4).map(([week, wLeads]) => {
           const wBooked = wLeads.filter(l => isBookedStatus(l.status)).length;
+          const wClient = wLeads.filter(l => isClientHandles(l.status)).length;
           const wCancelled = wLeads.filter(l => isCancelledStatus(l.status)).length;
           const wOpen = wLeads.filter(l => isOpenStatus(l.status)).length;
           return `
           <div class="bg-dark-800/50 rounded-lg p-3">
             <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${week}</div>
             <div class="text-white font-bold text-lg">${wLeads.length}</div>
-            <div class="text-xs"><span class="lead-booked">${wBooked} bkd</span> · <span class="lead-cancelled">${wCancelled} canc</span> · <span class="lead-open">${wOpen} open</span></div>
+            <div class="text-xs"><span class="lead-booked">${wBooked} bkd</span> · <span class="lead-client">${wClient} cli</span> · <span class="lead-cancelled">${wCancelled} canc</span> · <span class="lead-open">${wOpen} open</span></div>
           </div>`;
         }).join('')}
         ${weeks['Week 5+'].length > 0 ? `
