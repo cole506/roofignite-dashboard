@@ -50,6 +50,14 @@ tailwind.config = {
   .badge-yellow { background: rgba(234,179,8,0.15); color: #eab308; }
   .badge-blue { background: rgba(59,130,246,0.15); color: #3b82f6; }
   .badge-gray { background: rgba(148,163,184,0.15); color: #94a3b8; }
+  .metric-good { color: #22c55e; }
+  .metric-bad { color: #ef4444; }
+  .metric-warn { color: #eab308; }
+  .metric-neutral { color: #e2e8f0; }
+  .tab-btn { padding: 6px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
+  .tab-btn.active { background: rgba(249,115,22,0.15); color: #fb923c; font-weight: 600; }
+  .tab-btn:not(.active) { color: #94a3b8; }
+  .tab-btn:not(.active):hover { color: #e2e8f0; background: rgba(100,116,139,0.1); }
 </style>
 </head>
 <body class="min-h-screen">
@@ -69,7 +77,7 @@ tailwind.config = {
       </div>
     </div>
 
-    <nav class="flex-1 py-4 px-3 space-y-1">
+    <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
       <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-1">Overview</div>
       <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
@@ -81,14 +89,28 @@ tailwind.config = {
         <span id="alert-badge" class="ml-auto badge badge-red hidden">0</span>
       </button>
 
+      <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Managers</div>
+      <button onclick="navigate('manager', 'Cole')" id="nav-mgr-cole" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Cole
+      </button>
+      <button onclick="navigate('manager', 'Jonathan')" id="nav-mgr-jonathan" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Jonathan
+      </button>
+      <button onclick="navigate('manager', 'Tyler')" id="nav-mgr-tyler" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        Tyler
+      </button>
+
       <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Pods</div>
       <button onclick="navigate('pod', 'Pod 2 - RoofIgnite')" id="nav-pod2" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        Pod 2 — Tyler
+        Pod 2
       </button>
       <button onclick="navigate('pod', 'Pod 1 - RoofIgnite')" id="nav-pod1" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        Pod 1 — Oscar
+        Pod 1
       </button>
 
       <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Accounts</div>
@@ -119,27 +141,17 @@ tailwind.config = {
 
   <!-- Main Content -->
   <main class="flex-1 ml-[260px] p-6">
-    <!-- Loading State -->
     <div id="loading-state" class="flex items-center justify-center h-96">
       <div class="text-center">
         <div class="w-12 h-12 border-3 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
         <p class="text-dark-300 text-sm">Fetching live data from Google Sheets...</p>
       </div>
     </div>
-
-    <!-- Dashboard View -->
     <div id="view-dashboard" class="hidden fade-in"></div>
-
-    <!-- Alerts View -->
     <div id="view-alerts" class="hidden fade-in"></div>
-
-    <!-- Pod View -->
     <div id="view-pod" class="hidden fade-in"></div>
-
-    <!-- Account Detail View -->
+    <div id="view-manager" class="hidden fade-in"></div>
     <div id="view-account" class="hidden fade-in"></div>
-
-    <!-- Billing View -->
     <div id="view-billing" class="hidden fade-in"></div>
   </main>
 </div>
@@ -153,20 +165,27 @@ const SHEETS = {
   'Pod 2 - RoofIgnite': 0,
   'Pod 1 - RoofIgnite': 295240236
 };
+const LEAD_SHEETS = {
+  'ALL_ROOF': 1440123496,
+  'ALL_CiGN': 951162408
+};
 
 const KPI_TARGETS = {
-  linkCTR: 0.009,
-  linkCPC: 3.00,
-  cpm: 20.00,
-  frequency: 2.50,
-  surveyPct: 2.00
+  linkCTR: 0.009,   // >= 0.90% is good
+  linkCPC: 3.00,    // <= $3.00 is good
+  cpm: 20.00,       // <= $20 is good
+  frequency: 2.50,  // <= 2.50 is good
+  surveyPct: 2.00,  // >= 2.00% is good
+  osaPct: 20        // < 20% is good (lower is better for OSA)
 };
 
 let allAccounts = [];
 let allCycles = [];
+let allLeads = [];  // leads from ALL_ROOF + ALL_CiGN
 let currentView = 'dashboard';
 let currentPod = null;
 let currentAccount = null;
+let currentManager = null;
 
 async function fetchSheetData(sheetName, gid) {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}`;
@@ -183,17 +202,71 @@ async function fetchSheetData(sheetName, gid) {
   }
 }
 
+async function fetchLeadData(sheetName, gid) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}`;
+  try {
+    const resp = await fetch(url);
+    const text = await resp.text();
+    const jsonStr = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?/);
+    if (!jsonStr) throw new Error('Failed to parse lead response');
+    const data = JSON.parse(jsonStr[1]);
+    return parseLeadData(data, sheetName);
+  } catch (e) {
+    console.error(`Error fetching leads ${sheetName}:`, e);
+    return [];
+  }
+}
+
+function parseLeadData(data, source) {
+  const rows = data.table.rows;
+  const leads = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row.c) continue;
+    const va = row.c[0] ? (row.c[0].v || '') : '';
+    const dateRaw = row.c[1] ? (row.c[1].f || row.c[1].v || '') : '';
+    const subAccount = row.c[2] ? (row.c[2].v || '') : '';
+    const name = row.c[3] ? (row.c[3].v || '') : '';
+    const status = row.c[6] ? (row.c[6].v || '') : '';
+
+    if (!subAccount || !dateRaw) continue;
+
+    // Parse the date
+    let dateStr = '';
+    if (row.c[1] && row.c[1].v) {
+      const v = row.c[1].v;
+      if (typeof v === 'string' && v.match(/Date\(/)) {
+        const m = v.match(/Date\((\d+),(\d+),(\d+)/);
+        if (m) dateStr = `${m[1]}-${String(Number(m[2])+1).padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+      } else if (row.c[1].f) {
+        dateStr = row.c[1].f;
+      } else {
+        dateStr = String(v);
+      }
+    }
+
+    leads.push({
+      source,
+      va: va.trim(),
+      date: dateStr,
+      subAccount: subAccount.trim(),
+      name: name.trim(),
+      status: status.trim(),
+    });
+  }
+  return leads;
+}
+
 function parseSheetData(data, podName) {
   const rows = data.table.rows;
-  const cols = data.table.cols;
   const accounts = [];
   const cycles = [];
   let currentAccountName = '';
   let currentAdAccountId = '';
   let currentSection = '';
-  let currentManager = '';
+  let currentMgr = '';
 
-  for (let i = 1; i < rows.length; i++) { // skip header
+  for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row.c) continue;
 
@@ -203,7 +276,7 @@ function parseSheetData(data, podName) {
 
     if (!cellA && !cellB && !cellC) continue;
 
-    // Detect section headers (like "Tyler", "ROOF Ignite", "EXPANSION CLIENTS", "POD 1 KLAUS DEALERS")
+    // Detect section headers
     const isSection = cellA && !cellB && !cellC &&
       (cellA.includes('EXPANSION') || cellA.includes('POD 1') || cellA.includes('Tyler') ||
        cellA === 'ROOF Ignite' || cellA.includes('TAKEN OVER') || cellA.includes('ContractorsIgnite') ||
@@ -211,57 +284,61 @@ function parseSheetData(data, podName) {
 
     if (isSection) {
       currentSection = cellA;
-      if (cellA === 'Tyler') currentManager = 'Tyler';
-      else if (cellA.includes('OSCAR') || cellA.includes('EXPANSION')) currentManager = 'Oscar';
       continue;
     }
 
-    // Detect account summary rows (have account name + ad account ID, but cycle cell might be empty or say PAUSED/WINTER)
-    const hasAdAccountId = cellC && String(cellC).length > 10 && /^\d+$/.test(String(cellC).replace(/\s/g,''));
-    const isCycleRow = cellB && (String(cellB).toLowerCase().startsWith('cycle') || String(cellB).toLowerCase().includes('winter'));
+    // Detect account rows: has account name in A, has ad account ID in C (long number)
+    const hasAdAccountId = cellC && String(cellC).replace(/\s/g,'').length > 10 && /^\d+$/.test(String(cellC).replace(/\s/g,''));
 
-    if (cellA && hasAdAccountId && !isCycleRow) {
+    // Check if B is a cycle label
+    const cellBStr = String(cellB).trim();
+    const cellBLower = cellBStr.toLowerCase();
+    const isCycleLabel = cellBStr && (cellBLower.startsWith('cycle') || (cellBLower.includes('winter') && cellBLower.includes('cycle')));
+
+    // Check if B is a paused/winter status (NOT a cycle row)
+    const isPausedStatus = cellBStr && !isCycleLabel &&
+      (cellBStr.toUpperCase() === 'PAUSED' || cellBStr.toUpperCase() === 'PAUSE' || cellBStr.toUpperCase() === 'WINTER');
+
+    // Account summary row: has name in A, ad account ID in C, and B is NOT a cycle label
+    if (cellA && hasAdAccountId && !isCycleLabel) {
       currentAccountName = cellA.trim();
-      currentAdAccountId = String(cellC).trim();
+      currentAdAccountId = String(cellC).replace(/\s/g,'').trim();
 
-      const isPaused = cellB && (String(cellB).toUpperCase() === 'PAUSED' || String(cellB).toUpperCase() === 'PAUSE' || String(cellB).toUpperCase() === 'WINTER');
+      // Get account manager from column V (index 21)
+      const mgr = row.c[21] ? String(row.c[21].v || '').trim() : '';
+      if (mgr) currentMgr = mgr;
 
-      // Get goals from summary row
       const bookedGoal = getNum(row, 5);
       const gregGoal = getNum(row, 6);
       const cplGoal = getNum(row, 11);
       const dailyBudget = getNum(row, 13);
       const monthlyBudget = getNum(row, 14);
 
-      // Try to get account manager from column V (index 21)
-      const mgr = row.c[21] ? (row.c[21].v || '') : '';
-      if (mgr) currentManager = mgr.trim();
-
       accounts.push({
         name: currentAccountName,
         adAccountId: currentAdAccountId,
         pod: podName,
         section: currentSection,
-        manager: currentManager || (podName === 'Pod 2 - RoofIgnite' ? 'Tyler' : 'Oscar'),
-        isPaused: isPaused,
-        bookedGoal: bookedGoal,
-        gregGoal: gregGoal,
-        cplGoal: cplGoal,
-        dailyBudget: dailyBudget,
-        monthlyBudget: monthlyBudget,
+        manager: currentMgr || 'Unassigned',
+        isPaused: isPausedStatus,
+        bookedGoal, gregGoal, cplGoal, dailyBudget, monthlyBudget,
         cycles: []
       });
       continue;
     }
 
-    // Cycle rows
-    if (isCycleRow && currentAccountName) {
+    // Cycle rows: B starts with "Cycle" or contains "Winter Cycle"
+    if (isCycleLabel && currentAccountName) {
+      // Get manager from this row if present
+      const rowMgr = row.c[21] ? String(row.c[21].v || '').trim() : '';
+      if (rowMgr) currentMgr = rowMgr;
+
       const cycleData = {
         account: currentAccountName,
         adAccountId: currentAdAccountId,
         pod: podName,
-        manager: currentManager || (podName === 'Pod 2 - RoofIgnite' ? 'Tyler' : 'Oscar'),
-        cycle: String(cellB).trim(),
+        manager: currentMgr || 'Unassigned',
+        cycle: cellBStr,
         cycleStartDate: getDate(row, 3),
         cycleEndDate: getDate(row, 4),
         bookedGoal: getNum(row, 5),
@@ -280,7 +357,7 @@ function parseSheetData(data, podName) {
         cpm: getNum(row, 18),
         frequency: getNum(row, 19),
         surveyPct: getNum(row, 20),
-        accountManager: row.c[21] ? (row.c[21].v || '') : '',
+        accountManager: rowMgr || currentMgr,
         notes: row.c[22] ? (row.c[22].v || '') : '',
         goodToBill: row.c[23] ? (row.c[23].v || '') : '',
         billed: row.c[24] ? (row.c[24].v || '') : '',
@@ -288,8 +365,6 @@ function parseSheetData(data, podName) {
       };
 
       cycles.push(cycleData);
-
-      // Attach to parent account
       const parentAcct = accounts.find(a => a.name === currentAccountName && a.adAccountId === currentAdAccountId);
       if (parentAcct) parentAcct.cycles.push(cycleData);
     }
@@ -308,25 +383,45 @@ function getNum(row, idx) {
 
 function getDate(row, idx) {
   if (!row.c || !row.c[idx]) return null;
-  const v = row.c[idx].v;
+  const cell = row.c[idx];
+  const v = cell.v;
   if (!v) return null;
+
+  // Try formatted value first
+  if (cell.f) {
+    // Google might give "1/15/2026" or "2026-01-15"
+    const d = new Date(cell.f);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    return cell.f;
+  }
+
+  // Handle Date(year, month, day) format
+  if (typeof v === 'string' && v.includes('Date(')) {
+    const m = v.match(/Date\((\d+),(\d+),(\d+)/);
+    if (m) return `${m[1]}-${String(Number(m[2])+1).padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  }
+
   if (typeof v === 'string') return v;
-  // Google Sheets date format: Date(year, month, day)
-  const match = String(row.c[idx].f || v).match(/\d{4}[-/]\d{2}[-/]\d{2}/);
-  if (match) return match[0];
-  return row.c[idx].f || String(v);
+  return String(v);
 }
 
 async function loadAllData() {
   document.getElementById('loading-state').classList.remove('hidden');
 
-  const results = await Promise.all([
-    fetchSheetData('Pod 2 - RoofIgnite', SHEETS['Pod 2 - RoofIgnite']),
-    fetchSheetData('Pod 1 - RoofIgnite', SHEETS['Pod 1 - RoofIgnite'])
+  const [podResults, leadResults] = await Promise.all([
+    Promise.all([
+      fetchSheetData('Pod 2 - RoofIgnite', SHEETS['Pod 2 - RoofIgnite']),
+      fetchSheetData('Pod 1 - RoofIgnite', SHEETS['Pod 1 - RoofIgnite'])
+    ]),
+    Promise.all([
+      fetchLeadData('ALL_ROOF', LEAD_SHEETS['ALL_ROOF']),
+      fetchLeadData('ALL_CiGN', LEAD_SHEETS['ALL_CiGN'])
+    ])
   ]);
 
-  allAccounts = [...results[0].accounts, ...results[1].accounts];
-  allCycles = [...results[0].cycles, ...results[1].cycles];
+  allAccounts = [...podResults[0].accounts, ...podResults[1].accounts];
+  allCycles = [...podResults[0].cycles, ...podResults[1].cycles];
+  allLeads = [...leadResults[0], ...leadResults[1]];
 
   // Populate account dropdown
   const sel = document.getElementById('account-select');
@@ -352,17 +447,12 @@ async function loadAllData() {
     sel.appendChild(group);
   }
 
-  // Update status
   document.getElementById('data-status').className = 'w-2 h-2 rounded-full bg-green-500';
-  document.getElementById('data-status-text').textContent = `${allAccounts.length} accounts loaded`;
+  document.getElementById('data-status-text').textContent = `${allAccounts.length} accounts · ${allLeads.length} leads`;
 
-  // Update alert badge
   const alertCount = getAlertAccounts().length;
   const badge = document.getElementById('alert-badge');
-  if (alertCount > 0) {
-    badge.textContent = alertCount;
-    badge.classList.remove('hidden');
-  }
+  if (alertCount > 0) { badge.textContent = alertCount; badge.classList.remove('hidden'); }
 
   document.getElementById('loading-state').classList.add('hidden');
   navigate('dashboard');
@@ -389,6 +479,43 @@ function fmtPct(n) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return n.toFixed(0) + '%';
 }
+function fmtDate(dateStr) {
+  if (!dateStr || dateStr === '—') return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Metric coloring helpers
+function osaColor(v) {
+  if (v === null || v === undefined) return 'text-dark-400';
+  return v < KPI_TARGETS.osaPct ? 'metric-good' : 'metric-bad';
+}
+function cplColor(v, goal) {
+  if (v === null || v === undefined) return 'text-dark-400';
+  if (!goal) return 'metric-neutral';
+  return v <= goal ? 'metric-good' : 'metric-bad';
+}
+function ctrColor(v) {
+  if (v === null || v === undefined || v === 0) return 'text-dark-400';
+  return v >= KPI_TARGETS.linkCTR ? 'metric-good' : 'metric-bad';
+}
+function cpcColor(v) {
+  if (v === null || v === undefined) return 'text-dark-400';
+  return v <= KPI_TARGETS.linkCPC ? 'metric-good' : 'metric-bad';
+}
+function cpmColor(v) {
+  if (v === null || v === undefined) return 'text-dark-400';
+  return v <= KPI_TARGETS.cpm ? 'metric-good' : 'metric-bad';
+}
+function freqColor(v) {
+  if (v === null || v === undefined) return 'text-dark-400';
+  return v <= KPI_TARGETS.frequency ? 'metric-good' : (v <= 3.5 ? 'metric-warn' : 'metric-bad');
+}
+function surveyColor(v) {
+  if (v === null || v === undefined) return 'text-dark-400';
+  return v >= KPI_TARGETS.surveyPct ? 'metric-good' : 'metric-bad';
+}
 
 function getLatestCycle(accountName, adAccountId) {
   const acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
@@ -403,50 +530,44 @@ function getAlertAccounts() {
     if (!latest) return;
     const issues = [];
 
-    if (latest.osaPct !== null && latest.osaPct === 0 && latest.totalLeads > 5) issues.push({ type: 'danger', msg: '0% booking rate with leads coming in' });
-    else if (latest.osaPct !== null && latest.osaPct < 5 && latest.totalLeads > 10) issues.push({ type: 'warning', msg: `Low booking rate: ${fmtPct(latest.osaPct)}` });
-
+    if (latest.osaPct !== null && latest.osaPct >= KPI_TARGETS.osaPct && latest.totalLeads > 5) issues.push({ type: 'danger', msg: `High OSA: ${fmtPct(latest.osaPct)}` });
     if (acct.cplGoal && latest.cpl && latest.cpl > acct.cplGoal * 1.5) issues.push({ type: 'danger', msg: `CPL ${fmtDollar(latest.cpl,2)} far exceeds goal ${fmtDollar(acct.cplGoal,2)}` });
     else if (acct.cplGoal && latest.cpl && latest.cpl > acct.cplGoal * 1.15) issues.push({ type: 'warning', msg: `CPL ${fmtDollar(latest.cpl,2)} above goal ${fmtDollar(acct.cplGoal,2)}` });
-
     if (latest.totalLeads !== null && latest.totalLeads === 0) issues.push({ type: 'danger', msg: 'Zero leads this cycle' });
-
     if (latest.linkCTR !== null && latest.linkCTR > 0 && latest.linkCTR < KPI_TARGETS.linkCTR) issues.push({ type: 'warning', msg: `Low CTR: ${(latest.linkCTR * 100).toFixed(2)}%` });
-
     if (latest.frequency !== null && latest.frequency > 4) issues.push({ type: 'warning', msg: `High frequency: ${latest.frequency.toFixed(1)}` });
 
     if (issues.length) alerts.push({ account: acct, latest, issues });
   });
+  return alerts.sort((a, b) => b.issues.filter(i => i.type === 'danger').length - a.issues.filter(i => i.type === 'danger').length);
+}
 
-  return alerts.sort((a, b) => {
-    const aDanger = a.issues.filter(i => i.type === 'danger').length;
-    const bDanger = b.issues.filter(i => i.type === 'danger').length;
-    return bDanger - aDanger;
+function getAccountsByPod(podName) { return allAccounts.filter(a => a.pod === podName); }
+
+function getAccountsByManager(mgrName) {
+  return allAccounts.filter(a => {
+    const m = (a.manager || '').toLowerCase();
+    return m === mgrName.toLowerCase() || m.includes(mgrName.toLowerCase());
   });
 }
 
-function getAccountsByManager() {
-  const mgrs = {};
-  allAccounts.forEach(a => {
-    const m = a.manager || 'Unassigned';
-    if (!mgrs[m]) mgrs[m] = [];
-    mgrs[m].push(a);
+function getLeadsForAccount(accountName, startDate, endDate) {
+  return allLeads.filter(l => {
+    const nameMatch = l.subAccount.toLowerCase().includes(accountName.toLowerCase()) || accountName.toLowerCase().includes(l.subAccount.toLowerCase());
+    if (!nameMatch) return false;
+    if (startDate && endDate && l.date) {
+      return l.date >= startDate && l.date <= endDate;
+    }
+    return true;
   });
-  return mgrs;
-}
-
-function getAccountsByPod(podName) {
-  return allAccounts.filter(a => a.pod === podName);
 }
 
 // ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
 function navigate(view, param) {
-  // Hide all views
   document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-
   currentView = view;
 
   switch(view) {
@@ -463,6 +584,13 @@ function navigate(view, param) {
       if (param === 'Pod 2 - RoofIgnite') document.getElementById('nav-pod2').classList.add('active');
       else document.getElementById('nav-pod1').classList.add('active');
       renderPodView(param);
+      break;
+    case 'manager':
+      currentManager = param;
+      const navId = 'nav-mgr-' + param.toLowerCase();
+      const navEl = document.getElementById(navId);
+      if (navEl) navEl.classList.add('active');
+      renderManagerView(param);
       break;
     case 'account':
       renderAccountDetail(param.name, param.adAccountId);
@@ -491,10 +619,7 @@ function renderDashboard() {
   const paused = allAccounts.filter(a => a.isPaused);
   const alerts = getAlertAccounts();
 
-  // Aggregate latest cycle data
   let totalLeads = 0, totalSpent = 0, totalBooked = 0, cplValues = [], osaValues = [];
-  const pod1Accts = active.filter(a => a.pod === 'Pod 1 - RoofIgnite');
-  const pod2Accts = active.filter(a => a.pod === 'Pod 2 - RoofIgnite');
 
   active.forEach(a => {
     const latest = getLatestCycle(a.name, a.adAccountId);
@@ -509,8 +634,10 @@ function renderDashboard() {
   const avgCPL = cplValues.length ? cplValues.reduce((a,b)=>a+b,0)/cplValues.length : 0;
   const avgOSA = osaValues.length ? osaValues.reduce((a,b)=>a+b,0)/osaValues.length : 0;
 
-  // Calculate pod-level stats
-  function podStats(accts) {
+  // Manager stats
+  const managers = ['Cole', 'Jonathan', 'Tyler'];
+  function mgrStats(name) {
+    const accts = getAccountsByManager(name).filter(a => !a.isPaused);
     let leads=0, spent=0, booked=0, cpls=[];
     accts.forEach(a => {
       const l = getLatestCycle(a.name, a.adAccountId);
@@ -523,16 +650,28 @@ function renderDashboard() {
     return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.length };
   }
 
-  const p1Stats = podStats(pod1Accts);
-  const p2Stats = podStats(pod2Accts);
+  // Pod stats
+  function podStats(accts) {
+    let leads=0, spent=0, booked=0, cpls=[];
+    accts.filter(a=>!a.isPaused).forEach(a => {
+      const l = getLatestCycle(a.name, a.adAccountId);
+      if (!l) return;
+      if (l.totalLeads) leads += l.totalLeads;
+      if (l.amountSpent) spent += l.amountSpent;
+      if (l.bookedAppts) booked += l.bookedAppts;
+      if (l.cpl && l.cpl > 0) cpls.push(l.cpl);
+    });
+    return { leads, spent, booked, avgCPL: cpls.length ? cpls.reduce((a,b)=>a+b,0)/cpls.length : 0, count: accts.filter(a=>!a.isPaused).length };
+  }
+  const p1 = podStats(getAccountsByPod('Pod 1 - RoofIgnite'));
+  const p2 = podStats(getAccountsByPod('Pod 2 - RoofIgnite'));
 
   el.innerHTML = `
     <div class="mb-6">
       <h1 class="text-2xl font-bold text-white">Leadership Dashboard</h1>
-      <p class="text-dark-300 text-sm mt-1">Real-time overview across all pods &middot; ${active.length} active accounts, ${paused.length} paused</p>
+      <p class="text-dark-300 text-sm mt-1">Real-time overview &middot; ${active.length} active, ${paused.length} paused &middot; ${allLeads.length} leads tracked</p>
     </div>
 
-    <!-- Top KPI Cards -->
     <div class="grid grid-cols-5 gap-4 mb-6">
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Active Accounts</div>
@@ -546,13 +685,13 @@ function renderDashboard() {
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Avg CPL</div>
-        <div class="text-2xl font-bold ${avgCPL > 300 ? 'text-red-400' : 'text-white'}">${fmtDollar(avgCPL, 2)}</div>
-        <div class="text-xs text-dark-300 mt-1">across active accounts</div>
+        <div class="text-2xl font-bold text-white">${fmtDollar(avgCPL, 2)}</div>
+        <div class="text-xs text-dark-300 mt-1">across active</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Avg OSA Rate</div>
-        <div class="text-2xl font-bold ${avgOSA < 5 ? 'text-red-400' : avgOSA < 10 ? 'text-yellow-400' : 'text-green-400'}">${fmtPct(avgOSA)}</div>
-        <div class="text-xs text-dark-300 mt-1">booking rate</div>
+        <div class="text-2xl font-bold ${osaColor(avgOSA)} mt-0">${fmtPct(avgOSA)}</div>
+        <div class="text-xs text-dark-300 mt-1">target: &lt; 20%</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card ${alerts.length > 0 ? 'glow border-red-500/30' : ''}">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Alerts</div>
@@ -561,34 +700,50 @@ function renderDashboard() {
       </div>
     </div>
 
+    <!-- Manager Cards -->
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      ${managers.map(m => {
+        const s = mgrStats(m);
+        return `
+        <div class="glass rounded-xl p-5 cursor-pointer hover:border-brand-500/30 transition-all" onclick="navigate('manager','${m}')">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-white font-semibold">${m}</h3>
+              <p class="text-dark-400 text-xs">${s.count} active accounts</p>
+            </div>
+            <span class="text-brand-400 text-xs hover:text-brand-300">View →</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(s.leads)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(s.booked)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(s.avgCPL,2)}</div></div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
     <!-- Pod Comparison -->
     <div class="grid grid-cols-2 gap-4 mb-6">
       <div class="glass rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
-          <div>
-            <h3 class="text-white font-semibold">Pod 2 — Tyler</h3>
-            <p class="text-dark-400 text-xs">${p2Stats.count} active accounts</p>
-          </div>
+          <div><h3 class="text-white font-semibold">Pod 2</h3><p class="text-dark-400 text-xs">${p2.count} active</p></div>
           <button onclick="navigate('pod','Pod 2 - RoofIgnite')" class="text-brand-400 text-xs hover:text-brand-300">View All →</button>
         </div>
         <div class="grid grid-cols-3 gap-3">
-          <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p2Stats.leads)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p2Stats.booked)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(p2Stats.avgCPL,2)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p2.leads)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p2.booked)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(p2.avgCPL,2)}</div></div>
         </div>
       </div>
       <div class="glass rounded-xl p-5">
         <div class="flex items-center justify-between mb-4">
-          <div>
-            <h3 class="text-white font-semibold">Pod 1 — Oscar</h3>
-            <p class="text-dark-400 text-xs">${p1Stats.count} active accounts</p>
-          </div>
+          <div><h3 class="text-white font-semibold">Pod 1</h3><p class="text-dark-400 text-xs">${p1.count} active</p></div>
           <button onclick="navigate('pod','Pod 1 - RoofIgnite')" class="text-brand-400 text-xs hover:text-brand-300">View All →</button>
         </div>
         <div class="grid grid-cols-3 gap-3">
-          <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p1Stats.leads)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p1Stats.booked)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(p1Stats.avgCPL,2)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p1.leads)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p1.booked)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPL</div><div class="text-white font-semibold">${fmtDollar(p1.avgCPL,2)}</div></div>
         </div>
       </div>
     </div>
@@ -596,54 +751,48 @@ function renderDashboard() {
     <!-- Top Performers + Needs Attention -->
     <div class="grid grid-cols-2 gap-4 mb-6">
       <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-green-500"></span> Top Performers
-        </h3>
+        <h3 class="text-white font-semibold mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> Top Performers</h3>
         <div class="space-y-2" id="top-performers"></div>
       </div>
       <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-red-500"></span> Needs Attention
-        </h3>
+        <h3 class="text-white font-semibold mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Needs Attention</h3>
         <div class="space-y-2" id="needs-attention"></div>
       </div>
     </div>
 
-    <!-- CPL Distribution Chart + OSA Chart -->
     <div class="grid grid-cols-2 gap-4">
       <div class="glass rounded-xl p-5">
         <h3 class="text-white font-semibold mb-3">CPL Distribution (Latest Cycle)</h3>
         <div class="chart-container"><canvas id="chart-cpl-dist"></canvas></div>
       </div>
       <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">OSA Booking Rate by Account</h3>
+        <h3 class="text-white font-semibold mb-3">OSA Rate by Account</h3>
         <div class="chart-container"><canvas id="chart-osa"></canvas></div>
       </div>
     </div>
   `;
 
-  // Top performers: highest OSA accounts
+  // Top performers: lowest OSA (best)
   const performers = active.map(a => {
     const l = getLatestCycle(a.name, a.adAccountId);
     return { account: a, latest: l };
-  }).filter(x => x.latest && x.latest.osaPct > 0 && x.latest.totalLeads > 5)
-    .sort((a,b) => (b.latest.osaPct||0) - (a.latest.osaPct||0))
+  }).filter(x => x.latest && x.latest.osaPct !== null && x.latest.osaPct > 0 && x.latest.osaPct < KPI_TARGETS.osaPct && x.latest.totalLeads > 5)
+    .sort((a,b) => (a.latest.osaPct||100) - (b.latest.osaPct||100))
     .slice(0, 5);
 
   document.getElementById('top-performers').innerHTML = performers.map(p => `
     <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer" onclick="navigate('account',{name:'${esc(p.account.name)}',adAccountId:'${p.account.adAccountId}'})">
       <div>
         <div class="text-white text-sm font-medium">${p.account.name}</div>
-        <div class="text-dark-400 text-xs">${p.account.pod.replace(' - RoofIgnite','')}</div>
+        <div class="text-dark-400 text-xs">${p.account.manager}</div>
       </div>
       <div class="text-right">
         <div class="badge badge-green">${fmtPct(p.latest.osaPct)} OSA</div>
         <div class="text-dark-400 text-xs mt-1">${fmt(p.latest.totalLeads)} leads</div>
       </div>
     </div>
-  `).join('');
+  `).join('') || '<div class="text-dark-400 text-sm text-center py-4">No data yet</div>';
 
-  // Needs attention
   const attention = alerts.slice(0, 5);
   document.getElementById('needs-attention').innerHTML = attention.map(a => `
     <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
@@ -653,9 +802,8 @@ function renderDashboard() {
       </div>
       <span class="badge ${a.issues[0].type === 'danger' ? 'badge-red' : 'badge-yellow'}">${a.issues[0].type === 'danger' ? 'Critical' : 'Warning'}</span>
     </div>
-  `).join('');
+  `).join('') || '<div class="text-dark-400 text-sm text-center py-4">All clear!</div>';
 
-  // Charts
   renderCPLDistChart();
   renderOSAChart();
 }
@@ -673,20 +821,13 @@ function renderCPLDistChart() {
     type: 'bar',
     data: {
       labels: data.map(d => d.name.length > 15 ? d.name.substring(0,15)+'...' : d.name),
-      datasets: [{
-        label: 'CPL',
-        data: data.map(d => d.cpl),
-        backgroundColor: data.map(d => d.goal && d.cpl > d.goal ? 'rgba(239,68,68,0.6)' : 'rgba(249,115,22,0.6)'),
-        borderRadius: 4,
-      }]
+      datasets: [{ label: 'CPL', data: data.map(d => d.cpl),
+        backgroundColor: data.map(d => d.goal && d.cpl > d.goal ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)'), borderRadius: 4 }]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
+    options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: '#64748b', callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.1)' } }
-      }
+      scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
+        y: { ticks: { color: '#64748b', callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.1)' } } }
     }
   });
 }
@@ -698,27 +839,19 @@ function renderOSAChart() {
   const data = active.map(a => {
     const l = getLatestCycle(a.name, a.adAccountId);
     return l && l.osaPct !== null ? { name: a.name, osa: l.osaPct } : null;
-  }).filter(Boolean).sort((a,b) => b.osa - a.osa).slice(0, 20);
+  }).filter(Boolean).sort((a,b) => a.osa - b.osa).slice(0, 20);
 
   new Chart(ctx, {
     type: 'bar',
     data: {
       labels: data.map(d => d.name.length > 15 ? d.name.substring(0,15)+'...' : d.name),
-      datasets: [{
-        label: 'OSA %',
-        data: data.map(d => d.osa),
-        backgroundColor: data.map(d => d.osa >= 10 ? 'rgba(34,197,94,0.6)' : d.osa >= 5 ? 'rgba(234,179,8,0.6)' : 'rgba(239,68,68,0.6)'),
-        borderRadius: 4,
-      }]
+      datasets: [{ label: 'OSA %', data: data.map(d => d.osa),
+        backgroundColor: data.map(d => d.osa < 20 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'), borderRadius: 4 }]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      indexAxis: 'y',
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
       plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: '#64748b', callback: v => v+'%' }, grid: { color: 'rgba(100,116,139,0.1)' } },
-        y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } }
-      }
+      scales: { x: { ticks: { color: '#64748b', callback: v => v+'%' }, grid: { color: 'rgba(100,116,139,0.1)' } },
+        y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } } }
     }
   });
 }
@@ -752,15 +885,35 @@ function renderAlerts() {
           </div>
           <div class="mt-2 grid grid-cols-5 gap-4 text-xs">
             <div><span class="text-dark-400">Leads:</span> <span class="text-white">${fmt(a.latest.totalLeads)}</span></div>
-            <div><span class="text-dark-400">OSA:</span> <span class="${(a.latest.osaPct||0)<5?'text-red-400':'text-white'}">${fmtPct(a.latest.osaPct)}</span></div>
+            <div><span class="text-dark-400">OSA:</span> <span class="${osaColor(a.latest.osaPct)}">${fmtPct(a.latest.osaPct)}</span></div>
             <div><span class="text-dark-400">CPL:</span> <span class="text-white">${fmtDollar(a.latest.cpl,2)}</span></div>
             <div><span class="text-dark-400">Spent:</span> <span class="text-white">${fmtDollar(a.latest.amountSpent,2)}</span></div>
             <div><span class="text-dark-400">Booked:</span> <span class="text-white">${fmt(a.latest.bookedAppts)}</span></div>
           </div>
         </div>
       `).join('')}
-      ${alerts.length === 0 ? '<div class="glass rounded-xl p-8 text-center text-dark-400">No alerts — all accounts performing within KPI targets</div>' : ''}
+      ${alerts.length === 0 ? '<div class="glass rounded-xl p-8 text-center text-dark-400">No alerts — all accounts within KPI targets</div>' : ''}
     </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════
+// RENDER: MANAGER VIEW
+// ═══════════════════════════════════════════════
+function renderManagerView(mgrName) {
+  const el = document.getElementById('view-manager');
+  el.classList.remove('hidden');
+
+  const accounts = getAccountsByManager(mgrName);
+  const active = accounts.filter(a => !a.isPaused);
+  const paused = accounts.filter(a => a.isPaused);
+
+  el.innerHTML = `
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-white">${mgrName}</h1>
+      <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${paused.length} paused</p>
+    </div>
+    ${renderAccountTable(active, paused, mgrName)}
   `;
 }
 
@@ -775,21 +928,26 @@ function renderPodView(podName) {
   const active = accounts.filter(a => !a.isPaused);
   const paused = accounts.filter(a => a.isPaused);
   const podLabel = podName.replace(' - RoofIgnite', '');
-  const manager = podName.includes('Pod 2') ? 'Tyler' : 'Oscar';
 
   el.innerHTML = `
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-white">${podLabel} — ${manager}</h1>
+      <h1 class="text-2xl font-bold text-white">${podLabel}</h1>
       <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${paused.length} paused</p>
     </div>
+    ${renderAccountTable(active, paused)}
+  `;
+}
 
+function renderAccountTable(active, paused, mgrName) {
+  return `
     <div class="glass rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
             <tr class="border-b border-dark-600 text-dark-400 text-xs uppercase tracking-wider">
               <th class="text-left py-3 px-4 font-medium">Account</th>
-              <th class="text-left py-3 px-4 font-medium">Current Cycle</th>
+              <th class="text-left py-3 px-4 font-medium">Cycle</th>
+              <th class="text-left py-3 px-4 font-medium">Dates</th>
               <th class="text-right py-3 px-4 font-medium">Leads</th>
               <th class="text-right py-3 px-4 font-medium">OSA %</th>
               <th class="text-right py-3 px-4 font-medium">Booked</th>
@@ -798,42 +956,40 @@ function renderPodView(podName) {
               <th class="text-right py-3 px-4 font-medium">Spent</th>
               <th class="text-right py-3 px-4 font-medium">CTR</th>
               <th class="text-right py-3 px-4 font-medium">CPC</th>
-              <th class="text-right py-3 px-4 font-medium">Frequency</th>
+              <th class="text-right py-3 px-4 font-medium">Freq</th>
               <th class="text-center py-3 px-4 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             ${active.map(a => {
               const l = getLatestCycle(a.name, a.adAccountId);
-              const cplOk = l && a.cplGoal && l.cpl ? l.cpl <= a.cplGoal : true;
-              const osaOk = l && l.osaPct !== null ? l.osaPct >= 5 : true;
-              const hasIssue = !cplOk || !osaOk;
+              const cplGoal = a.cplGoal || (l && l.cplGoal);
+              const hasIssue = l && ((l.osaPct !== null && l.osaPct >= KPI_TARGETS.osaPct) || (cplGoal && l.cpl && l.cpl > cplGoal));
               return `
                 <tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                   <td class="py-3 px-4">
                     <div class="text-white font-medium">${a.name}</div>
-                    <div class="text-dark-400 text-xs">${a.manager || manager}</div>
+                    <div class="text-dark-400 text-xs">${a.manager}</div>
                   </td>
                   <td class="py-3 px-4 text-dark-300">${l ? l.cycle : '—'}</td>
+                  <td class="py-3 px-4 text-dark-400 text-xs whitespace-nowrap">${l ? fmtDate(l.cycleStartDate) + ' – ' + fmtDate(l.cycleEndDate) : '—'}</td>
                   <td class="py-3 px-4 text-right text-white">${l ? fmt(l.totalLeads) : '—'}</td>
-                  <td class="py-3 px-4 text-right"><span class="${l && l.osaPct !== null ? (l.osaPct >= 10 ? 'text-green-400' : l.osaPct >= 5 ? 'text-yellow-400' : 'text-red-400') : 'text-dark-400'}">${l ? fmtPct(l.osaPct) : '—'}</span></td>
+                  <td class="py-3 px-4 text-right"><span class="${l ? osaColor(l.osaPct) : 'text-dark-400'}">${l ? fmtPct(l.osaPct) : '—'}</span></td>
                   <td class="py-3 px-4 text-right text-white">${l ? fmt(l.bookedAppts) : '—'}</td>
-                  <td class="py-3 px-4 text-right"><span class="${!cplOk ? 'text-red-400' : 'text-white'}">${l ? fmtDollar(l.cpl,2) : '—'}</span></td>
-                  <td class="py-3 px-4 text-right text-dark-400">${a.cplGoal ? fmtDollar(a.cplGoal,2) : (l && l.cplGoal ? fmtDollar(l.cplGoal,2) : '—')}</td>
+                  <td class="py-3 px-4 text-right"><span class="${l ? cplColor(l.cpl, cplGoal) : 'text-dark-400'}">${l ? fmtDollar(l.cpl,2) : '—'}</span></td>
+                  <td class="py-3 px-4 text-right text-dark-400">${cplGoal ? fmtDollar(cplGoal,2) : '—'}</td>
                   <td class="py-3 px-4 text-right text-white">${l ? fmtDollar(l.amountSpent,2) : '—'}</td>
-                  <td class="py-3 px-4 text-right text-dark-300">${l && l.linkCTR ? (l.linkCTR*100).toFixed(2)+'%' : '—'}</td>
-                  <td class="py-3 px-4 text-right text-dark-300">${l ? fmtDollar(l.linkCPC,2) : '—'}</td>
-                  <td class="py-3 px-4 text-right text-dark-300">${l && l.frequency ? l.frequency.toFixed(1) : '—'}</td>
+                  <td class="py-3 px-4 text-right"><span class="${l ? ctrColor(l.linkCTR) : 'text-dark-400'}">${l && l.linkCTR ? (l.linkCTR*100).toFixed(2)+'%' : '—'}</span></td>
+                  <td class="py-3 px-4 text-right"><span class="${l ? cpcColor(l.linkCPC) : 'text-dark-400'}">${l ? fmtDollar(l.linkCPC,2) : '—'}</span></td>
+                  <td class="py-3 px-4 text-right"><span class="${l ? freqColor(l.frequency) : 'text-dark-400'}">${l && l.frequency ? l.frequency.toFixed(1) : '—'}</span></td>
                   <td class="py-3 px-4 text-center">${hasIssue ? '<span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>' : '<span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>'}</td>
                 </tr>
               `;
             }).join('')}
             ${paused.map(a => `
               <tr class="table-row border-b border-dark-700/50 opacity-50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
-                <td class="py-3 px-4">
-                  <div class="text-white font-medium">${a.name} <span class="badge badge-gray ml-1">PAUSED</span></div>
-                </td>
-                <td class="py-3 px-4 text-dark-400" colspan="11">—</td>
+                <td class="py-3 px-4"><div class="text-white font-medium">${a.name} <span class="badge badge-gray ml-1">PAUSED</span></div></td>
+                <td class="py-3 px-4 text-dark-400" colspan="12">—</td>
               </tr>
             `).join('')}
           </tbody>
@@ -855,10 +1011,11 @@ function renderAccountDetail(name, adAccountId) {
 
   const cycles = acct.cycles || [];
   const latest = cycles.length ? cycles[cycles.length - 1] : null;
+  const cplGoal = acct.cplGoal || (latest && latest.cplGoal);
 
   el.innerHTML = `
     <div class="mb-6">
-      <button onclick="history.back; navigate(currentPod ? 'pod' : 'dashboard', currentPod)" class="text-dark-400 text-sm hover:text-white mb-2 flex items-center gap-1">
+      <button onclick="navigate(currentManager ? 'manager' : currentPod ? 'pod' : 'dashboard', currentManager || currentPod)" class="text-dark-400 text-sm hover:text-white mb-2 flex items-center gap-1">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
       </button>
       <div class="flex items-center gap-3">
@@ -868,7 +1025,6 @@ function renderAccountDetail(name, adAccountId) {
       <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} &middot; Manager: ${acct.manager} &middot; Ad Account: ${acct.adAccountId}</p>
     </div>
 
-    <!-- Current Cycle KPIs -->
     ${latest ? `
     <div class="grid grid-cols-6 gap-3 mb-6">
       <div class="glass rounded-xl p-4 kpi-card">
@@ -878,13 +1034,13 @@ function renderAccountDetail(name, adAccountId) {
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">OSA Rate</div>
-        <div class="text-xl font-bold ${(latest.osaPct||0)>=10?'text-green-400':(latest.osaPct||0)>=5?'text-yellow-400':'text-red-400'} mt-1">${fmtPct(latest.osaPct)}</div>
-        <div class="text-xs text-dark-400">${fmt(latest.bookedAppts)} booked</div>
+        <div class="text-xl font-bold ${osaColor(latest.osaPct)} mt-1">${fmtPct(latest.osaPct)}</div>
+        <div class="text-xs text-dark-400">${fmt(latest.bookedAppts)} booked · target &lt;20%</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">CPL</div>
-        <div class="text-xl font-bold ${acct.cplGoal && latest.cpl > acct.cplGoal ? 'text-red-400' : 'text-white'} mt-1">${fmtDollar(latest.cpl,2)}</div>
-        <div class="text-xs text-dark-400">Goal: ${fmtDollar(acct.cplGoal || latest.cplGoal,2)}</div>
+        <div class="text-xl font-bold ${cplColor(latest.cpl, cplGoal)} mt-1">${fmtDollar(latest.cpl,2)}</div>
+        <div class="text-xs text-dark-400">Goal: ${fmtDollar(cplGoal,2)}</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Amount Spent</div>
@@ -893,13 +1049,13 @@ function renderAccountDetail(name, adAccountId) {
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Link CTR</div>
-        <div class="text-xl font-bold ${latest.linkCTR && latest.linkCTR < KPI_TARGETS.linkCTR ? 'text-red-400' : 'text-white'} mt-1">${latest.linkCTR ? (latest.linkCTR*100).toFixed(2)+'%' : '—'}</div>
-        <div class="text-xs text-dark-400">Target: 0.90%+</div>
+        <div class="text-xl font-bold ${ctrColor(latest.linkCTR)} mt-1">${latest.linkCTR ? (latest.linkCTR*100).toFixed(2)+'%' : '—'}</div>
+        <div class="text-xs text-dark-400">Target: ≥ 0.90%</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Frequency</div>
-        <div class="text-xl font-bold ${latest.frequency && latest.frequency > 3 ? 'text-yellow-400' : 'text-white'} mt-1">${latest.frequency ? latest.frequency.toFixed(2) : '—'}</div>
-        <div class="text-xs text-dark-400">Target: < 2.50</div>
+        <div class="text-xl font-bold ${freqColor(latest.frequency)} mt-1">${latest.frequency ? latest.frequency.toFixed(2) : '—'}</div>
+        <div class="text-xs text-dark-400">Target: ≤ 2.50</div>
       </div>
     </div>
     ` : '<div class="glass rounded-xl p-6 mb-6 text-dark-400 text-center">No cycle data available</div>'}
@@ -916,11 +1072,12 @@ function renderAccountDetail(name, adAccountId) {
       </div>
     </div>
 
+    <!-- Lead Breakdown for Current Cycle -->
+    <div id="lead-breakdown" class="mb-6"></div>
+
     <!-- Full Cycle History Table -->
     <div class="glass rounded-xl overflow-hidden">
-      <div class="p-4 border-b border-dark-600">
-        <h3 class="text-white font-semibold">Cycle History</h3>
-      </div>
+      <div class="p-4 border-b border-dark-600"><h3 class="text-white font-semibold">Cycle History</h3></div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -932,7 +1089,6 @@ function renderAccountDetail(name, adAccountId) {
               <th class="text-right py-2.5 px-3 font-medium">Leads</th>
               <th class="text-right py-2.5 px-3 font-medium">OSA %</th>
               <th class="text-right py-2.5 px-3 font-medium">Booked</th>
-              <th class="text-right py-2.5 px-3 font-medium">Est. Booked</th>
               <th class="text-right py-2.5 px-3 font-medium">CPL Goal</th>
               <th class="text-right py-2.5 px-3 font-medium">CPL</th>
               <th class="text-right py-2.5 px-3 font-medium">Spent</th>
@@ -947,28 +1103,26 @@ function renderAccountDetail(name, adAccountId) {
           <tbody>
             ${cycles.map((c, idx) => {
               const isLatest = idx === cycles.length - 1;
-              const cplGoal = acct.cplGoal || c.cplGoal;
+              const cGoal = acct.cplGoal || c.cplGoal;
               return `
               <tr class="table-row border-b border-dark-700/50 ${isLatest ? 'bg-brand-500/5' : ''}">
                 <td class="py-2.5 px-3 text-white font-medium whitespace-nowrap">${c.cycle} ${isLatest ? '<span class="badge badge-blue ml-1">Current</span>' : ''}</td>
-                <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${c.cycleStartDate || '—'}</td>
-                <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${c.cycleEndDate || '—'}</td>
+                <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleStartDate)}</td>
+                <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleEndDate)}</td>
                 <td class="py-2.5 px-3 text-right text-dark-300">${fmt(c.bookedGoal)}</td>
                 <td class="py-2.5 px-3 text-right text-white font-medium">${fmt(c.totalLeads)}</td>
-                <td class="py-2.5 px-3 text-right"><span class="${c.osaPct !== null ? (c.osaPct >= 10 ? 'text-green-400' : c.osaPct >= 5 ? 'text-yellow-400' : 'text-red-400') : 'text-dark-400'}">${fmtPct(c.osaPct)}</span></td>
+                <td class="py-2.5 px-3 text-right"><span class="${osaColor(c.osaPct)}">${fmtPct(c.osaPct)}</span></td>
                 <td class="py-2.5 px-3 text-right text-white">${fmt(c.bookedAppts)}</td>
-                <td class="py-2.5 px-3 text-right text-dark-300">${fmt(c.estBookedAppts)}</td>
                 <td class="py-2.5 px-3 text-right text-dark-400">${fmtDollar(c.cplGoal,2)}</td>
-                <td class="py-2.5 px-3 text-right"><span class="${cplGoal && c.cpl > cplGoal ? 'text-red-400' : 'text-white'}">${fmtDollar(c.cpl,2)}</span></td>
+                <td class="py-2.5 px-3 text-right"><span class="${cplColor(c.cpl, cGoal)}">${fmtDollar(c.cpl,2)}</span></td>
                 <td class="py-2.5 px-3 text-right text-white">${fmtDollar(c.amountSpent,2)}</td>
-                <td class="py-2.5 px-3 text-right text-dark-300">${c.linkCTR ? (c.linkCTR*100).toFixed(2)+'%' : '—'}</td>
-                <td class="py-2.5 px-3 text-right text-dark-300">${fmtDollar(c.linkCPC,2)}</td>
-                <td class="py-2.5 px-3 text-right text-dark-300">${fmtDollar(c.cpm,2)}</td>
-                <td class="py-2.5 px-3 text-right ${c.frequency && c.frequency > 3 ? 'text-yellow-400' : 'text-dark-300'}">${c.frequency ? c.frequency.toFixed(2) : '—'}</td>
-                <td class="py-2.5 px-3 text-right text-dark-300">${c.surveyPct ? c.surveyPct.toFixed(2)+'%' : '—'}</td>
+                <td class="py-2.5 px-3 text-right"><span class="${ctrColor(c.linkCTR)}">${c.linkCTR ? (c.linkCTR*100).toFixed(2)+'%' : '—'}</span></td>
+                <td class="py-2.5 px-3 text-right"><span class="${cpcColor(c.linkCPC)}">${fmtDollar(c.linkCPC,2)}</span></td>
+                <td class="py-2.5 px-3 text-right"><span class="${cpmColor(c.cpm)}">${fmtDollar(c.cpm,2)}</span></td>
+                <td class="py-2.5 px-3 text-right"><span class="${freqColor(c.frequency)}">${c.frequency ? c.frequency.toFixed(2) : '—'}</span></td>
+                <td class="py-2.5 px-3 text-right"><span class="${surveyColor(c.surveyPct)}">${c.surveyPct ? c.surveyPct.toFixed(2)+'%' : '—'}</span></td>
                 <td class="py-2.5 px-3 text-center">${c.billed === 'Yes' ? '<span class="badge badge-green">Yes</span>' : c.goodToBill === 'Yes' ? '<span class="badge badge-yellow">Ready</span>' : '<span class="badge badge-gray">No</span>'}</td>
-              </tr>
-              `;
+              </tr>`;
             }).join('')}
           </tbody>
         </table>
@@ -982,11 +1136,145 @@ function renderAccountDetail(name, adAccountId) {
     </div>` : ''}
   `;
 
-  // Render charts
   if (cycles.length > 1) {
     renderAccountCPLChart(cycles, acct.cplGoal);
     renderAccountLeadsChart(cycles);
   }
+
+  // Render lead breakdown
+  renderLeadBreakdown(acct, cycles);
+}
+
+function renderLeadBreakdown(acct, cycles) {
+  const container = document.getElementById('lead-breakdown');
+  if (!container) return;
+
+  // Find leads matching this account
+  const accountLeads = allLeads.filter(l =>
+    l.subAccount.toLowerCase().includes(acct.name.toLowerCase()) ||
+    acct.name.toLowerCase().includes(l.subAccount.toLowerCase())
+  );
+
+  if (!accountLeads.length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Build cycle tabs - show breakdown for each cycle that has matching leads
+  let cycleBreakdowns = [];
+  cycles.forEach((c, idx) => {
+    if (!c.cycleStartDate || !c.cycleEndDate) return;
+    const start = c.cycleStartDate;
+    const end = c.cycleEndDate;
+    const cycleLeads = accountLeads.filter(l => l.date && l.date >= start && l.date <= end);
+    if (cycleLeads.length > 0 || idx === cycles.length - 1) {
+      cycleBreakdowns.push({ cycle: c, leads: cycleLeads, isLatest: idx === cycles.length - 1 });
+    }
+  });
+
+  // Also check for leads that don't match any cycle (use latest cycle's date range for current)
+  if (!cycleBreakdowns.length && accountLeads.length > 0) {
+    // Show all leads
+    cycleBreakdowns.push({ cycle: { cycle: 'All Leads' }, leads: accountLeads, isLatest: true });
+  }
+
+  if (!cycleBreakdowns.length) { container.innerHTML = ''; return; }
+
+  // Show latest cycle breakdown by default
+  const latest = cycleBreakdowns[cycleBreakdowns.length - 1];
+  const leads = latest.leads;
+
+  // Group by date
+  const byDate = {};
+  leads.forEach(l => {
+    const d = l.date || 'Unknown';
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(l);
+  });
+  const dates = Object.keys(byDate).sort();
+
+  // Group by week (7-day windows from cycle start)
+  const weeks = { 'Week 1': [], 'Week 2': [], 'Week 3': [], 'Week 4': [], 'Week 5+': [] };
+  if (latest.cycle.cycleStartDate) {
+    const startMs = new Date(latest.cycle.cycleStartDate).getTime();
+    leads.forEach(l => {
+      if (!l.date) return;
+      const dayDiff = Math.floor((new Date(l.date).getTime() - startMs) / (86400000));
+      if (dayDiff < 7) weeks['Week 1'].push(l);
+      else if (dayDiff < 14) weeks['Week 2'].push(l);
+      else if (dayDiff < 21) weeks['Week 3'].push(l);
+      else if (dayDiff < 28) weeks['Week 4'].push(l);
+      else weeks['Week 5+'].push(l);
+    });
+  }
+
+  // Status breakdown
+  const confirmed = leads.filter(l => l.status && l.status.toLowerCase().includes('confirmed')).length;
+  const cancelled = leads.filter(l => l.status && l.status.toLowerCase().includes('cancel')).length;
+  const callback = leads.filter(l => l.status && (l.status.toLowerCase().includes('call back') || l.status.toLowerCase().includes('callback'))).length;
+
+  container.innerHTML = `
+    <div class="glass rounded-xl p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-white font-semibold">Lead Breakdown — ${latest.cycle.cycle}</h3>
+        <div class="flex gap-2 text-xs">
+          <span class="badge badge-green">${confirmed} confirmed</span>
+          <span class="badge badge-red">${cancelled} cancelled</span>
+          <span class="badge badge-blue">${callback} callback</span>
+          <span class="badge badge-gray">${leads.length} total</span>
+        </div>
+      </div>
+
+      <!-- Week Breakdown -->
+      <div class="grid grid-cols-5 gap-3 mb-4">
+        ${Object.entries(weeks).filter(([k,v]) => v.length > 0 || k !== 'Week 5+').slice(0,4).map(([week, wLeads]) => {
+          const wConfirmed = wLeads.filter(l => l.status && l.status.toLowerCase().includes('confirmed')).length;
+          return `
+          <div class="bg-dark-800/50 rounded-lg p-3">
+            <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${week}</div>
+            <div class="text-white font-bold text-lg">${wLeads.length}</div>
+            <div class="text-xs text-dark-400">${wConfirmed} confirmed</div>
+          </div>`;
+        }).join('')}
+        ${weeks['Week 5+'].length > 0 ? `
+        <div class="bg-dark-800/50 rounded-lg p-3">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">Week 5+</div>
+          <div class="text-white font-bold text-lg">${weeks['Week 5+'].length}</div>
+        </div>` : ''}
+      </div>
+
+      <!-- Day-by-Day -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="border-b border-dark-600 text-dark-400 uppercase tracking-wider">
+              <th class="text-left py-2 px-2 font-medium">Date</th>
+              <th class="text-right py-2 px-2 font-medium">Leads</th>
+              <th class="text-right py-2 px-2 font-medium">Confirmed</th>
+              <th class="text-right py-2 px-2 font-medium">Cancelled</th>
+              <th class="text-left py-2 px-2 font-medium">Names</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${dates.map(d => {
+              const dayLeads = byDate[d];
+              const dConf = dayLeads.filter(l => l.status && l.status.toLowerCase().includes('confirmed')).length;
+              const dCanc = dayLeads.filter(l => l.status && l.status.toLowerCase().includes('cancel')).length;
+              const names = dayLeads.map(l => l.name).filter(Boolean).slice(0, 3).join(', ');
+              return `
+              <tr class="border-b border-dark-700/30">
+                <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${fmtDate(d)}</td>
+                <td class="py-1.5 px-2 text-right text-white font-medium">${dayLeads.length}</td>
+                <td class="py-1.5 px-2 text-right metric-good">${dConf || '—'}</td>
+                <td class="py-1.5 px-2 text-right metric-bad">${dCanc || '—'}</td>
+                <td class="py-1.5 px-2 text-dark-400 truncate max-w-[200px]">${names}${dayLeads.length > 3 ? '...' : ''}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 function renderAccountCPLChart(cycles, goalCPL) {
@@ -998,33 +1286,14 @@ function renderAccountCPLChart(cycles, goalCPL) {
     data: {
       labels,
       datasets: [
-        {
-          label: 'CPL',
-          data: cycles.map(c => c.cpl),
-          borderColor: '#f97316',
-          backgroundColor: 'rgba(249,115,22,0.1)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 4,
-          pointBackgroundColor: '#f97316',
-        },
-        ...(goalCPL ? [{
-          label: 'Goal',
-          data: cycles.map(() => goalCPL),
-          borderColor: 'rgba(148,163,184,0.4)',
-          borderDash: [5,5],
-          pointRadius: 0,
-          fill: false,
-        }] : [])
+        { label: 'CPL', data: cycles.map(c => c.cpl), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#f97316' },
+        ...(goalCPL ? [{ label: 'Goal', data: cycles.map(() => goalCPL), borderColor: 'rgba(148,163,184,0.4)', borderDash: [5,5], pointRadius: 0, fill: false }] : [])
       ]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
+    options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10 } } } },
-      scales: {
-        x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: '#64748b', callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.1)' } }
-      }
+      scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
+        y: { ticks: { color: '#64748b', callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.1)' } } }
     }
   });
 }
@@ -1038,27 +1307,14 @@ function renderAccountLeadsChart(cycles) {
     data: {
       labels,
       datasets: [
-        {
-          label: 'Total Leads',
-          data: cycles.map(c => c.totalLeads),
-          backgroundColor: 'rgba(59,130,246,0.5)',
-          borderRadius: 4,
-        },
-        {
-          label: 'Booked',
-          data: cycles.map(c => c.bookedAppts),
-          backgroundColor: 'rgba(34,197,94,0.5)',
-          borderRadius: 4,
-        }
+        { label: 'Total Leads', data: cycles.map(c => c.totalLeads), backgroundColor: 'rgba(59,130,246,0.5)', borderRadius: 4 },
+        { label: 'Booked', data: cycles.map(c => c.bookedAppts), backgroundColor: 'rgba(34,197,94,0.5)', borderRadius: 4 }
       ]
     },
-    options: {
-      responsive: true, maintainAspectRatio: false,
+    options: { responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10 } } } },
-      scales: {
-        x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(100,116,139,0.1)' } }
-      }
+      scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
+        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(100,116,139,0.1)' } } }
     }
   });
 }
@@ -1074,15 +1330,9 @@ function renderBilling() {
   allAccounts.filter(a => !a.isPaused).forEach(a => {
     const latest = getLatestCycle(a.name, a.adAccountId);
     if (!latest) return;
-    billingData.push({
-      account: a,
-      cycle: latest.cycle,
-      spent: latest.amountSpent,
-      goodToBill: latest.goodToBill,
-      billed: latest.billed,
-      billingNotes: latest.billingNotes,
-      monthlyBudget: a.monthlyBudget || latest.monthlyBudget,
-    });
+    billingData.push({ account: a, cycle: latest.cycle, spent: latest.amountSpent,
+      goodToBill: latest.goodToBill, billed: latest.billed, billingNotes: latest.billingNotes,
+      monthlyBudget: a.monthlyBudget || latest.monthlyBudget });
   });
 
   const readyToBill = billingData.filter(b => b.goodToBill === 'Yes' && b.billed !== 'Yes');
@@ -1096,65 +1346,24 @@ function renderBilling() {
       <h1 class="text-2xl font-bold text-white">Billing Tracker</h1>
       <p class="text-dark-300 text-sm mt-1">Current cycle billing status</p>
     </div>
-
     <div class="grid grid-cols-4 gap-4 mb-6">
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase">Ready to Bill</div>
-        <div class="text-2xl font-bold text-yellow-400">${readyToBill.length}</div>
-        <div class="text-xs text-dark-400">${fmtDollar(totalReady)}</div>
-      </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase">Billed</div>
-        <div class="text-2xl font-bold text-green-400">${billed.length}</div>
-        <div class="text-xs text-dark-400">${fmtDollar(totalBilled)}</div>
-      </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase">Not Ready</div>
-        <div class="text-2xl font-bold text-dark-300">${notReady.length}</div>
-      </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase">Total Accounts</div>
-        <div class="text-2xl font-bold text-white">${billingData.length}</div>
-      </div>
+      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Ready to Bill</div><div class="text-2xl font-bold text-yellow-400">${readyToBill.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalReady)}</div></div>
+      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Billed</div><div class="text-2xl font-bold text-green-400">${billed.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalBilled)}</div></div>
+      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Not Ready</div><div class="text-2xl font-bold text-dark-300">${notReady.length}</div></div>
+      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Total Accounts</div><div class="text-2xl font-bold text-white">${billingData.length}</div></div>
     </div>
-
     ${readyToBill.length ? `
     <div class="glass rounded-xl overflow-hidden mb-4">
-      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-        <h3 class="text-white font-semibold">Ready to Bill (${readyToBill.length})</h3>
-      </div>
-      <table class="w-full text-sm">
-        <tbody>
-          ${readyToBill.map(b => `
-            <tr class="table-row border-b border-dark-700/50">
-              <td class="py-3 px-4 text-white font-medium">${b.account.name}</td>
-              <td class="py-3 px-4 text-dark-300">${b.cycle}</td>
-              <td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td>
-              <td class="py-3 px-4 text-dark-400">${b.billingNotes || ''}</td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-yellow-500"></span><h3 class="text-white font-semibold">Ready to Bill (${readyToBill.length})</h3></div>
+      <table class="w-full text-sm"><tbody>
+        ${readyToBill.map(b => `<tr class="table-row border-b border-dark-700/50"><td class="py-3 px-4 text-white font-medium">${b.account.name}</td><td class="py-3 px-4 text-dark-300">${b.cycle}</td><td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td><td class="py-3 px-4 text-dark-400">${b.billingNotes || ''}</td></tr>`).join('')}
+      </tbody></table>
     </div>` : ''}
-
     <div class="glass rounded-xl overflow-hidden">
-      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-green-500"></span>
-        <h3 class="text-white font-semibold">Already Billed (${billed.length})</h3>
-      </div>
-      <table class="w-full text-sm">
-        <tbody>
-          ${billed.map(b => `
-            <tr class="table-row border-b border-dark-700/50">
-              <td class="py-3 px-4 text-white font-medium">${b.account.name}</td>
-              <td class="py-3 px-4 text-dark-300">${b.cycle}</td>
-              <td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td>
-              <td class="py-3 px-4"><span class="badge badge-green">Billed</span></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span><h3 class="text-white font-semibold">Already Billed (${billed.length})</h3></div>
+      <table class="w-full text-sm"><tbody>
+        ${billed.map(b => `<tr class="table-row border-b border-dark-700/50"><td class="py-3 px-4 text-white font-medium">${b.account.name}</td><td class="py-3 px-4 text-dark-300">${b.cycle}</td><td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td><td class="py-3 px-4"><span class="badge badge-green">Billed</span></td></tr>`).join('')}
+      </tbody></table>
     </div>
   `;
 }
@@ -1162,9 +1371,7 @@ function renderBilling() {
 // ═══════════════════════════════════════════════
 // UTILITY
 // ═══════════════════════════════════════════════
-function esc(str) {
-  return str.replace(/'/g, "\\'").replace(/"/g, '\\"');
-}
+function esc(str) { return str.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
 
 // ═══════════════════════════════════════════════
 // INIT
