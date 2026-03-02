@@ -56,7 +56,16 @@ tailwind.config = {
   .metric-neutral { color: #e2e8f0; }
   .lead-booked { color: #22c55e; }
   .lead-cancelled { color: #ef4444; }
-  .lead-other { color: #e2e8f0; }
+  .lead-open { color: #e2e8f0; }
+  .filter-badge { display: inline-flex; align-items: center; padding: 4px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; }
+  .filter-badge:hover { transform: scale(1.05); }
+  .filter-badge.active { border-color: white; box-shadow: 0 0 12px rgba(255,255,255,0.2); }
+  .filter-badge.fb-green { background: rgba(34,197,94,0.25); color: #22c55e; }
+  .filter-badge.fb-red { background: rgba(239,68,68,0.25); color: #ef4444; }
+  .filter-badge.fb-white { background: rgba(226,232,240,0.15); color: #e2e8f0; }
+  .filter-badge.fb-blue { background: rgba(59,130,246,0.25); color: #3b82f6; }
+  .cycle-row-clickable { cursor: pointer; transition: background 0.15s; }
+  .cycle-row-clickable:hover { background: rgba(59,130,246,0.1) !important; }
   .tab-btn { padding: 6px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
   .tab-btn.active { background: rgba(249,115,22,0.15); color: #fb923c; font-weight: 600; }
   .tab-btn:not(.active) { color: #94a3b8; }
@@ -674,24 +683,36 @@ function surveyColor(v) {
 
 // Lead status color: green=booked, red=cancelled/invalid, white=other
 function leadStatusColor(status) {
-  if (!status) return 'lead-other';
-  const s = status.toLowerCase();
-  if (s.includes('confirmed') || s.includes('manual booked') || s.includes('client handles')) return 'lead-booked';
-  if (s.includes('cancel') || s.includes('invalid')) return 'lead-cancelled';
-  return 'lead-other';
+  if (!status) return 'lead-open';
+  const s = status.toLowerCase().trim();
+  if (isBookedStatus(status)) return 'lead-booked';
+  if (isCancelledStatus(status)) return 'lead-cancelled';
+  return 'lead-open';
 }
 
 function isBookedStatus(status) {
   if (!status) return false;
-  const s = status.toLowerCase();
-  return s.includes('confirmed') || s.includes('manual booked') || s.includes('client handles');
+  const s = status.toLowerCase().trim();
+  // "Confirmed" but NOT "Unconfirmed"
+  if (s === 'confirmed') return true;
+  if (s.includes('confirmed') && !s.includes('unconfirmed')) return true;
+  if (s.includes('manual booked') || s.includes('client handles')) return true;
+  return false;
 }
 
 function isCancelledStatus(status) {
   if (!status) return false;
-  const s = status.toLowerCase();
+  const s = status.toLowerCase().trim();
   return s.includes('cancel') || s.includes('invalid');
 }
+
+// "Open" = anything not booked and not cancelled
+function isOpenStatus(status) {
+  return !isBookedStatus(status) && !isCancelledStatus(status);
+}
+
+// Active lead filter state for the breakdown table
+let activeLeadFilter = 'all'; // 'all', 'booked', 'cancelled', 'open'
 
 // ═══════════════════════════════════════════════
 // ACTIVE CYCLE LOGIC — cycles containing today
@@ -1324,12 +1345,12 @@ function renderAccountDetail(name, adAccountId) {
             </tr>
           </thead>
           <tbody>
-            ${cycles.map((c) => {
+            ${cycles.map((c, ci) => {
               const today = getTodayStr();
               const isActiveCyc = c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today;
               const cGoal = acct.cpaGoal || c.cpaGoal;
               return `
-              <tr class="table-row border-b border-dark-700/50 ${isActiveCyc ? 'bg-brand-500/5' : ''}">
+              <tr class="table-row border-b border-dark-700/50 cycle-row-clickable ${isActiveCyc ? 'bg-brand-500/5' : ''}" onclick="showCycleLeads(${ci})" title="Click to view leads for ${c.cycle}">
                 <td class="py-2.5 px-3 text-white font-medium whitespace-nowrap">${c.cycle} ${isActiveCyc ? '<span class="badge badge-blue ml-1">Active</span>' : ''}</td>
                 <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleStartDate)}</td>
                 <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleEndDate)}</td>
@@ -1368,9 +1389,18 @@ function renderAccountDetail(name, adAccountId) {
   renderLeadBreakdown(acct, cycles);
 }
 
-function renderLeadBreakdown(acct, cycles) {
+// Store current breakdown context so filter clicks can re-render
+let _currentBreakdownLeads = [];
+let _currentBreakdownCycle = null;
+let _currentBreakdownAcct = null;
+let _currentBreakdownCycles = [];
+
+function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
   const container = document.getElementById('lead-breakdown');
   if (!container) return;
+
+  _currentBreakdownAcct = acct;
+  _currentBreakdownCycles = cycles;
 
   const accountLeads = allLeads.filter(l =>
     l.subAccount.toLowerCase().includes(acct.name.toLowerCase()) ||
@@ -1391,30 +1421,44 @@ function renderLeadBreakdown(acct, cycles) {
     const cycleLeads = accountLeads.filter(l => l.date && l.date >= start && l.date <= end);
     const isActiveCyc = c.cycleStartDate <= today && c.cycleEndDate >= today;
     if (cycleLeads.length > 0 || isActiveCyc) {
-      cycleBreakdowns.push({ cycle: c, leads: cycleLeads, isActive: isActiveCyc });
+      cycleBreakdowns.push({ cycle: c, leads: cycleLeads, isActive: isActiveCyc, idx });
     }
   });
 
   if (!cycleBreakdowns.length && accountLeads.length > 0) {
-    cycleBreakdowns.push({ cycle: { cycle: 'All Leads' }, leads: accountLeads, isActive: true });
+    cycleBreakdowns.push({ cycle: { cycle: 'All Leads' }, leads: accountLeads, isActive: true, idx: -1 });
   }
 
   if (!cycleBreakdowns.length) { container.innerHTML = ''; return; }
 
-  // Show active cycle breakdown by default, fallback to latest
-  const activeBreakdown = cycleBreakdowns.find(b => b.isActive) || cycleBreakdowns[cycleBreakdowns.length - 1];
+  // If a specific cycle index was requested (from clicking cycle history), use that
+  let activeBreakdown;
+  if (forceCycleIdx !== undefined) {
+    activeBreakdown = cycleBreakdowns.find(b => b.idx === forceCycleIdx) || cycleBreakdowns[cycleBreakdowns.length - 1];
+  } else {
+    activeBreakdown = cycleBreakdowns.find(b => b.isActive) || cycleBreakdowns[cycleBreakdowns.length - 1];
+  }
+
   const leads = activeBreakdown.leads;
+  _currentBreakdownLeads = leads;
+  _currentBreakdownCycle = activeBreakdown.cycle;
+
+  // Apply filter
+  const filtered = activeLeadFilter === 'all' ? leads :
+    activeLeadFilter === 'booked' ? leads.filter(l => isBookedStatus(l.status)) :
+    activeLeadFilter === 'cancelled' ? leads.filter(l => isCancelledStatus(l.status)) :
+    leads.filter(l => isOpenStatus(l.status));
 
   // Group by date
   const byDate = {};
-  leads.forEach(l => {
+  filtered.forEach(l => {
     const d = l.date || 'Unknown';
     if (!byDate[d]) byDate[d] = [];
     byDate[d].push(l);
   });
   const dates = Object.keys(byDate).sort();
 
-  // Group by week
+  // Group by week (from all leads, not filtered)
   const weeks = { 'Week 1': [], 'Week 2': [], 'Week 3': [], 'Week 4': [], 'Week 5+': [] };
   if (activeBreakdown.cycle.cycleStartDate) {
     const startMs = new Date(activeBreakdown.cycle.cycleStartDate).getTime();
@@ -1431,17 +1475,19 @@ function renderLeadBreakdown(acct, cycles) {
 
   const booked = leads.filter(l => isBookedStatus(l.status)).length;
   const cancelled = leads.filter(l => isCancelledStatus(l.status)).length;
-  const other = leads.length - booked - cancelled;
+  const open = leads.filter(l => isOpenStatus(l.status)).length;
+
+  const fActive = (f) => activeLeadFilter === f ? 'active' : '';
 
   container.innerHTML = `
     <div class="glass rounded-xl p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-white font-semibold">Lead Breakdown — ${activeBreakdown.cycle.cycle}</h3>
-        <div class="flex gap-2 text-xs">
-          <span class="badge badge-green">${booked} booked</span>
-          <span class="badge badge-red">${cancelled} cancelled/invalid</span>
-          <span class="badge badge-gray">${other} other</span>
-          <span class="badge badge-blue">${leads.length} total</span>
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 class="text-white font-semibold text-base">Lead Breakdown — ${activeBreakdown.cycle.cycle}</h3>
+        <div class="flex gap-2 flex-wrap">
+          <span class="filter-badge fb-green ${fActive('booked')}" onclick="setLeadFilter('booked')">${booked} booked</span>
+          <span class="filter-badge fb-red ${fActive('cancelled')}" onclick="setLeadFilter('cancelled')">${cancelled} cancelled</span>
+          <span class="filter-badge fb-white ${fActive('open')}" onclick="setLeadFilter('open')">${open} open</span>
+          <span class="filter-badge fb-blue ${fActive('all')}" onclick="setLeadFilter('all')">${leads.length} total</span>
         </div>
       </div>
 
@@ -1450,11 +1496,12 @@ function renderLeadBreakdown(acct, cycles) {
         ${Object.entries(weeks).filter(([k,v]) => v.length > 0 || k !== 'Week 5+').slice(0,4).map(([week, wLeads]) => {
           const wBooked = wLeads.filter(l => isBookedStatus(l.status)).length;
           const wCancelled = wLeads.filter(l => isCancelledStatus(l.status)).length;
+          const wOpen = wLeads.filter(l => isOpenStatus(l.status)).length;
           return `
           <div class="bg-dark-800/50 rounded-lg p-3">
             <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${week}</div>
             <div class="text-white font-bold text-lg">${wLeads.length}</div>
-            <div class="text-xs"><span class="lead-booked">${wBooked} booked</span> · <span class="lead-cancelled">${wCancelled} canc.</span></div>
+            <div class="text-xs"><span class="lead-booked">${wBooked} bkd</span> · <span class="lead-cancelled">${wCancelled} canc</span> · <span class="lead-open">${wOpen} open</span></div>
           </div>`;
         }).join('')}
         ${weeks['Week 5+'].length > 0 ? `
@@ -1464,10 +1511,13 @@ function renderLeadBreakdown(acct, cycles) {
         </div>` : ''}
       </div>
 
+      <!-- Showing filter info -->
+      ${activeLeadFilter !== 'all' ? `<div class="text-dark-400 text-xs mb-2">Showing ${filtered.length} ${activeLeadFilter} leads · <span class="text-brand-400 cursor-pointer" onclick="setLeadFilter('all')">show all</span></div>` : ''}
+
       <!-- Day-by-Day with individual leads -->
-      <div class="overflow-x-auto">
+      <div class="overflow-x-auto" style="max-height: 500px; overflow-y: auto;">
         <table class="w-full text-xs">
-          <thead>
+          <thead class="sticky top-0 bg-dark-700 z-10">
             <tr class="border-b border-dark-600 text-dark-400 uppercase tracking-wider">
               <th class="text-left py-2 px-2 font-medium">Date</th>
               <th class="text-left py-2 px-2 font-medium">Name</th>
@@ -1476,6 +1526,7 @@ function renderLeadBreakdown(acct, cycles) {
             </tr>
           </thead>
           <tbody>
+            ${filtered.length === 0 ? '<tr><td colspan="4" class="py-4 px-2 text-dark-400 text-center">No leads match this filter</td></tr>' : ''}
             ${dates.map(d => {
               const dayLeads = byDate[d];
               return dayLeads.map((l, li) => `
@@ -1491,6 +1542,24 @@ function renderLeadBreakdown(acct, cycles) {
       </div>
     </div>
   `;
+}
+
+// Click handler for filter badges — toggles filter and re-renders
+function setLeadFilter(filter) {
+  activeLeadFilter = activeLeadFilter === filter ? 'all' : filter;
+  if (_currentBreakdownAcct && _currentBreakdownCycles.length) {
+    const cycleIdx = _currentBreakdownCycles.indexOf(_currentBreakdownCycle);
+    renderLeadBreakdown(_currentBreakdownAcct, _currentBreakdownCycles, cycleIdx >= 0 ? cycleIdx : undefined);
+  }
+}
+
+// Click handler for cycle history rows
+function showCycleLeads(cycleIdx) {
+  activeLeadFilter = 'all';
+  if (_currentBreakdownAcct && _currentBreakdownCycles.length) {
+    renderLeadBreakdown(_currentBreakdownAcct, _currentBreakdownCycles, cycleIdx);
+    document.getElementById('lead-breakdown')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function renderAccountCPAChart(cycles, goalCPA) {
