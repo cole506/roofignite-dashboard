@@ -269,6 +269,35 @@ function parseLeadData(data, source) {
   return leads;
 }
 
+// Build a column name → index map from the header row (data.table.cols)
+// Uses case-insensitive partial matching so column rearrangements don't break anything
+function buildColumnMap(cols) {
+  const map = {};
+  if (!cols || !cols.length) return map;
+  cols.forEach((col, idx) => {
+    const label = (col.label || '').trim();
+    if (label) map[label.toLowerCase()] = idx;
+  });
+  return map;
+}
+
+// Find a column index by trying multiple possible header names (case-insensitive, partial match)
+function colIdx(colMap, ...names) {
+  // First try exact matches
+  for (const name of names) {
+    const key = name.toLowerCase();
+    if (colMap[key] !== undefined) return colMap[key];
+  }
+  // Then try partial/includes matches
+  const keys = Object.keys(colMap);
+  for (const name of names) {
+    const lower = name.toLowerCase();
+    const found = keys.find(k => k.includes(lower) || lower.includes(k));
+    if (found !== undefined) return colMap[found];
+  }
+  return -1; // not found
+}
+
 function parseSheetData(data, podName) {
   const rows = data.table.rows;
   const accounts = [];
@@ -277,6 +306,48 @@ function parseSheetData(data, podName) {
   let currentAdAccountId = '';
   let currentSection = '';
   let currentMgr = '';
+
+  // === DYNAMIC COLUMN MAPPING ===
+  // Read header labels from gviz cols array instead of hardcoding indices
+  const colMap = buildColumnMap(data.table.cols);
+  console.log(`[${podName}] Column map:`, colMap);
+
+  // Map each field to its column index by header name
+  // Columns A, B, C (indices 0, 1, 2) are structural — account name, cycle label, ad account id
+  // Everything else is looked up dynamically
+  const COL = {
+    cycleStart:    colIdx(colMap, 'cycle start date', 'cycle start', 'start date'),
+    cycleEnd:      colIdx(colMap, 'cycle end date', 'cycle end', 'end date'),
+    bookedGoal:    colIdx(colMap, 'booked appointment goal', 'booked appt goal', 'appt goal', 'appointment goal'),
+    gregGoal:      colIdx(colMap, 'greg goal', 'greg\'s goal'),
+    totalLeads:    colIdx(colMap, 'total leads', 'leads'),
+    osaPct:        colIdx(colMap, 'osa', 'osa %', 'osa rate', 'osa pct'),
+    bookedAppts:   colIdx(colMap, 'booked appointments', 'booked appts', 'booked'),
+    estBooked:     colIdx(colMap, 'est. booked', 'est booked', 'estimated booked'),
+    cpaGoal:       colIdx(colMap, 'cpa goal', 'cpl goal', 'cost per appt goal'),
+    cpa:           colIdx(colMap, 'cpa', 'cpl', 'cost per appt', 'cost per lead'),
+    dailyBudget:   colIdx(colMap, 'daily budget', 'daily'),
+    monthlyBudget: colIdx(colMap, 'monthly budget', 'monthly'),
+    amountSpent:   colIdx(colMap, 'amount spent', 'spent', 'total spent'),
+    linkCTR:       colIdx(colMap, 'link ctr', 'ctr'),
+    linkCPC:       colIdx(colMap, 'link cpc', 'cpc'),
+    cpm:           colIdx(colMap, 'cpm'),
+    frequency:     colIdx(colMap, 'frequency', 'freq'),
+    surveyPct:     colIdx(colMap, 'survey', 'survey %', 'survey pct', 'survey rate'),
+    manager:       colIdx(colMap, 'account manager', 'manager', 'acct manager'),
+    notes:         colIdx(colMap, 'notes', 'note'),
+    goodToBill:    colIdx(colMap, 'good to bill', 'ready to bill'),
+    billed:        colIdx(colMap, 'billed'),
+    billingNotes:  colIdx(colMap, 'billing notes', 'billing note'),
+  };
+  console.log(`[${podName}] Resolved column indices:`, COL);
+
+  // Helper to safely read a cell value by column key
+  function getStr(row, colKey) {
+    const idx = COL[colKey];
+    if (idx === undefined || idx < 0 || !row.c || !row.c[idx]) return '';
+    return String(row.c[idx].v || '').trim();
+  }
 
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
@@ -311,14 +382,8 @@ function parseSheetData(data, podName) {
       currentAccountName = cellA.trim();
       currentAdAccountId = String(cellC).replace(/\s/g,'').trim();
 
-      const mgr = row.c[21] ? String(row.c[21].v || '').trim() : '';
+      const mgr = getStr(row, 'manager');
       if (mgr) currentMgr = mgr;
-
-      const bookedGoal = getNum(row, 5);
-      const gregGoal = getNum(row, 6);
-      const cpaGoal = getNum(row, 11);
-      const dailyBudget = getNum(row, 13);
-      const monthlyBudget = getNum(row, 14);
 
       accounts.push({
         name: currentAccountName,
@@ -327,14 +392,18 @@ function parseSheetData(data, podName) {
         section: currentSection,
         manager: currentMgr || 'Unassigned',
         isPaused: isPausedStatus,
-        bookedGoal, gregGoal, cpaGoal, dailyBudget, monthlyBudget,
+        bookedGoal:    COL.bookedGoal >= 0 ? getNum(row, COL.bookedGoal) : null,
+        gregGoal:      COL.gregGoal >= 0 ? getNum(row, COL.gregGoal) : null,
+        cpaGoal:       COL.cpaGoal >= 0 ? getNum(row, COL.cpaGoal) : null,
+        dailyBudget:   COL.dailyBudget >= 0 ? getNum(row, COL.dailyBudget) : null,
+        monthlyBudget: COL.monthlyBudget >= 0 ? getNum(row, COL.monthlyBudget) : null,
         cycles: []
       });
       continue;
     }
 
     if (isCycleLabel && currentAccountName) {
-      const rowMgr = row.c[21] ? String(row.c[21].v || '').trim() : '';
+      const rowMgr = getStr(row, 'manager');
       if (rowMgr) currentMgr = rowMgr;
 
       const cycleData = {
@@ -343,29 +412,29 @@ function parseSheetData(data, podName) {
         pod: podName,
         manager: currentMgr || 'Unassigned',
         cycle: cellBStr,
-        cycleStartDate: getDate(row, 3),
-        cycleEndDate: getDate(row, 4),
-        bookedGoal: getNum(row, 5),
-        gregGoal: getNum(row, 6),
-        totalLeads: getNum(row, 7),
-        osaPct: normPct(getNum(row, 8)),        // NORMALIZED: handles 0.15 → 15
-        bookedAppts: getNum(row, 9),
-        estBookedAppts: getNum(row, 10),
-        cpaGoal: getNum(row, 11),
-        cpa: getNum(row, 12),
-        dailyBudget: getNum(row, 13),
-        monthlyBudget: getNum(row, 14),
-        amountSpent: getNum(row, 15),
-        linkCTR: getNum(row, 16),               // Already in % form (1.04 = 1.04%)
-        linkCPC: getNum(row, 17),
-        cpm: getNum(row, 18),
-        frequency: getNum(row, 19),
-        surveyPct: normPct(getNum(row, 20)),     // NORMALIZED
+        cycleStartDate: COL.cycleStart >= 0 ? getDate(row, COL.cycleStart) : null,
+        cycleEndDate:   COL.cycleEnd >= 0 ? getDate(row, COL.cycleEnd) : null,
+        bookedGoal:     COL.bookedGoal >= 0 ? getNum(row, COL.bookedGoal) : null,
+        gregGoal:       COL.gregGoal >= 0 ? getNum(row, COL.gregGoal) : null,
+        totalLeads:     COL.totalLeads >= 0 ? getNum(row, COL.totalLeads) : null,
+        osaPct:         COL.osaPct >= 0 ? normPct(getNum(row, COL.osaPct)) : null,
+        bookedAppts:    COL.bookedAppts >= 0 ? getNum(row, COL.bookedAppts) : null,
+        estBookedAppts: COL.estBooked >= 0 ? getNum(row, COL.estBooked) : null,
+        cpaGoal:        COL.cpaGoal >= 0 ? getNum(row, COL.cpaGoal) : null,
+        cpa:            COL.cpa >= 0 ? getNum(row, COL.cpa) : null,
+        dailyBudget:    COL.dailyBudget >= 0 ? getNum(row, COL.dailyBudget) : null,
+        monthlyBudget:  COL.monthlyBudget >= 0 ? getNum(row, COL.monthlyBudget) : null,
+        amountSpent:    COL.amountSpent >= 0 ? getNum(row, COL.amountSpent) : null,
+        linkCTR:        COL.linkCTR >= 0 ? getNum(row, COL.linkCTR) : null,
+        linkCPC:        COL.linkCPC >= 0 ? getNum(row, COL.linkCPC) : null,
+        cpm:            COL.cpm >= 0 ? getNum(row, COL.cpm) : null,
+        frequency:      COL.frequency >= 0 ? getNum(row, COL.frequency) : null,
+        surveyPct:      COL.surveyPct >= 0 ? normPct(getNum(row, COL.surveyPct)) : null,
         accountManager: rowMgr || currentMgr,
-        notes: row.c[22] ? (row.c[22].v || '') : '',
-        goodToBill: row.c[23] ? (row.c[23].v || '') : '',
-        billed: row.c[24] ? (row.c[24].v || '') : '',
-        billingNotes: row.c[25] ? (row.c[25].v || '') : '',
+        notes:          COL.notes >= 0 ? getStr(row, 'notes') : '',
+        goodToBill:     COL.goodToBill >= 0 ? getStr(row, 'goodToBill') : '',
+        billed:         COL.billed >= 0 ? getStr(row, 'billed') : '',
+        billingNotes:   COL.billingNotes >= 0 ? getStr(row, 'billingNotes') : '',
       };
 
       cycles.push(cycleData);
