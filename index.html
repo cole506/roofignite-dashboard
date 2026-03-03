@@ -521,6 +521,33 @@ function normPct(v) {
   return v;
 }
 
+// Fetch Greg Config from a named sheet tab (uses sheet= param instead of gid=)
+async function fetchGregConfig() {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=Greg%20Config`;
+    const resp = await fetch(url);
+    const text = await resp.text();
+    const jsonStr = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]*)\);?/);
+    if (!jsonStr) { console.log('[Greg Config] No config tab found — using defaults'); return; }
+    const data = JSON.parse(jsonStr[1]);
+    const rows = data.table?.rows || [];
+    rows.forEach(row => {
+      const type = row.c?.[0]?.v?.toString().trim().toLowerCase();
+      const name = row.c?.[1]?.v?.toString().trim();
+      const mode = row.c?.[2]?.v?.toString().trim().toUpperCase();
+      if (!type || !name || !mode) return;
+      if (type === 'manager' && ['HARD','SOFT','OFF'].includes(mode)) {
+        gregConfig.managerModes[name] = mode;
+      } else if (type === 'account' && ['HARD','SOFT','OFF'].includes(mode)) {
+        gregConfig.accountModes[name] = mode;
+      }
+    });
+    console.log('[Greg Config] Loaded:', gregConfig);
+  } catch (e) {
+    console.log('[Greg Config] Could not load config tab (may not exist yet):', e.message);
+  }
+}
+
 async function fetchSheetData(sheetName, gid) {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${gid}`;
   try {
@@ -1144,6 +1171,10 @@ async function loadAllData() {
     cycleMgrCounts[m] = (cycleMgrCounts[m] || 0) + 1;
   });
   console.log('Manager distribution (cycle-level):', cycleMgrCounts);
+
+  // Initialize Greg config: set defaults then load from Greg Config sheet if it exists
+  initGregConfig();
+  await fetchGregConfig();
 
   // Populate account dropdown
   const sel = document.getElementById('account-select');
@@ -3319,6 +3350,49 @@ let adminEditingAccount = null; // name of account being edited
 let adminEditingCycle = null;   // {account, cycleIndex}
 let adminShowNewClient = false;
 
+// ═══ Greg Configuration State ═══
+// Mirrors Greg Apps Script's OWNER_RUN_FLAGS and DISABLED_ACCOUNTS
+// Modes: 'HARD' (pauses ads), 'SOFT' (Slack alerts only), 'OFF' (disabled)
+const gregConfig = {
+  managerModes: {},    // { 'Cole': 'HARD', 'Tyler': 'SOFT', ... }
+  accountModes: {},    // { 'Some Account': 'OFF' } — per-account overrides
+  defaultMode: 'SOFT'  // Fallback for managers not listed
+};
+
+function initGregConfig() {
+  const managers = getManagers();
+  managers.forEach(m => {
+    if (!gregConfig.managerModes[m]) gregConfig.managerModes[m] = gregConfig.defaultMode;
+  });
+}
+
+function getGregMode(accountName, managerName) {
+  if (gregConfig.accountModes[accountName]) return gregConfig.accountModes[accountName];
+  return gregConfig.managerModes[managerName] || gregConfig.defaultMode;
+}
+
+function setManagerGregMode(manager, mode) {
+  gregConfig.managerModes[manager] = mode;
+  showToast(`Greg → ${mode} for all of ${manager}'s accounts`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+  if (APPS_SCRIPT_URL) writeToSheet('setManagerGregMode', { manager, mode });
+  renderAdminView();
+}
+
+function setAccountGregMode(accountName, mode) {
+  const acct = allAccounts.find(a => a.name === accountName);
+  if (!acct) return;
+  const managerMode = gregConfig.managerModes[acct.manager] || gregConfig.defaultMode;
+  if (mode === managerMode) {
+    delete gregConfig.accountModes[accountName];
+    showToast(`${accountName}: Greg reset to manager default (${managerMode})`, 'info');
+  } else {
+    gregConfig.accountModes[accountName] = mode;
+    showToast(`${accountName}: Greg → ${mode}`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+  }
+  if (APPS_SCRIPT_URL) writeToSheet('setAccountGregMode', { name: accountName, mode: mode === managerMode ? null : mode });
+  renderAdminView();
+}
+
 function getManagers() {
   const mgrs = new Set();
   allAccounts.forEach(a => mgrs.add(a.manager));
@@ -3380,6 +3454,41 @@ function renderAdminView() {
 
     ${adminShowNewClient ? renderNewClientForm(managers) : ''}
 
+    <!-- Greg Control Center -->
+    <div class="glass rounded-2xl p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="w-6 h-6 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-600/20 border border-green-500/20 flex items-center justify-center text-[10px]">🤖</span>
+          Greg Control Center
+        </h3>
+        <div class="flex items-center gap-2 text-[10px] text-dark-400">
+          <span class="w-2 h-2 rounded-full bg-green-500"></span> HARD = pauses ads
+          <span class="w-2 h-2 rounded-full bg-yellow-500 ml-2"></span> SOFT = alerts only
+          <span class="w-2 h-2 rounded-full bg-dark-500 ml-2"></span> OFF = disabled
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${Math.min(managers.length, 5)} gap-3">
+        ${managers.map(m => {
+          const mode = gregConfig.managerModes[m] || gregConfig.defaultMode;
+          const acctCount = allAccounts.filter(a => a.manager === m).length;
+          const overrideCount = allAccounts.filter(a => a.manager === m && gregConfig.accountModes[a.name]).length;
+          return `
+          <div class="bg-dark-800/60 rounded-xl p-3 border border-dark-600/30">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-white">${m}</span>
+              <span class="text-[10px] text-dark-400">${acctCount} accts</span>
+            </div>
+            <div class="flex rounded-lg overflow-hidden border border-dark-600/40">
+              ${['OFF','SOFT','HARD'].map(md => `<button onclick="setManagerGregMode('${esc(m)}','${md}')" class="flex-1 py-1.5 text-[10px] font-bold transition-all ${mode === md
+                ? md === 'HARD' ? 'bg-green-500/30 text-green-300' : md === 'SOFT' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-dark-600/60 text-dark-300'
+                : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">${md}</button>`).join('')}
+            </div>
+            ${overrideCount > 0 ? `<div class="text-[9px] text-brand-400 mt-1.5">${overrideCount} account override${overrideCount > 1 ? 's' : ''}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
     <!-- Filters -->
     <div class="flex items-center gap-3 mb-6">
       <div class="flex-1 relative">
@@ -3414,8 +3523,8 @@ function renderAdminView() {
         <tbody>
           ${accts.map((a, idx) => {
             const latestCycle = a.cycles.length ? a.cycles[a.cycles.length - 1] : null;
-            const gregGoal = latestCycle?.gregGoal || a.gregGoal;
-            const gregOn = gregGoal && gregGoal > 0;
+            const effectiveGregMode = getGregMode(a.name, a.manager);
+            const hasOverride = !!gregConfig.accountModes[a.name];
             const isActive = hasActiveCycle(a) && !a.isPaused;
             const isEditing = adminEditingAccount === a.name;
             return `
@@ -3447,9 +3556,12 @@ function renderAdminView() {
               </button>
             </td>
             <td class="px-4 py-3 text-center">
-              <button onclick="toggleGreg('${esc(a.name)}')" class="relative w-10 h-5 rounded-full transition-all ${gregOn ? 'bg-brand-500' : 'bg-dark-600'}" title="${gregOn ? 'Greg ON — Goal: '+gregGoal : 'Greg OFF'}">
-                <span class="absolute top-0.5 ${gregOn ? 'right-0.5' : 'left-0.5'} w-4 h-4 bg-white rounded-full shadow transition-all"></span>
-              </button>
+              <div class="inline-flex rounded-lg overflow-hidden border ${hasOverride ? 'border-brand-500/40' : 'border-dark-600/30'}" title="${hasOverride ? 'Account override (manager default: '+gregConfig.managerModes[a.manager]+')' : 'Using manager default'}">
+                ${['OFF','SOFT','HARD'].map(m => `<button onclick="setAccountGregMode('${esc(a.name)}','${m}')" class="px-2 py-1 text-[10px] font-bold transition-all ${effectiveGregMode === m
+                  ? m === 'HARD' ? 'bg-green-500/30 text-green-300' : m === 'SOFT' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-dark-600/60 text-dark-400'
+                  : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">${m}</button>`).join('')}
+              </div>
+              ${hasOverride ? '<div class="text-[8px] text-brand-400 mt-0.5">override</div>' : ''}
             </td>
             <td class="px-5 py-3 text-right">
               ${isEditing ? `
@@ -3519,8 +3631,9 @@ function renderNewClientForm(managers) {
           <input id="new-client-booked-goal" type="number" placeholder="6" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
         </div>
         <div>
-          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Greg Goal</label>
-          <input id="new-client-greg-goal" type="number" placeholder="0 = off" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Greg Appt Goal</label>
+          <input id="new-client-greg-goal" type="number" placeholder="e.g. 10" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+          <div class="text-[9px] text-dark-500 mt-1">Mode set in Greg Control Center above</div>
         </div>
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">CPA Goal ($)</label>
@@ -3575,7 +3688,7 @@ function renderCycleEditor() {
                   <th class="text-left px-3 py-2 font-semibold">Start</th>
                   <th class="text-left px-3 py-2 font-semibold">End</th>
                   <th class="text-right px-3 py-2 font-semibold">Booked Goal</th>
-                  <th class="text-right px-3 py-2 font-semibold">Greg Goal</th>
+                  <th class="text-right px-3 py-2 font-semibold">Greg Appt Goal</th>
                   <th class="text-right px-3 py-2 font-semibold">CPA Goal</th>
                   <th class="text-right px-3 py-2 font-semibold">Daily $</th>
                   <th class="text-right px-3 py-2 font-semibold">Monthly $</th>
@@ -3693,39 +3806,8 @@ function toggleAccountStatus(name) {
   renderAdminView();
 }
 
-function toggleGreg(name) {
-  const acct = allAccounts.find(a => a.name === name);
-  if (!acct) return;
-
-  const latestCycle = acct.cycles.length ? acct.cycles[acct.cycles.length - 1] : null;
-  if (latestCycle) {
-    const wasOn = latestCycle.gregGoal && latestCycle.gregGoal > 0;
-    if (wasOn) {
-      latestCycle.gregGoal = 0;
-      showToast(`Greg OFF for ${name}`, 'warning');
-    } else {
-      const goal = prompt(`Set Greg goal for ${name}:`, '10');
-      if (!goal) return;
-      latestCycle.gregGoal = parseFloat(goal) || 0;
-      showToast(`Greg ON for ${name} — Goal: ${latestCycle.gregGoal}`, 'success');
-    }
-    if (APPS_SCRIPT_URL) writeToSheet('toggleGreg', { name, cycle: latestCycle.cycle, gregGoal: latestCycle.gregGoal });
-  } else {
-    // No cycles yet — set on account level
-    const wasOn = acct.gregGoal && acct.gregGoal > 0;
-    if (wasOn) {
-      acct.gregGoal = 0;
-      showToast(`Greg OFF for ${name}`, 'warning');
-    } else {
-      const goal = prompt(`Set Greg goal for ${name}:`, '10');
-      if (!goal) return;
-      acct.gregGoal = parseFloat(goal) || 0;
-      showToast(`Greg ON for ${name} — Goal: ${acct.gregGoal}`, 'success');
-    }
-  }
-
-  renderAdminView();
-}
+// Greg toggle replaced by 3-mode system: setManagerGregMode() and setAccountGregMode()
+// defined above in the Greg Configuration State section
 
 function saveCycleEdit(accountName, cycleIndex) {
   const acct = allAccounts.find(a => a.name === accountName);
@@ -3850,32 +3932,87 @@ function showAppsScriptSetup() {
   modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
   modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   modal.innerHTML = `
-    <div class="glass rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
-      <h2 class="text-lg font-bold text-white mb-4">🔧 Google Apps Script Setup</h2>
+    <div class="glass rounded-2xl p-6 max-w-3xl w-full max-h-[85vh] overflow-y-auto" onclick="event.stopPropagation()">
+      <h2 class="text-lg font-bold text-white mb-4">🔧 Apps Script Setup — Dashboard Write-Back + Greg Config</h2>
       <div class="text-sm text-dark-200 space-y-3">
-        <p><strong class="text-white">Step 1:</strong> Open your Google Sheet → Extensions → Apps Script</p>
-        <p><strong class="text-white">Step 2:</strong> Replace Code.gs with the script below</p>
-        <p><strong class="text-white">Step 3:</strong> Click Deploy → New deployment → Web app</p>
-        <p><strong class="text-white">Step 4:</strong> Set "Execute as: Me" and "Who has access: Anyone"</p>
-        <p><strong class="text-white">Step 5:</strong> Copy the web app URL and paste it below</p>
-        <div class="bg-dark-900 rounded-xl p-4 mt-4 mb-4 text-[11px] font-mono text-green-400 overflow-x-auto whitespace-pre">function doPost(e) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pod 2 - RoofIgnite');
+        <p class="text-yellow-300 text-xs font-semibold">Two things to set up:</p>
+
+        <p><strong class="text-white">1. Create a "Greg Config" sheet tab</strong> in your Google Sheet with columns:</p>
+        <div class="bg-dark-900 rounded-lg p-3 text-[11px] font-mono text-blue-300 overflow-x-auto">Type | Name | Mode
+manager | Cole | HARD
+manager | Tyler | SOFT
+manager | Jonathan | OFF
+account | Some Account Name | OFF</div>
+        <p class="text-[11px] text-dark-400">The Greg script will read this tab instead of hardcoded OWNER_RUN_FLAGS. "manager" rows set per-manager mode; "account" rows override individual accounts.</p>
+
+        <p><strong class="text-white">2. Deploy this Apps Script</strong> (Extensions → Apps Script → Deploy → Web app):</p>
+        <div class="bg-dark-900 rounded-xl p-4 mt-2 mb-4 text-[10px] font-mono text-green-400 overflow-x-auto whitespace-pre">function doPost(e) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
   const data = JSON.parse(e.postData.contents);
   const action = data.action;
 
-  if (action === 'createClient') {
-    // Append new account row
-    sheet.appendRow([data.name, 'Q1 Onboarded', data.adAccountId || '', '', '',
-      data.gregGoal || '', data.bookedGoal || '', '', '', '', '',
-      '', '', data.dailyBudget || '', data.monthlyBudget || '']);
+  // Greg mode changes → write to "Greg Config" tab
+  if (action === 'setManagerGregMode' || action === 'setAccountGregMode') {
+    let configSheet = ss.getSheetByName('Greg Config');
+    if (!configSheet) {
+      configSheet = ss.insertSheet('Greg Config');
+      configSheet.appendRow(['Type', 'Name', 'Mode']);
+    }
+    const type = action === 'setManagerGregMode' ? 'manager' : 'account';
+    const name = data.manager || data.name;
+    const mode = data.mode;
+
+    // Find existing row or append
+    const vals = configSheet.getDataRange().getValues();
+    let found = false;
+    for (let i = 1; i &lt; vals.length; i++) {
+      if (vals[i][0] === type &amp;&amp; vals[i][1] === name) {
+        if (mode === null) { configSheet.deleteRow(i + 1); } // remove override
+        else { configSheet.getRange(i + 1, 3).setValue(mode); }
+        found = true; break;
+      }
+    }
+    if (!found &amp;&amp; mode !== null) configSheet.appendRow([type, name, mode]);
   }
-  // Add more handlers as needed...
+
+  // Client CRUD operations
+  if (action === 'createClient') {
+    const sheet = ss.getSheetByName(data.pod || 'Pod 2 - RoofIgnite');
+    if (sheet) sheet.appendRow([data.name, '', data.adAccountId||'',
+      '', '', data.gregGoal||'', data.bookedGoal||'', '', '', '',
+      '', '', '', data.dailyBudget||'', data.monthlyBudget||'']);
+  }
 
   return ContentService.createTextOutput(JSON.stringify({ok:true}))
     .setMimeType(ContentService.MimeType.JSON);
 }</div>
-        <div class="flex gap-3 items-center">
-          <input id="gas-url-input" type="text" placeholder="Paste Apps Script URL..." class="flex-1 bg-dark-800 border border-dark-600 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+
+        <p><strong class="text-white">3. Update Greg script</strong> to read config from sheet instead of hardcoded constants:</p>
+        <div class="bg-dark-900 rounded-xl p-4 mt-2 mb-4 text-[10px] font-mono text-amber-300 overflow-x-auto whitespace-pre">// Replace OWNER_RUN_FLAGS and DISABLED_ACCOUNTS in Greg script with:
+function loadGregConfig() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const configSheet = ss.getSheetByName('Greg Config');
+  const flags = {}; const disabled = [];
+  if (configSheet) {
+    const vals = configSheet.getDataRange().getValues();
+    for (let i = 1; i &lt; vals.length; i++) {
+      const [type, name, mode] = vals[i];
+      if (type === 'manager') flags[name] = mode;
+      if (type === 'account' &amp;&amp; mode === 'OFF') disabled.push(name);
+    }
+  }
+  return { ownerRunFlags: flags, disabledAccounts: disabled };
+}
+
+// In your main Greg function, replace:
+//   const mode = OWNER_RUN_FLAGS[owner] || DEFAULT_OWNER_MODE;
+// With:
+//   const config = loadGregConfig();
+//   const mode = config.ownerRunFlags[owner] || DEFAULT_OWNER_MODE;
+//   const DISABLED_ACCOUNTS = config.disabledAccounts;</div>
+
+        <div class="flex gap-3 items-center mt-4">
+          <input id="gas-url-input" type="text" placeholder="Paste Apps Script web app URL..." class="flex-1 bg-dark-800 border border-dark-600 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
           <button onclick="const u=document.getElementById('gas-url-input').value.trim();if(u){APPS_SCRIPT_URL=u;showToast('Apps Script connected!','success');this.closest('.fixed').remove();renderAdminView();}else{showToast('Please paste a URL','error');}" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-all">Connect</button>
         </div>
       </div>
