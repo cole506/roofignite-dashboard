@@ -510,6 +510,16 @@ function parseSheetData(data, podName) {
     const cellCraw = row.c[2] ? (row.c[2].f || row.c[2].v || '') : '';
     const cellC = String(cellCraw).replace(/,/g, '');
 
+    // DEBUG: dump ALL cell data for Good Guy rows
+    if (String(cellA).toLowerCase().includes('good guy') || (currentAccountName && currentAccountName.toLowerCase().includes('good guy') && cellB)) {
+      const cellDump = [];
+      for (let dc = 0; dc < Math.min(row.c.length, 25); dc++) {
+        const cell = row.c[dc];
+        if (cell && (cell.v !== null || cell.f)) cellDump.push(`col${dc}={v:${JSON.stringify(cell.v)},f:${JSON.stringify(cell.f)}}`);
+      }
+      console.log(`[DEBUG-GoodGuy] Row ${i}: A="${cellA}" B="${cellB}" C="${cellC}" | ${cellDump.join(' | ')}`);
+    }
+
     if (!cellA && !cellB && !cellC) continue;
 
     // Section/label row: has ONLY cellA, nothing in any other column (no B, no C, no data cols)
@@ -652,6 +662,36 @@ function parseSheetData(data, podName) {
       }
     }
   }
+
+  // Post-parse fixup: scan cycles for ad IDs and propagate to parent accounts
+  accounts.forEach(acct => {
+    if (!acct.adAccountId) {
+      const cycleWithId = acct.cycles.find(c => c.adAccountId);
+      if (cycleWithId) {
+        acct.adAccountId = cycleWithId.adAccountId;
+        console.log(`[AdID-PostFix] ${acct.name}: got ad ID from cycle → ${acct.adAccountId}`);
+      }
+    }
+    // Also check global cycles array for this account name
+    if (!acct.adAccountId) {
+      const globalCycle = cycles.find(c => c.account === acct.name && c.adAccountId);
+      if (globalCycle) {
+        acct.adAccountId = globalCycle.adAccountId;
+        console.log(`[AdID-PostFix] ${acct.name}: got ad ID from global cycles → ${acct.adAccountId}`);
+      }
+    }
+  });
+
+  // Debug: dump accounts missing ad IDs and what their raw cycle data looks like
+  const noAdId = accounts.filter(a => !a.adAccountId && a.cycles.length > 0);
+  if (noAdId.length > 0) {
+    console.warn(`[AdID-Missing] ${noAdId.length} accounts with cycles but no ad ID:`, noAdId.map(a => `${a.name} (${a.cycles.length} cycles)`));
+  }
+
+  // Debug: for each account, log the ad ID status
+  accounts.forEach(a => {
+    console.log(`[AdID-Summary] ${a.name}: adAccountId="${a.adAccountId}", cycles=${a.cycles.length}, cycleAdIds=[${a.cycles.map(c => c.adAccountId || 'EMPTY').join(',')}]`);
+  });
 
   return { accounts, cycles };
 }
