@@ -2019,7 +2019,23 @@ function renderAccountDetail(name, adAccountId) {
     <!-- Meta Ad Performance -->
     <div class="glass rounded-xl p-5 mb-6" id="meta-daily-section">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-white font-semibold">Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
+        <div class="flex items-center gap-3">
+          <h3 class="text-white font-semibold">Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
+          ${META_ACCESS_TOKEN && adId && cycles.length > 0 ? `
+          <select id="meta-cycle-select" onchange="switchMetaCycle()" class="text-xs bg-dark-700 border border-dark-600 text-dark-200 rounded px-2 py-1 appearance-none pr-7 cursor-pointer" style="min-width:180px;">
+            ${(() => {
+              const today2 = getTodayStr();
+              const hasAnActive = cycles.some(cc => cc.cycleStartDate && cc.cycleEndDate && cc.cycleStartDate <= today2 && cc.cycleEndDate >= today2);
+              return cycles.map((c, ci) => {
+                const isAct = c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today2 && c.cycleEndDate >= today2;
+                const shouldSelect = isAct || (!hasAnActive && ci === cycles.length - 1);
+                const lbl = c.cycle + (isAct ? ' (Active)' : '') + (c.cycleStartDate ? ' · ' + fmtDate(c.cycleStartDate) : '');
+                return '<option value="' + ci + '"' + (shouldSelect ? ' selected' : '') + '>' + lbl + '</option>';
+              }).join('');
+            })()}
+          </select>
+          ` : ''}
+        </div>
         ${META_ACCESS_TOKEN && adId ? `
         <div class="flex gap-1" id="meta-view-toggles">
           <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="daily" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Daily</button>
@@ -2112,9 +2128,19 @@ function renderAccountDetail(name, adAccountId) {
     renderAccountLeadsChart(cycles);
   }
 
-  // Load Meta daily insights for active cycle
-  if (META_ACCESS_TOKEN && adId && activeCyc && activeCyc.cycleStartDate && activeCyc.cycleEndDate) {
-    loadMetaDailyInsights(adId, activeCyc.cycleStartDate, activeCyc.cycleEndDate, activeCyc, name);
+  // Store context for cycle switching
+  _metaCycleAcct = acct;
+  _metaCycleAdId = adId;
+  _metaCycleList = cycles;
+
+  // Load Meta daily insights for the selected cycle (active or most recent)
+  if (META_ACCESS_TOKEN && adId && cycles.length > 0) {
+    const selEl = document.getElementById('meta-cycle-select');
+    const selIdx = selEl ? parseInt(selEl.value) : -1;
+    const selCyc = selIdx >= 0 ? cycles[selIdx] : activeCyc;
+    if (selCyc && selCyc.cycleStartDate && selCyc.cycleEndDate) {
+      loadMetaDailyInsights(adId, selCyc.cycleStartDate, selCyc.cycleEndDate, selCyc, name);
+    }
   }
 
   renderLeadBreakdown(acct, cycles);
@@ -2347,6 +2373,24 @@ let metaDailyData = null;
 let metaCurrentView = 'daily'; // 'daily', 'quarters', or 'full'
 let metaCurrentCycle = null; // store cycle context for CPA calc
 let metaAccountName = '';
+
+// Cycle selector context
+let _metaCycleAcct = null;
+let _metaCycleAdId = '';
+let _metaCycleList = [];
+
+function switchMetaCycle() {
+  const selEl = document.getElementById('meta-cycle-select');
+  if (!selEl || !_metaCycleAcct || !_metaCycleAdId) return;
+  const idx = parseInt(selEl.value);
+  const cyc = _metaCycleList[idx];
+  if (!cyc || !cyc.cycleStartDate || !cyc.cycleEndDate) return;
+  // Reset view toggles to Full Cycle default
+  document.querySelectorAll('.meta-view-toggle').forEach(b => { b.style.background = 'rgba(100,116,139,0.15)'; b.style.color = '#94a3b8'; b.classList.remove('active'); });
+  const fullBtn = document.querySelector('.meta-view-toggle[data-view="full"]');
+  if (fullBtn) { fullBtn.classList.add('active'); fullBtn.style.background = 'rgba(251,146,60,0.2)'; fullBtn.style.color = '#fdba74'; }
+  loadMetaDailyInsights(_metaCycleAdId, cyc.cycleStartDate, cyc.cycleEndDate, cyc, _metaCycleAcct.name);
+}
 
 function aggregateDays(dayArray) {
   const totalSpend = dayArray.reduce((s,d)=>s+d.spend,0);
