@@ -2404,6 +2404,7 @@ function renderMetaAggTable(aggData, cycle) {
             <th class="py-2 px-2 text-right font-medium">Link CTR</th>
             <th class="py-2 px-2 text-right font-medium">CPC</th>
             <th class="py-2 px-2 text-right font-medium">Freq</th>
+            <th class="py-2 px-2 text-right font-medium">Bookings</th>
             <th class="py-2 px-2 text-right font-medium">CPA</th>
             <th class="py-2 px-2 text-right font-medium">Days</th>
           </tr>
@@ -2419,6 +2420,7 @@ function renderMetaAggTable(aggData, cycle) {
             <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', w.cpc, cycle)}">${fmtDollar(w.cpc,2)}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
+            <td class="py-1.5 px-2 text-right ${w.bookings > 0 ? 'metric-cell-green' : ''}">${w.bookings || 0}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', w.cpa, cycle)}">${w.cpa > 0 ? fmtDollar(w.cpa,0) : '—'}</td>
             <td class="py-1.5 px-2 text-right text-dark-400">${w.days}d</td>
           </tr>`;}).join('')}
