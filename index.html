@@ -852,40 +852,57 @@ function getGregLeadCPLGoal(bookingCPLGoal, l2bRate) {
   return bookingCPLGoal * clampedRate;
 }
 
-// Spend Pacing: how much of budget used vs how far into the cycle
-function getSpendPacing(cycle) {
-  if (!cycle || !cycle.amountSpent || !cycle.cycleStartDate || !cycle.cycleEndDate) return null;
+// Booking Pacing: based on current CPA, remaining budget, and booked goal
+// Are we on track to hit within 80% of the booking target?
+function getBookingPacing(cycle) {
+  if (!cycle || !cycle.cycleStartDate || !cycle.cycleEndDate) return null;
   const budget = cycle.monthlyBudget || null;
-  if (!budget) return null;
+  const bookedGoal = cycle.bookedGoal || null;
+  const currentBooked = cycle.bookedAppts || 0;
+  const spent = cycle.amountSpent || 0;
+  const cpa = cycle.cpa || 0;
+  if (!budget || !bookedGoal) return null;
 
   const startMs = new Date(cycle.cycleStartDate).getTime();
   const endMs = new Date(cycle.cycleEndDate).getTime();
   const nowMs = Date.now();
   const totalDays = Math.max(1, (endMs - startMs) / 86400000);
   const elapsedDays = Math.max(0, Math.min(totalDays, (nowMs - startMs) / 86400000));
-  const pctElapsed = elapsedDays / totalDays;
-  const pctSpent = cycle.amountSpent / budget;
+  const pctElapsed = Math.min(1, elapsedDays / totalDays);
   const daysLeft = Math.max(0, Math.ceil((endMs - nowMs) / 86400000));
-  const dailyBudgetNeeded = daysLeft > 0 ? (budget - cycle.amountSpent) / daysLeft : 0;
+  const remainingBudget = Math.max(0, budget - spent);
 
-  // Pacing ratio: >1.15 = overspending, <0.85 = underspending
-  const pacingRatio = pctElapsed > 0 ? pctSpent / pctElapsed : 0;
+  // Project total bookings: current booked + (remaining budget / current CPA)
+  const projectedAdditional = (cpa > 0 && daysLeft > 0) ? remainingBudget / cpa : 0;
+  const projectedTotal = currentBooked + projectedAdditional;
+  const pctOfGoal = bookedGoal > 0 ? projectedTotal / bookedGoal : 0;
+
+  // On track = projected to hit >= 80% of goal
+  const status = pctOfGoal >= 0.95 ? 'on-track' : pctOfGoal >= 0.80 ? 'close' : 'behind';
 
   return {
-    pctElapsed: Math.min(1, pctElapsed),
-    pctSpent: Math.min(1.5, pctSpent), // cap at 150% for display
-    pacingRatio,
+    currentBooked,
+    bookedGoal,
+    projectedTotal: Math.round(projectedTotal),
+    pctOfGoal,
+    pctElapsed,
     daysLeft,
-    dailyBudgetNeeded,
-    status: pacingRatio > 1.15 ? 'over' : pacingRatio < 0.85 ? 'under' : 'on-pace',
-    budget
+    remainingBudget,
+    cpa,
+    status,
   };
 }
 
-function pacingColor(status) {
-  if (status === 'over') return '#ef4444';
-  if (status === 'under') return '#3b82f6';
-  return '#22c55e';
+function bookingPaceColor(status) {
+  if (status === 'on-track') return '#22c55e';
+  if (status === 'close') return '#eab308';
+  return '#ef4444';
+}
+
+function bookingPaceLabel(status) {
+  if (status === 'on-track') return 'On Track';
+  if (status === 'close') return 'Close';
+  return 'Behind';
 }
 
 // Get the cycle before the current one for trend comparison
@@ -983,12 +1000,12 @@ function getHealthScore(acct, cycle) {
     }
   }
 
-  // ── Pacing (5 pts) ──
-  const pacing = getSpendPacing(cycle);
-  if (pacing) {
+  // ── Pacing (5 pts) — booking pace ──
+  const bkPacing = getBookingPacing(cycle);
+  if (bkPacing) {
     maxPossible += 5;
-    if (pacing.status === 'on-pace') score += 5;
-    else if (pacing.pacingRatio > 0.7 && pacing.pacingRatio < 1.3) score += 3;
+    if (bkPacing.status === 'on-track') score += 5;
+    else if (bkPacing.status === 'close') score += 3;
     else score += 0;
   }
 
@@ -1105,9 +1122,9 @@ function getAllAlerts() {
     if (track === false)
       issues.push({ type: 'warning', msg: `Off track: Est. ${fmt(active.estBookedAppts)} / ${fmt(active.bookedGoal)}`, current: fmt(active.estBookedAppts), threshold: fmt(active.bookedGoal) });
 
-    const pacing = getSpendPacing(active);
-    if (pacing && (pacing.pacingRatio < 0.7 || pacing.pacingRatio > 1.3))
-      issues.push({ type: 'warning', msg: `Pacing ${(pacing.pacingRatio*100).toFixed(0)}% of expected`, current: `${(pacing.pacingRatio*100).toFixed(0)}%`, threshold: '70-130%' });
+    const bkPace = getBookingPacing(active);
+    if (bkPace && bkPace.status === 'behind')
+      issues.push({ type: 'warning', msg: `Booking pace: projected ${bkPace.projectedTotal} of ${bkPace.bookedGoal} goal`, current: `${Math.round(bkPace.pctOfGoal*100)}%`, threshold: '≥80%' });
 
     // CTR decline vs previous cycle
     const prev = getPreviousCycle(acct.name, acct.adAccountId, active);
@@ -1623,7 +1640,7 @@ function renderAccountTable(active, inactive, mgrName) {
               const hs = getHealthScore(a, c);
               const hc = healthScoreColor(hs);
               const l2b = getLeadToBookedRate(a.name, 45);
-              const pacing = c ? getSpendPacing(c) : null;
+              const bkPace = c ? getBookingPacing(c) : null;
               return `
                 <tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                   <td class="py-3 px-3 text-center">${hs !== null ? `<span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold" style="background:${hc.bg};color:${hc.text};">${hs}</span>` : '<span class="text-dark-500 text-xs">—</span>'}</td>
@@ -1641,7 +1658,7 @@ function renderAccountTable(active, inactive, mgrName) {
                   <td class="py-3 px-3 text-right"><span class="${c ? cpaColor(c.cpa, cpaGoal) : 'text-dark-400'}">${c ? fmtDollar(c.cpa,2) : '—'}</span></td>
                   <td class="py-3 px-3 text-right text-dark-400">${cpaGoal ? fmtDollar(cpaGoal,2) : '—'}</td>
                   <td class="py-3 px-3 text-right text-white">${c ? fmtDollar(c.amountSpent,0) : '—'}</td>
-                  <td class="py-3 px-3 text-right">${pacing ? `<span class="text-xs font-medium" style="color:${pacingColor(pacing.status)}">${pacing.status === 'over' ? '▲' : pacing.status === 'under' ? '▼' : '●'} ${Math.round(pacing.pctSpent*100)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
+                  <td class="py-3 px-3 text-right">${bkPace ? `<span class="text-xs font-medium" style="color:${bookingPaceColor(bkPace.status)}">${bkPace.status === 'behind' ? '▲' : '●'} ${Math.round(bkPace.pctOfGoal*100)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
                   <td class="py-3 px-3 text-right"><span class="${c ? ctrColor(c.linkCTR) : 'text-dark-400'}">${c && c.linkCTR ? fmtPctDec(c.linkCTR) : '—'}</span></td>
                   <td class="py-3 px-3 text-right"><span class="${c ? freqColor(c.frequency) : 'text-dark-400'}">${c && c.frequency ? c.frequency.toFixed(1) : '—'}</span></td>
                   <td class="py-3 px-3 text-center">${onTrackBadge(c)}</td>
@@ -1740,9 +1757,9 @@ function renderAccountDetail(name, adAccountId) {
         <div class="text-xs text-dark-400">Target: ≤ 2.50</div>
       </div>
     </div>
-    <!-- Spend Pacing + L2B Rate + Greg CPL -->
+    <!-- Booking Pacing + L2B Rate + Greg CPL -->
     ${(() => {
-      const pacing = getSpendPacing(activeCyc);
+      const bkPace = getBookingPacing(activeCyc);
       const l2b = getLeadToBookedRate(name, 45);
       const gregCPL = getGregLeadCPLGoal(cpaGoal, l2b);
       const acctLeads45d = allLeads.filter(l => {
@@ -1754,24 +1771,24 @@ function renderAccountDetail(name, adAccountId) {
       const booked45 = acctLeads45d.filter(l => isBookedStatus(l.status)).length;
 
       return `<div class="grid grid-cols-3 gap-3 mb-6">
-        ${pacing ? `<div class="glass rounded-xl p-4">
+        ${bkPace ? `<div class="glass rounded-xl p-4">
           <div class="flex items-center justify-between mb-2">
-            <div class="text-dark-400 text-[10px] uppercase tracking-wider">Spend Pacing</div>
-            <span class="text-xs font-semibold" style="color:${pacingColor(pacing.status)}">${pacing.status === 'over' ? 'Overspending' : pacing.status === 'under' ? 'Underspending' : 'On Pace'}</span>
+            <div class="text-dark-400 text-[10px] uppercase tracking-wider">Booking Pacing</div>
+            <span class="text-xs font-semibold" style="color:${bookingPaceColor(bkPace.status)}">${bookingPaceLabel(bkPace.status)}</span>
           </div>
           <div class="flex items-end gap-2 mb-2">
-            <div class="text-xl font-bold text-white">${fmtDollar(activeCyc.amountSpent,0)}</div>
-            <div class="text-dark-400 text-xs mb-0.5">of ${fmtDollar(pacing.budget,0)}</div>
+            <div class="text-xl font-bold text-white">${bkPace.currentBooked}</div>
+            <div class="text-dark-400 text-xs mb-0.5">of ${bkPace.bookedGoal} goal</div>
           </div>
           <div class="pacing-bar mb-1.5">
-            <div class="pacing-fill" style="width:${Math.min(100,pacing.pctSpent*100)}%;background:${pacingColor(pacing.status)};"></div>
+            <div class="pacing-fill" style="width:${Math.min(100, bkPace.currentBooked / bkPace.bookedGoal * 100)}%;background:${bookingPaceColor(bkPace.status)};"></div>
           </div>
           <div class="flex justify-between text-[10px] text-dark-400">
-            <span>${Math.round(pacing.pctSpent*100)}% spent</span>
-            <span>${Math.round(pacing.pctElapsed*100)}% of cycle elapsed</span>
+            <span>${Math.round(bkPace.currentBooked / bkPace.bookedGoal * 100)}% booked</span>
+            <span>${Math.round(bkPace.pctElapsed*100)}% of cycle elapsed</span>
           </div>
-          <div class="text-xs text-dark-300 mt-2">${pacing.daysLeft}d left · Need ~${fmtDollar(pacing.dailyBudgetNeeded,0)}/day</div>
-        </div>` : '<div class="glass rounded-xl p-4"><div class="text-dark-400 text-xs">No pacing data</div></div>'}
+          <div class="text-xs text-dark-300 mt-2">Projected: ~${bkPace.projectedTotal} bookings · ${bkPace.daysLeft}d left${bkPace.cpa > 0 ? ' · CPA ' + fmtDollar(bkPace.cpa,0) : ''}</div>
+        </div>` : '<div class="glass rounded-xl p-4"><div class="text-dark-400 text-xs">No booking pace data</div></div>'}
 
         <div class="glass rounded-xl p-4">
           <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-2">Lead-to-Booked Rate (45d)</div>
@@ -1838,9 +1855,9 @@ function renderAccountDetail(name, adAccountId) {
         <h3 class="text-white font-semibold">Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
         ${META_ACCESS_TOKEN && adId ? `
         <div class="flex gap-1" id="meta-view-toggles">
-          <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle active" data-view="daily" style="background:rgba(251,146,60,0.2);color:#fdba74;">Day-by-Day</button>
+          <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="daily" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Daily</button>
           <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="quarters" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Cycle Quarters</button>
-          <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="full" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Full Cycle</button>
+          <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle active" data-view="full" style="background:rgba(251,146,60,0.2);color:#fdba74;">Full Cycle</button>
         </div>
         ` : ''}
       </div>
@@ -2253,6 +2270,7 @@ function renderMetaDailyTable(data, cycle) {
             <th class="py-2 px-2 text-right font-medium">CTR (Link)</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
+            <th class="py-2 px-2 text-right font-medium">Bookings</th>
             <th class="py-2 px-2 text-right font-medium">CPA</th>
           </tr>
         </thead>
@@ -2266,7 +2284,7 @@ function renderMetaDailyTable(data, cycle) {
             const linkCPC = d.outboundClicks > 0 ? d.spend / d.outboundClicks : 0;
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
               <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${dateStr}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('spend', d.spend, cycle)}">${fmtDollar(d.spend,2)}</td>
+              <td class="py-1.5 px-2 text-right text-dark-200">${fmtDollar(d.spend,2)}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', d.frequency, cycle)}">${d.frequency > 0 ? d.frequency.toFixed(2) : '—'}</td>
               <td class="py-1.5 px-2 text-right text-dark-200">${fmt(d.impressions)}</td>
               <td class="py-1.5 px-2 text-right text-dark-200">${fmt(d.clicks)}</td>
@@ -2275,6 +2293,7 @@ function renderMetaDailyTable(data, cycle) {
               <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', d.linkCTR, cycle)}">${d.linkCTR > 0 ? d.linkCTR.toFixed(2)+'%' : '—'}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('leads', d.leads, cycle)}">${d.leads}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', cpl, cycle)}">${d.leads > 0 ? fmtDollar(cpl,2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right ${dailyBookings > 0 ? 'metric-cell-green' : ''}">${dailyBookings}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
             </tr>`;
           }).join('')}
@@ -2348,13 +2367,15 @@ async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle, acc
 
   metaDailyData = data;
   metaCurrentCycle = cycle || null;
-  metaCurrentView = 'daily';
+  metaCurrentView = 'full';
   metaAccountName = accountName || '';
   section.querySelector('h3').textContent = 'Ad Performance';
 
   renderMetaSummary(data);
   renderMetaDailyChart('spend');
-  renderMetaDailyTable(data, cycle);
+  // Default to Full Cycle view
+  const fData = aggregateToFullCycle(data);
+  renderMetaAggTable(fData, cycle);
 
   // View toggle (Day-by-Day / Cycle Quarters / Full Cycle)
   document.querySelectorAll('.meta-view-toggle').forEach(btn => {
