@@ -492,7 +492,16 @@ function parseSheetData(data, podName) {
     // Try named "ad account id" column first, then fallback to column C
     // Use .f (formatted string) over .v (numeric value) to avoid JS number precision loss on 17+ digit IDs
     const adIdCell = COL.adAccountId >= 0 && row.c[COL.adAccountId] ? row.c[COL.adAccountId] : null;
-    const adIdRaw = adIdCell ? String(adIdCell.f || adIdCell.v || '') : String(cellC || '');
+    // Prefer .f (formatted string) but fall back to .v if .f is in scientific notation
+    let adIdRaw;
+    if (adIdCell) {
+      const fVal = adIdCell.f ? String(adIdCell.f) : '';
+      const vVal = adIdCell.v != null ? String(adIdCell.v) : '';
+      // If .f is scientific notation (e.g. 1.30307E+15), use .v instead — it's the raw number
+      adIdRaw = (fVal && !/[eE]/.test(fVal)) ? fVal : vVal || fVal;
+    } else {
+      adIdRaw = String(cellC || '');
+    }
     const rawAdId = adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '');
     const hasAdAccountId = rawAdId.length > 3 && /^\d+$/.test(rawAdId);
 
