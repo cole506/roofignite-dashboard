@@ -1676,8 +1676,12 @@ function renderAccountDetail(name, adAccountId) {
   console.log('[RenderAcct] Found acct:', acct.name, 'stored adAccountId:', JSON.stringify(acct.adAccountId));
 
   const cycles = acct.cycles || [];
-  const adId = acct.adAccountId || adAccountId || '';
-  const activeCyc = getActiveCycle(name, adId || adAccountId);
+  // Prefer ad ID from the first cycle row (most reliable), then account header, then navigation param
+  const firstCycleAdId = cycles.length > 0 ? cycles[0].adAccountId : '';
+  const adId = firstCycleAdId || acct.adAccountId || adAccountId || '';
+  // Sync back so other functions use the right ID
+  if (adId && !acct.adAccountId) acct.adAccountId = adId;
+  const activeCyc = getActiveCycle(name, adId);
   const cpaGoal = acct.cpaGoal || (activeCyc && activeCyc.cpaGoal);
   const isActive = hasActiveCycle(acct);
 
@@ -1863,39 +1867,27 @@ function renderAccountDetail(name, adAccountId) {
       </div>
     </div>
 
-    <!-- Meta Daily Insights -->
+    <!-- Meta Ad Performance -->
     <div class="glass rounded-xl p-5 mb-6" id="meta-daily-section">
       <div class="flex items-center justify-between mb-3">
-        <div class="flex items-center gap-3">
-          <h3 class="text-white font-semibold">Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
-          ${META_ACCESS_TOKEN && adId ? `
-          <div class="flex gap-1" id="meta-view-toggles">
-            <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle active" data-view="daily" style="background:rgba(251,146,60,0.2);color:#fdba74;">Daily</button>
-            <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="weekly" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Weekly</button>
-          </div>
-          ` : ''}
-        </div>
+        <h3 class="text-white font-semibold">Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
         ${META_ACCESS_TOKEN && adId ? `
-        <div class="flex gap-1 flex-wrap" id="meta-metric-toggles">
-          <button class="text-xs px-2 py-1 rounded meta-toggle active" data-metric="spend" style="background:rgba(59,130,246,0.2);color:#93c5fd;">Spend</button>
-          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="leads" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Leads</button>
-          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpl" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPL</button>
-          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="linkCtr" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Link CTR</button>
-          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpc" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPC</button>
-          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="frequency" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Freq</button>
-          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpa" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPA</button>
+        <div class="flex gap-1" id="meta-view-toggles">
+          <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle active" data-view="daily" style="background:rgba(251,146,60,0.2);color:#fdba74;">Day-by-Day</button>
+          <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="quarters" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Cycle Quarters</button>
+          <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="full" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Full Cycle</button>
         </div>
         ` : ''}
       </div>
       ${META_ACCESS_TOKEN && adId ? `
-        <div class="chart-container" style="height:220px;"><canvas id="chart-meta-daily"></canvas></div>
-        <div id="meta-daily-summary" class="mt-3 grid grid-cols-7 gap-2 text-center"></div>
+        <div id="meta-daily-summary" class="mb-3 grid grid-cols-7 gap-2 text-center"></div>
+        <div class="chart-container" style="height:200px;"><canvas id="chart-meta-daily"></canvas></div>
         <div id="meta-daily-table" class="mt-4"></div>
       ` : `
         <div class="text-center py-8">
           <div class="text-4xl mb-3">📊</div>
           <div class="text-dark-200 font-medium mb-1">${!META_ACCESS_TOKEN ? 'Meta API Not Connected' : 'No Ad Account ID'}</div>
-          <div class="text-dark-400 text-sm mb-3">${!META_ACCESS_TOKEN ? 'Add your Meta access token to see daily spend, leads, CPL & CTR charts' : 'This account has no Meta Ad Account ID in the sheet'}</div>
+          <div class="text-dark-400 text-sm mb-3">${!META_ACCESS_TOKEN ? 'Add your Meta access token to see daily ad performance data' : 'This account has no Meta Ad Account ID in the sheet'}</div>
           ${!META_ACCESS_TOKEN ? '<div class="text-dark-500 text-xs font-mono bg-dark-800/50 inline-block px-3 py-1.5 rounded">Line 191: const META_ACCESS_TOKEN = \'your_token_here\';</div>' : ''}
         </div>
       `}
@@ -2203,45 +2195,54 @@ function renderAccountLeadsChart(cycles) {
 // ═══════════════════════════════════════════════
 let metaDailyChart = null;
 let metaDailyData = null;
-let metaWeeklyData = null;
-let metaCurrentView = 'daily'; // 'daily' or 'weekly'
+let metaCurrentView = 'daily'; // 'daily', 'quarters', or 'full'
 let metaCurrentCycle = null; // store cycle context for CPA calc
 
-function aggregateToWeekly(dailyData, cycleStartDate) {
+function aggregateDays(dayArray) {
+  const totalSpend = dayArray.reduce((s,d)=>s+d.spend,0);
+  const totalLeads = dayArray.reduce((s,d)=>s+d.leads,0);
+  const totalClicks = dayArray.reduce((s,d)=>s+d.clicks,0);
+  const totalImpr = dayArray.reduce((s,d)=>s+d.impressions,0);
+  const totalOB = dayArray.reduce((s,d)=>s+d.outboundClicks,0);
+  return {
+    days: dayArray.length,
+    startDate: dayArray[0].date,
+    endDate: dayArray[dayArray.length-1].date,
+    spend: totalSpend,
+    leads: totalLeads,
+    clicks: totalClicks,
+    impressions: totalImpr,
+    outboundClicks: totalOB,
+    cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
+    ctr: totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0,
+    linkCTR: totalImpr > 0 ? (totalOB / totalImpr) * 100 : 0,
+    frequency: dayArray.reduce((s,d)=>s+d.frequency,0) / dayArray.length,
+    cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
+  };
+}
+
+// Split cycle into 4 equal quarters
+function aggregateToQuarters(dailyData) {
   if (!dailyData || !dailyData.length) return [];
-  const startMs = new Date(cycleStartDate + 'T00:00:00').getTime();
-  const weeks = {};
-  dailyData.forEach(d => {
-    const dayMs = new Date(d.date + 'T00:00:00').getTime();
-    const weekNum = Math.floor((dayMs - startMs) / (7 * 86400000)) + 1;
-    if (!weeks[weekNum]) weeks[weekNum] = [];
-    weeks[weekNum].push(d);
-  });
-  return Object.keys(weeks).sort((a,b)=>a-b).map(wk => {
-    const days = weeks[wk];
-    const totalSpend = days.reduce((s,d)=>s+d.spend,0);
-    const totalLeads = days.reduce((s,d)=>s+d.leads,0);
-    const totalClicks = days.reduce((s,d)=>s+d.clicks,0);
-    const totalImpr = days.reduce((s,d)=>s+d.impressions,0);
-    const totalOB = days.reduce((s,d)=>s+d.outboundClicks,0);
-    return {
-      label: `Wk ${wk}`,
-      week: parseInt(wk),
-      days: days.length,
-      startDate: days[0].date,
-      endDate: days[days.length-1].date,
-      spend: totalSpend,
-      leads: totalLeads,
-      clicks: totalClicks,
-      impressions: totalImpr,
-      outboundClicks: totalOB,
-      cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
-      ctr: totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0,
-      linkCTR: totalImpr > 0 ? (totalOB / totalImpr) * 100 : 0,
-      frequency: days.reduce((s,d)=>s+d.frequency,0) / days.length,
-      cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
-    };
-  });
+  const total = dailyData.length;
+  const qSize = Math.ceil(total / 4);
+  const quarters = [];
+  for (let i = 0; i < 4; i++) {
+    const slice = dailyData.slice(i * qSize, Math.min((i + 1) * qSize, total));
+    if (!slice.length) continue;
+    const agg = aggregateDays(slice);
+    agg.label = `Q${i + 1}`;
+    quarters.push(agg);
+  }
+  return quarters;
+}
+
+// Full cycle as a single aggregated row
+function aggregateToFullCycle(dailyData) {
+  if (!dailyData || !dailyData.length) return [];
+  const agg = aggregateDays(dailyData);
+  agg.label = 'Full Cycle';
+  return [agg];
 }
 
 // Color coding helper for daily table cells
@@ -2281,11 +2282,14 @@ function renderMetaDailyTable(data, cycle) {
           <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
             <th class="py-2 px-2 text-left font-medium">Date</th>
             <th class="py-2 px-2 text-right font-medium">Spend</th>
+            <th class="py-2 px-2 text-right font-medium">Freq</th>
+            <th class="py-2 px-2 text-right font-medium">Impr</th>
+            <th class="py-2 px-2 text-right font-medium">Clicks</th>
+            <th class="py-2 px-2 text-right font-medium">Link Clicks</th>
+            <th class="py-2 px-2 text-right font-medium">CPC (Link)</th>
+            <th class="py-2 px-2 text-right font-medium">CTR (Link)</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
-            <th class="py-2 px-2 text-right font-medium">Link CTR</th>
-            <th class="py-2 px-2 text-right font-medium">CPC</th>
-            <th class="py-2 px-2 text-right font-medium">Freq</th>
             <th class="py-2 px-2 text-right font-medium">CPA</th>
           </tr>
         </thead>
@@ -2295,14 +2299,18 @@ function renderMetaDailyTable(data, cycle) {
             const dateStr = (dt.getMonth()+1) + '/' + dt.getDate();
             const cpl = d.leads > 0 ? d.spend / d.leads : 0;
             const cpa = bookedAppts > 0 ? cumulativeSpend / bookedAppts : 0;
+            const linkCPC = d.outboundClicks > 0 ? d.spend / d.outboundClicks : 0;
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
               <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${dateStr}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('spend', d.spend, cycle)}">${fmtDollar(d.spend,0)}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('spend', d.spend, cycle)}">${fmtDollar(d.spend,2)}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', d.frequency, cycle)}">${d.frequency > 0 ? d.frequency.toFixed(2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right text-dark-200">${fmt(d.impressions)}</td>
+              <td class="py-1.5 px-2 text-right text-dark-200">${fmt(d.clicks)}</td>
+              <td class="py-1.5 px-2 text-right text-dark-200">${d.outboundClicks}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', linkCPC, cycle)}">${linkCPC > 0 ? fmtDollar(linkCPC,2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', d.linkCTR, cycle)}">${d.linkCTR > 0 ? d.linkCTR.toFixed(2)+'%' : '—'}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('leads', d.leads, cycle)}">${d.leads}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', cpl, cycle)}">${d.leads > 0 ? fmtDollar(cpl,2) : '—'}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', d.linkCTR, cycle)}">${d.linkCTR > 0 ? d.linkCTR.toFixed(2)+'%' : '—'}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', d.cpc, cycle)}">${fmtDollar(d.cpc,2)}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', d.frequency, cycle)}">${d.frequency > 0 ? d.frequency.toFixed(2) : '—'}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
             </tr>`;
           }).join('')}
@@ -2312,22 +2320,7 @@ function renderMetaDailyTable(data, cycle) {
   `;
 }
 
-async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle) {
-  const section = document.getElementById('meta-daily-section');
-  if (!section || !META_ACCESS_TOKEN) return;
-  section.querySelector('h3').innerHTML = 'Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">Loading…</span>';
-  const data = await fetchMetaDailyInsights(adAccountId, startDate, endDate);
-  if (!data || data.length === 0) {
-    section.querySelector('h3').innerHTML = 'Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">No data available</span>';
-    return;
-  }
-  metaDailyData = data;
-  metaCurrentCycle = cycle || null;
-  metaWeeklyData = aggregateToWeekly(data, startDate);
-  metaCurrentView = 'daily';
-  section.querySelector('h3').innerHTML = `Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">${data.length} days via Meta API</span>`;
-
-  // Summary stats — expanded
+function renderMetaSummary(data) {
   const totalSpend = data.reduce((s, d) => s + d.spend, 0);
   const totalLeads = data.reduce((s, d) => s + d.leads, 0);
   const totalClicks = data.reduce((s, d) => s + d.clicks, 0);
@@ -2348,75 +2341,88 @@ async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle) {
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Impressions</div><div class="text-white font-bold text-sm">${totalImpr > 1000 ? (totalImpr/1000).toFixed(1)+'K' : fmt(totalImpr)}</div></div>
     `;
   }
+}
 
+function switchMetaView(view) {
+  metaCurrentView = view;
+  renderMetaDailyChart('spend');
+  renderMetaSummary(metaDailyData);
+  if (view === 'daily') {
+    renderMetaDailyTable(metaDailyData, metaCurrentCycle);
+  } else if (view === 'quarters') {
+    const qData = aggregateToQuarters(metaDailyData);
+    renderMetaAggTable(qData, metaCurrentCycle);
+  } else {
+    const fData = aggregateToFullCycle(metaDailyData);
+    renderMetaAggTable(fData, metaCurrentCycle);
+  }
+}
+
+async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle) {
+  const section = document.getElementById('meta-daily-section');
+  if (!section || !META_ACCESS_TOKEN) return;
+  section.querySelector('h3').innerHTML = 'Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">Loading…</span>';
+  const data = await fetchMetaDailyInsights(adAccountId, startDate, endDate);
+  if (!data || data.length === 0) {
+    section.querySelector('h3').innerHTML = 'Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">No data available</span>';
+    return;
+  }
+  metaDailyData = data;
+  metaCurrentCycle = cycle || null;
+  metaCurrentView = 'daily';
+  section.querySelector('h3').innerHTML = `Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">${data.length} days via Meta API</span>`;
+
+  renderMetaSummary(data);
   renderMetaDailyChart('spend');
   renderMetaDailyTable(data, cycle);
 
-  // Metric toggle buttons
-  const metricColors = {
-    spend: 'rgba(59,130,246,0.2)', leads: 'rgba(34,197,94,0.2)', cpl: 'rgba(249,115,22,0.2)',
-    linkCtr: 'rgba(20,184,166,0.2)', cpc: 'rgba(236,72,153,0.2)', frequency: 'rgba(245,158,11,0.2)', cpa: 'rgba(239,68,68,0.2)'
-  };
-  const metricTextColors = {
-    spend: '#93c5fd', leads: '#86efac', cpl: '#fdba74',
-    linkCtr: '#5eead4', cpc: '#f9a8d4', frequency: '#fcd34d', cpa: '#fca5a5'
-  };
-  document.querySelectorAll('.meta-toggle').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('.meta-toggle').forEach(b => { b.style.background = 'rgba(100,116,139,0.15)'; b.style.color = '#94a3b8'; b.classList.remove('active'); });
-      btn.classList.add('active');
-      const m = btn.dataset.metric;
-      btn.style.background = metricColors[m] || metricColors.spend;
-      btn.style.color = metricTextColors[m] || metricTextColors.spend;
-      renderMetaDailyChart(m);
-    };
-  });
-
-  // View toggle (Daily/Weekly)
+  // View toggle (Day-by-Day / Cycle Quarters / Full Cycle)
   document.querySelectorAll('.meta-view-toggle').forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll('.meta-view-toggle').forEach(b => { b.style.background = 'rgba(100,116,139,0.15)'; b.style.color = '#94a3b8'; b.classList.remove('active'); });
       btn.classList.add('active');
       btn.style.background = 'rgba(251,146,60,0.2)';
       btn.style.color = '#fdba74';
-      metaCurrentView = btn.dataset.view;
-      const activeMetric = document.querySelector('.meta-toggle.active');
-      renderMetaDailyChart(activeMetric ? activeMetric.dataset.metric : 'spend');
-      if (metaCurrentView === 'daily') renderMetaDailyTable(metaDailyData, metaCurrentCycle);
-      else renderMetaWeeklyTable(metaWeeklyData, metaCurrentCycle);
+      switchMetaView(btn.dataset.view);
     };
   });
 }
 
-function renderMetaWeeklyTable(weeklyData, cycle) {
+function renderMetaAggTable(aggData, cycle) {
   const el = document.getElementById('meta-daily-table');
-  if (!el || !weeklyData || !weeklyData.length) return;
+  if (!el || !aggData || !aggData.length) return;
+  const bookedAppts = cycle ? (cycle.bookedAppts || 0) : 0;
   el.innerHTML = `
     <div class="overflow-x-auto rounded-lg border border-dark-600/50">
       <table class="w-full text-xs">
         <thead>
           <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
-            <th class="py-2 px-2 text-left font-medium">Week</th>
+            <th class="py-2 px-2 text-left font-medium">Period</th>
             <th class="py-2 px-2 text-right font-medium">Spend</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
             <th class="py-2 px-2 text-right font-medium">Link CTR</th>
             <th class="py-2 px-2 text-right font-medium">CPC</th>
             <th class="py-2 px-2 text-right font-medium">Freq</th>
+            <th class="py-2 px-2 text-right font-medium">CPA</th>
             <th class="py-2 px-2 text-right font-medium">Days</th>
           </tr>
         </thead>
         <tbody>
-          ${weeklyData.map(w => `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
-            <td class="py-1.5 px-2 text-dark-200 font-medium">${w.label}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('spend', w.spend/w.days, cycle)}">${fmtDollar(w.spend,0)}</td>
+          ${aggData.map(w => {
+            const cpa = bookedAppts > 0 ? w.spend / (bookedAppts * (w.days / metaDailyData.length)) : 0;
+            const dateRange = w.startDate !== w.endDate ? `<div class="text-dark-400 text-[9px]">${w.startDate.slice(5)} → ${w.endDate.slice(5)}</div>` : '';
+            return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
+            <td class="py-1.5 px-2 text-dark-200 font-medium">${w.label}${dateRange}</td>
+            <td class="py-1.5 px-2 text-right">${fmtDollar(w.spend,0)}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('leads', w.leads, cycle)}">${w.leads}</td>
-            <td class="py-1.5 px-2 text-right">${w.leads > 0 ? fmtDollar(w.cpl,2) : '—'}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', w.cpl, cycle)}">${w.leads > 0 ? fmtDollar(w.cpl,2) : '—'}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', w.cpc, cycle)}">${fmtDollar(w.cpc,2)}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
             <td class="py-1.5 px-2 text-right text-dark-400">${w.days}d</td>
-          </tr>`).join('')}
+          </tr>`;}).join('')}
         </tbody>
       </table>
     </div>
@@ -2424,38 +2430,36 @@ function renderMetaWeeklyTable(weeklyData, cycle) {
 }
 
 function renderMetaDailyChart(metric) {
-  const sourceData = metaCurrentView === 'weekly' ? metaWeeklyData : metaDailyData;
-  if (!sourceData || !sourceData.length) return;
+  if (!metaDailyData || !metaDailyData.length) return;
   const ctx = document.getElementById('chart-meta-daily');
   if (!ctx) return;
   if (metaDailyChart) metaDailyChart.destroy();
 
-  const labels = metaCurrentView === 'weekly'
-    ? sourceData.map(d => d.label)
-    : sourceData.map(d => { const dt = new Date(d.date + 'T12:00:00'); return (dt.getMonth()+1) + '/' + dt.getDate(); });
+  let sourceData, labels, pointSize;
+  if (metaCurrentView === 'quarters') {
+    sourceData = aggregateToQuarters(metaDailyData);
+    labels = sourceData.map(d => d.label);
+    pointSize = 6;
+  } else if (metaCurrentView === 'full') {
+    // For full cycle, show the daily data on the chart anyway (table is the aggregate)
+    sourceData = metaDailyData;
+    labels = sourceData.map(d => { const dt = new Date(d.date + 'T12:00:00'); return (dt.getMonth()+1) + '/' + dt.getDate(); });
+    pointSize = 2;
+  } else {
+    sourceData = metaDailyData;
+    labels = sourceData.map(d => { const dt = new Date(d.date + 'T12:00:00'); return (dt.getMonth()+1) + '/' + dt.getDate(); });
+    pointSize = 2;
+  }
 
-  const bookedAppts = metaCurrentCycle ? (metaCurrentCycle.bookedAppts || 0) : 0;
-  const totalMetaSpend = metaDailyData ? metaDailyData.reduce((s,d)=>s+d.spend,0) : 0;
-
-  const configs = {
-    spend:     { label: 'Spend', data: sourceData.map(d => d.spend), color: '#3b82f6', fill: 'rgba(59,130,246,0.1)', prefix: '$' },
-    leads:     { label: 'Leads', data: sourceData.map(d => d.leads), color: '#22c55e', fill: 'rgba(34,197,94,0.1)', prefix: '' },
-    cpl:       { label: 'Cost Per Lead', data: sourceData.map(d => d.leads > 0 ? d.spend / d.leads : 0), color: '#f97316', fill: 'rgba(249,115,22,0.1)', prefix: '$' },
-    linkCtr:   { label: 'Link CTR %', data: sourceData.map(d => d.linkCTR), color: '#14b8a6', fill: 'rgba(20,184,166,0.1)', prefix: '', suffix: '%' },
-    cpc:       { label: 'CPC', data: sourceData.map(d => d.cpc), color: '#ec4899', fill: 'rgba(236,72,153,0.1)', prefix: '$' },
-    frequency: { label: 'Frequency', data: sourceData.map(d => d.frequency), color: '#f59e0b', fill: 'rgba(245,158,11,0.1)', prefix: '' },
-    cpa:       { label: 'CPA', data: sourceData.map(() => bookedAppts > 0 ? totalMetaSpend / bookedAppts : 0), color: '#ef4444', fill: 'rgba(239,68,68,0.1)', prefix: '$' },
-  };
-  const cfg = configs[metric] || configs.spend;
-
+  // Chart always shows spend trend
   metaDailyChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels,
       datasets: [{
-        label: cfg.label, data: cfg.data,
-        borderColor: cfg.color, backgroundColor: cfg.fill,
-        borderWidth: 2, pointRadius: metaCurrentView === 'weekly' ? 4 : 2, pointHoverRadius: 6,
+        label: 'Spend', data: sourceData.map(d => d.spend),
+        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)',
+        borderWidth: 2, pointRadius: pointSize, pointHoverRadius: 6,
         fill: true, tension: 0.3
       }]
     },
@@ -2463,14 +2467,11 @@ function renderMetaDailyChart(metric) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (tip) => {
-          const v = tip.raw.toFixed(2);
-          return cfg.prefix ? `${cfg.label}: ${cfg.prefix}${v}` : `${cfg.label}: ${v}${cfg.suffix || ''}`;
-        }}}
+        tooltip: { callbacks: { label: (tip) => `Spend: $${tip.raw.toFixed(2)}` } }
       },
       scales: {
         x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45 }, grid: { display: false } },
-        y: { ticks: { color: '#64748b', callback: (v) => cfg.prefix + (v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(cfg.prefix ? 0 : 2)) }, grid: { color: 'rgba(100,116,139,0.1)' } }
+        y: { ticks: { color: '#64748b', callback: (v) => '$' + (v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)) }, grid: { color: 'rgba(100,116,139,0.1)' } }
       }
     }
   });
