@@ -301,6 +301,16 @@ function parseLeadCSV(csvText, source) {
   const COL_SUB      = findCol('sub account', 'subaccount');
   const COL_NAME     = findCol('name');
   const COL_STATUS   = findCol('status');
+  // Followup note columns (1st Call, 2nd Day, 3rd Day, 4th Day, 5th Day...)
+  const followupCols = [];
+  headerCells.forEach((h, idx) => {
+    const hl = h.toLowerCase().trim();
+    if (hl.includes('1st call') || hl.includes('2nd day') || hl.includes('3rd day') ||
+        hl.includes('4th day') || hl.includes('5th day') || hl.includes('6th day') ||
+        hl.includes('7th day') || hl.includes('follow up') || hl.includes('follow-up')) {
+      followupCols.push(idx);
+    }
+  });
 
   const leads = [];
   for (let i = 1; i < lines.length; i++) {
@@ -316,6 +326,13 @@ function parseLeadCSV(csvText, source) {
       dateStr = `${dm[3]}-${dm[1].padStart(2,'0')}-${dm[2].padStart(2,'0')}`;
     }
 
+    // Get most recent followup note (scan right to left for last non-empty)
+    let lastNote = '';
+    for (let fi = followupCols.length - 1; fi >= 0; fi--) {
+      const note = (cells[followupCols[fi]] || '').trim();
+      if (note) { lastNote = note; break; }
+    }
+
     leads.push({
       source,
       va:         COL_VA >= 0 ? (cells[COL_VA] || '').trim() : '',
@@ -323,6 +340,7 @@ function parseLeadCSV(csvText, source) {
       subAccount,
       name:       COL_NAME >= 0 ? (cells[COL_NAME] || '').trim() : '',
       status:     COL_STATUS >= 0 ? (cells[COL_STATUS] || '').trim() : '',
+      lastNote,
     });
   }
   return leads;
@@ -699,8 +717,8 @@ function leadStatusColor(status) {
 function isBookedStatus(status) {
   if (!status) return false;
   const s = status.toLowerCase().trim();
-  // "Confirmed" but NOT "Unconfirmed", and NOT "client handles"
-  if (s.includes('client handles')) return false;
+  // "Confirmed" but NOT "Unconfirmed", and NOT "other" (client handles / satellite)
+  if (isClientHandles(status)) return false;
   if (s === 'confirmed') return true;
   if (s.includes('confirmed') && !s.includes('unconfirmed')) return true;
   if (s.includes('manual booked')) return true;
@@ -709,7 +727,8 @@ function isBookedStatus(status) {
 
 function isClientHandles(status) {
   if (!status) return false;
-  return status.toLowerCase().trim().includes('client handles');
+  const s = status.toLowerCase().trim();
+  return s.includes('client handles') || s.includes('satellite') || s.includes('sat quote') || s.includes('sat. qt');
 }
 
 function isCancelledStatus(status) {
@@ -1545,7 +1564,10 @@ function renderAccountDetail(name, adAccountId) {
           ${gregCPL !== null ? `
             <div class="text-xl font-bold text-white">${fmtDollar(gregCPL,2)}</div>
             <div class="text-xs text-dark-400 mt-1">Booking Goal ${fmtDollar(cpaGoal,2)} × ${(Math.min(0.60,Math.max(0.375,l2b))*100).toFixed(1)}% L2B</div>
-            ${activeCyc.cpa ? `<div class="text-xs mt-2 ${activeCyc.cpa <= gregCPL ? 'metric-good' : 'metric-bad'}">Current CPA: ${fmtDollar(activeCyc.cpa,2)} ${activeCyc.cpa <= gregCPL ? '✓ under goal' : '⚠ over goal'}</div>` : ''}
+            ${(() => {
+              const currentCPL = (activeCyc.amountSpent && activeCyc.totalLeads && activeCyc.totalLeads > 0) ? activeCyc.amountSpent / activeCyc.totalLeads : null;
+              return currentCPL !== null ? `<div class="text-xs mt-2 ${currentCPL <= gregCPL ? 'metric-good' : 'metric-bad'}">Current CPL: ${fmtDollar(currentCPL,2)} ${currentCPL <= gregCPL ? '✓ under goal' : '⚠ over goal'}</div>` : '';
+            })()}
           ` : '<div class="text-dark-400 text-sm mt-2">Need CPA goal + L2B data</div>'}
         </div>
       </div>`;
@@ -1566,7 +1588,7 @@ function renderAccountDetail(name, adAccountId) {
         <div class="space-y-2">
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="text-dark-200">Total Leads</span><span class="text-white font-semibold">${total}</span></div><div class="funnel-bar" style="width:100%;background:rgba(59,130,246,0.3);color:#93c5fd;">100%</div></div>
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-booked">Booked</span><span class="text-white font-semibold">${booked}</span></div><div class="funnel-bar" style="width:${Math.max(5,booked/total*100)}%;background:rgba(34,197,94,0.3);color:#86efac;">${bkRate}%</div></div>
-          <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-client">Client Handles</span><span class="text-white font-semibold">${client}</span></div><div class="funnel-bar" style="width:${Math.max(3,client/total*100)}%;background:rgba(251,191,36,0.2);color:#fde68a;">${(client/total*100).toFixed(1)}%</div></div>
+          <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-client">Other</span><span class="text-white font-semibold">${client}</span></div><div class="funnel-bar" style="width:${Math.max(3,client/total*100)}%;background:rgba(251,191,36,0.2);color:#fde68a;">${(client/total*100).toFixed(1)}%</div></div>
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-open">Open</span><span class="text-white font-semibold">${open}</span></div><div class="funnel-bar" style="width:${Math.max(3,open/total*100)}%;background:rgba(226,232,240,0.1);color:#e2e8f0;">${(open/total*100).toFixed(1)}%</div></div>
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-cancelled">Cancelled</span><span class="text-white font-semibold">${cancelled}</span></div><div class="funnel-bar" style="width:${Math.max(3,cancelled/total*100)}%;background:rgba(239,68,68,0.15);color:#fca5a5;">${(cancelled/total*100).toFixed(1)}%</div></div>
         </div>
@@ -1757,7 +1779,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
         <h3 class="text-white font-semibold text-base">Lead Breakdown — ${activeBreakdown.cycle.cycle}</h3>
         <div class="flex gap-2 flex-wrap">
           <span class="filter-badge fb-green ${fActive('booked')}" onclick="setLeadFilter('booked')">${booked} booked</span>
-          <span class="filter-badge fb-yellow ${fActive('client')}" onclick="setLeadFilter('client')">${clientH} client handles</span>
+          <span class="filter-badge fb-yellow ${fActive('client')}" onclick="setLeadFilter('client')">${clientH} other</span>
           <span class="filter-badge fb-red ${fActive('cancelled')}" onclick="setLeadFilter('cancelled')">${cancelled} cancelled</span>
           <span class="filter-badge fb-white ${fActive('open')}" onclick="setLeadFilter('open')">${open} open</span>
           <span class="filter-badge fb-blue ${fActive('all')}" onclick="setLeadFilter('all')">${leads.length} total</span>
@@ -1775,7 +1797,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
           <div class="bg-dark-800/50 rounded-lg p-3">
             <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${week}</div>
             <div class="text-white font-bold text-lg">${wLeads.length}</div>
-            <div class="text-xs"><span class="lead-booked">${wBooked} bkd</span> · <span class="lead-client">${wClient} cli</span> · <span class="lead-cancelled">${wCancelled} canc</span> · <span class="lead-open">${wOpen} open</span></div>
+            <div class="text-xs"><span class="lead-booked">${wBooked} bkd</span> · <span class="lead-client">${wClient} oth</span> · <span class="lead-cancelled">${wCancelled} canc</span> · <span class="lead-open">${wOpen} open</span></div>
           </div>`;
         }).join('')}
         ${weeks['Week 5+'].length > 0 ? `
@@ -1796,7 +1818,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
               <th class="text-left py-2 px-2 font-medium">Date</th>
               <th class="text-left py-2 px-2 font-medium">Name</th>
               <th class="text-left py-2 px-2 font-medium">Status</th>
-              <th class="text-left py-2 px-2 font-medium">Source</th>
+              <th class="text-left py-2 px-2 font-medium">Last Note</th>
             </tr>
           </thead>
           <tbody>
@@ -1808,7 +1830,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
                 ${li === 0 ? `<td class="py-1.5 px-2 text-dark-200 whitespace-nowrap align-top" rowspan="${dayLeads.length}">${fmtDate(d)} <span class="text-dark-500">(${dayLeads.length})</span></td>` : ''}
                 <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.name || '—'}</td>
                 <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.status || '—'}</td>
-                <td class="py-1.5 px-2 text-dark-400">${l.source}</td>
+                <td class="py-1.5 px-2 text-dark-400" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(l.lastNote||'').replace(/"/g,'&quot;')}">${l.lastNote || '<span class="text-dark-600">—</span>'}</td>
               </tr>`).join('');
             }).join('')}
           </tbody>
