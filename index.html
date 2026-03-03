@@ -185,6 +185,47 @@ const LEAD_SHEETS = {
   'ALL_CiGN': 951162408
 };
 
+// ═══════════════════════════════════════════════
+// META API — Paste your long-lived access token here
+// ═══════════════════════════════════════════════
+const META_ACCESS_TOKEN = 'EAASdzH5TwEUBQRgZAhUKhIO1fHvuZCW9NA5ZBxJ2kxZAiRGDcKhY3FRQBwF53rzAtU4UADlTZCjZCvAKtAzdvPlDjeHZC5mrrmVe4RpSxcn1zJwDopKk7TaIz7ydeLYDFhXGgl8tB8Yd2HwZBaeVhU6DgOJt87xz0oHRA88lU6Ym9ZAhJVK4PK0P8VN4p2NsYLzS6kAZDZD'; // <-- Paste token here
+const META_API_VERSION = 'v20.0';
+const META_BASE = `https://graph.facebook.com/${META_API_VERSION}`;
+
+// Cache for Meta daily insights per ad account
+const metaDailyCache = {};
+
+async function fetchMetaDailyInsights(adAccountId, dateStart, dateEnd) {
+  if (!META_ACCESS_TOKEN || !adAccountId) return null;
+  const cacheKey = `${adAccountId}_${dateStart}_${dateEnd}`;
+  if (metaDailyCache[cacheKey]) return metaDailyCache[cacheKey];
+  const actId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+  try {
+    const url = `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,actions,cpc,cpm,ctr&time_range={"since":"${dateStart}","until":"${dateEnd}"}&time_increment=1&level=account&access_token=${META_ACCESS_TOKEN}`;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const days = (json.data || []).map(d => {
+      const leads = (d.actions || []).find(a => a.action_type === 'lead' || a.action_type === 'offsite_conversion.fb_pixel_lead');
+      return {
+        date: d.date_start,
+        spend: parseFloat(d.spend || 0),
+        impressions: parseInt(d.impressions || 0),
+        clicks: parseInt(d.clicks || 0),
+        leads: leads ? parseInt(leads.value || 0) : 0,
+        cpc: parseFloat(d.cpc || 0),
+        cpm: parseFloat(d.cpm || 0),
+        ctr: parseFloat(d.ctr || 0),
+      };
+    });
+    metaDailyCache[cacheKey] = days;
+    return days;
+  } catch (e) {
+    console.warn('Meta API error:', e);
+    return null;
+  }
+}
+
 const KPI_TARGETS = {
   linkCTR: 0.90,    // 0.90% — values are already in percentage form
   linkCPC: 3.00,
@@ -1094,7 +1135,7 @@ function renderDashboard() {
       <p class="text-dark-300 text-sm mt-1">Real-time overview · ${active.length} active, ${inactive.length} inactive · ${allLeads.length} leads tracked</p>
     </div>
 
-    <div class="grid grid-cols-5 gap-4 mb-6">
+    <div class="grid grid-cols-6 gap-4 mb-6">
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Active Accounts</div>
         <div class="text-2xl font-bold text-white">${active.length}</div>
@@ -1103,7 +1144,11 @@ function renderDashboard() {
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Active Cycle Leads</div>
         <div class="text-2xl font-bold text-white">${fmt(totalLeads)}</div>
-        <div class="text-xs text-dark-300 mt-1">${fmt(totalBooked)} booked</div>
+      </div>
+      <div class="glass rounded-xl p-4 kpi-card">
+        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Total Bookings</div>
+        <div class="text-2xl font-bold text-green-400">${fmt(totalBooked)}</div>
+        <div class="text-xs text-dark-300 mt-1">${totalLeads > 0 ? (totalBooked/totalLeads*100).toFixed(1) : 0}% book rate</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Avg CPA</div>
@@ -1396,6 +1441,7 @@ function renderAccountTable(active, inactive, mgrName) {
               <th class="text-right py-3 px-3 font-medium">Leads</th>
               <th class="text-right py-3 px-3 font-medium">L2B</th>
               <th class="text-right py-3 px-3 font-medium">OSA%</th>
+              <th class="text-right py-3 px-3 font-medium">Bkd</th>
               <th class="text-right py-3 px-3 font-medium">Est.Bkd</th>
               <th class="text-right py-3 px-3 font-medium">Goal</th>
               <th class="text-right py-3 px-3 font-medium">CPA</th>
@@ -1426,6 +1472,7 @@ function renderAccountTable(active, inactive, mgrName) {
                   <td class="py-3 px-3 text-right text-white">${c ? fmt(c.totalLeads) : '—'}</td>
                   <td class="py-3 px-3 text-right">${l2b !== null ? `<span class="${l2b >= 0.375 ? 'metric-good' : 'metric-warn'}">${(l2b*100).toFixed(0)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
                   <td class="py-3 px-3 text-right"><span class="${c ? osaColor(c.osaPct) : 'text-dark-400'}">${c ? fmtPct(c.osaPct) : '—'}</span></td>
+                  <td class="py-3 px-3 text-right text-green-400 font-semibold">${c ? fmt(c.bookedAppts) : '—'}</td>
                   <td class="py-3 px-3 text-right text-white">${c ? fmt(c.estBookedAppts) : '—'}</td>
                   <td class="py-3 px-3 text-right text-dark-400">${c ? fmt(c.bookedGoal) : '—'}</td>
                   <td class="py-3 px-3 text-right"><span class="${c ? cpaColor(c.cpa, cpaGoal) : 'text-dark-400'}">${c ? fmtDollar(c.cpa,2) : '—'}</span></td>
@@ -1441,7 +1488,7 @@ function renderAccountTable(active, inactive, mgrName) {
             ${inactive.map(a => `
               <tr class="table-row border-b border-dark-700/50 opacity-50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                 <td class="py-3 px-3"><div class="text-white font-medium">${a.name} <span class="badge badge-gray ml-1">INACTIVE</span></div></td>
-                <td class="py-3 px-3 text-dark-400" colspan="14">No active cycle</td>
+                <td class="py-3 px-3 text-dark-400" colspan="15">No active cycle</td>
               </tr>
             `).join('')}
           </tbody>
@@ -1485,10 +1532,15 @@ function renderAccountDetail(name, adAccountId) {
     </div>
 
     ${activeCyc ? `
-    <div class="grid grid-cols-6 gap-3 mb-6">
+    <div class="grid grid-cols-7 gap-3 mb-6">
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Total Leads</div>
         <div class="text-xl font-bold text-white mt-1">${fmt(activeCyc.totalLeads)}</div>
+      </div>
+      <div class="glass rounded-xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Booked Appts</div>
+        <div class="text-xl font-bold text-green-400 mt-1">${fmt(activeCyc.bookedAppts)}</div>
+        <div class="text-xs text-dark-400">Goal: ${fmt(activeCyc.bookedGoal)}</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">OSA Rate</div>
@@ -1498,7 +1550,7 @@ function renderAccountDetail(name, adAccountId) {
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Est. Booked</div>
         <div class="text-xl font-bold ${isOnTrack(activeCyc) === true ? 'metric-good' : isOnTrack(activeCyc) === false ? 'metric-bad' : 'text-white'} mt-1">${fmt(activeCyc.estBookedAppts)}</div>
-        <div class="text-xs text-dark-400">Goal: ${fmt(activeCyc.bookedGoal)} (80% = ${activeCyc.bookedGoal ? fmt(Math.ceil(activeCyc.bookedGoal * 0.8)) : '—'})</div>
+        <div class="text-xs text-dark-400">80% = ${activeCyc.bookedGoal ? fmt(Math.ceil(activeCyc.bookedGoal * 0.8)) : '—'}</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">CPA</div>
@@ -1608,6 +1660,23 @@ function renderAccountDetail(name, adAccountId) {
       </div>
     </div>
 
+    <!-- Meta Daily Insights -->
+    ${META_ACCESS_TOKEN && adId ? `
+    <div class="glass rounded-xl p-5 mb-6" id="meta-daily-section">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-white font-semibold">Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
+        <div class="flex gap-2" id="meta-metric-toggles">
+          <button class="text-xs px-2 py-1 rounded meta-toggle active" data-metric="spend" style="background:rgba(59,130,246,0.2);color:#93c5fd;">Spend</button>
+          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="leads" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Leads</button>
+          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpl" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPL</button>
+          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="ctr" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CTR</button>
+        </div>
+      </div>
+      <div class="chart-container" style="height:220px;"><canvas id="chart-meta-daily"></canvas></div>
+      <div id="meta-daily-summary" class="mt-3 grid grid-cols-5 gap-3 text-center"></div>
+    </div>
+    ` : ''}
+
     <!-- Lead Breakdown for Active Cycle -->
     <div id="lead-breakdown" class="mb-6"></div>
 
@@ -1676,6 +1745,11 @@ function renderAccountDetail(name, adAccountId) {
   if (cycles.length > 1) {
     renderAccountCPAChart(cycles, acct.cpaGoal);
     renderAccountLeadsChart(cycles);
+  }
+
+  // Load Meta daily insights for active cycle
+  if (META_ACCESS_TOKEN && adId && activeCyc && activeCyc.cycleStartDate && activeCyc.cycleEndDate) {
+    loadMetaDailyInsights(adId, activeCyc.cycleStartDate, activeCyc.cycleEndDate);
   }
 
   renderLeadBreakdown(acct, cycles);
@@ -1896,6 +1970,102 @@ function renderAccountLeadsChart(cycles) {
       plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10 } } } },
       scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
         y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(100,116,139,0.1)' } } }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// META DAILY INSIGHTS CHART
+// ═══════════════════════════════════════════════
+let metaDailyChart = null;
+let metaDailyData = null;
+
+async function loadMetaDailyInsights(adAccountId, startDate, endDate) {
+  const section = document.getElementById('meta-daily-section');
+  if (!section || !META_ACCESS_TOKEN) return;
+  section.querySelector('h3').innerHTML = 'Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">Loading…</span>';
+  const data = await fetchMetaDailyInsights(adAccountId, startDate, endDate);
+  if (!data || data.length === 0) {
+    section.querySelector('h3').innerHTML = 'Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">No data available</span>';
+    return;
+  }
+  metaDailyData = data;
+  section.querySelector('h3').innerHTML = `Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">${data.length} days via Meta API</span>`;
+
+  // Summary stats
+  const totalSpend = data.reduce((s, d) => s + d.spend, 0);
+  const totalLeads = data.reduce((s, d) => s + d.leads, 0);
+  const totalClicks = data.reduce((s, d) => s + d.clicks, 0);
+  const totalImpr = data.reduce((s, d) => s + d.impressions, 0);
+  const avgCPL = totalLeads > 0 ? totalSpend / totalLeads : 0;
+  const summaryEl = document.getElementById('meta-daily-summary');
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Total Spend</div><div class="text-white font-bold text-sm">${fmtDollar(totalSpend,0)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Total Leads</div><div class="text-white font-bold text-sm">${fmt(totalLeads)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Avg CPL</div><div class="text-white font-bold text-sm">${fmtDollar(avgCPL,2)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Total Clicks</div><div class="text-white font-bold text-sm">${fmt(totalClicks)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Impressions</div><div class="text-white font-bold text-sm">${totalImpr > 1000 ? (totalImpr/1000).toFixed(1)+'K' : fmt(totalImpr)}</div></div>
+    `;
+  }
+
+  renderMetaDailyChart('spend');
+
+  // Toggle buttons
+  document.querySelectorAll('.meta-toggle').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.meta-toggle').forEach(b => { b.style.background = 'rgba(100,116,139,0.15)'; b.style.color = '#94a3b8'; b.classList.remove('active'); });
+      btn.classList.add('active');
+      const colors = { spend: 'rgba(59,130,246,0.2)', leads: 'rgba(34,197,94,0.2)', cpl: 'rgba(249,115,22,0.2)', ctr: 'rgba(168,85,247,0.2)' };
+      const textColors = { spend: '#93c5fd', leads: '#86efac', cpl: '#fdba74', ctr: '#c4b5fd' };
+      const m = btn.dataset.metric;
+      btn.style.background = colors[m] || colors.spend;
+      btn.style.color = textColors[m] || textColors.spend;
+      renderMetaDailyChart(m);
+    };
+  });
+}
+
+function renderMetaDailyChart(metric) {
+  if (!metaDailyData) return;
+  const ctx = document.getElementById('chart-meta-daily');
+  if (!ctx) return;
+  if (metaDailyChart) metaDailyChart.destroy();
+
+  const labels = metaDailyData.map(d => {
+    const dt = new Date(d.date + 'T12:00:00');
+    return (dt.getMonth()+1) + '/' + dt.getDate();
+  });
+
+  const configs = {
+    spend: { label: 'Daily Spend', data: metaDailyData.map(d => d.spend), color: '#3b82f6', fill: 'rgba(59,130,246,0.1)', prefix: '$' },
+    leads: { label: 'Daily Leads', data: metaDailyData.map(d => d.leads), color: '#22c55e', fill: 'rgba(34,197,94,0.1)', prefix: '' },
+    cpl:   { label: 'Cost Per Lead', data: metaDailyData.map(d => d.leads > 0 ? d.spend / d.leads : 0), color: '#f97316', fill: 'rgba(249,115,22,0.1)', prefix: '$' },
+    ctr:   { label: 'CTR %', data: metaDailyData.map(d => d.ctr), color: '#a855f7', fill: 'rgba(168,85,247,0.1)', prefix: '' },
+  };
+  const cfg = configs[metric] || configs.spend;
+
+  metaDailyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: cfg.label, data: cfg.data,
+        borderColor: cfg.color, backgroundColor: cfg.fill,
+        borderWidth: 2, pointRadius: 2, pointHoverRadius: 5,
+        fill: true, tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (tip) => cfg.prefix ? `${cfg.label}: ${cfg.prefix}${tip.raw.toFixed(2)}` : `${cfg.label}: ${tip.raw.toFixed(2)}` } }
+      },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45 }, grid: { display: false } },
+        y: { ticks: { color: '#64748b', callback: (v) => cfg.prefix + (v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(cfg.prefix ? 0 : 2)) }, grid: { color: 'rgba(100,116,139,0.1)' } }
+      }
     }
   });
 }
