@@ -188,7 +188,7 @@ const LEAD_SHEETS = {
 // ═══════════════════════════════════════════════
 // META API — Paste your long-lived access token here
 // ═══════════════════════════════════════════════
-const META_ACCESS_TOKEN = 'EAASdzH5TwEUBQRgZAhUKhIO1fHvuZCW9NA5ZBxJ2kxZAiRGDcKhY3FRQBwF53rzAtU4UADlTZCjZCvAKtAzdvPlDjeHZC5mrrmVe4RpSxcn1zJwDopKk7TaIz7ydeLYDFhXGgl8tB8Yd2HwZBaeVhU6DgOJt87xz0oHRA88lU6Ym9ZAhJVK4PK0P8VN4p2NsYLzS6kAZDZD'; // <-- Paste token here
+const META_ACCESS_TOKEN = 'EAASdzH5TwEUBQRgZAhUKhIO1fHvuZCW9NA5ZBxJ2kxZAiRGDcKhY3FRQBwF53rzAtU4UADlTZCjZCvAKtAzdvPlDjeHZC5mrrmVe4RpSxcn1zJwDopKk7TaIz7ydeLYDFhXGgl8tB8Yd2HwZBaeVhU6DgOJt87xz0oHRA88lU6Ym9ZAhJVK4PK0P8VN4p2NsYLzS6kAZDZD';
 const META_API_VERSION = 'v20.0';
 const META_BASE = `https://graph.facebook.com/${META_API_VERSION}`;
 
@@ -457,6 +457,7 @@ function parseSheetData(data, podName) {
     goodToBill:    colIdx(colMap, 'good to bill', 'ready to bill'),
     billed:        colIdx(colMap, 'billed'),
     billingNotes:  colIdx(colMap, 'billing notes', 'billing note'),
+    adAccountId:   colIdx(colMap, 'ad account id', 'ad account', 'ad acct', 'ad acct id', 'meta id', 'fb id', 'facebook id', 'account id'),
   };
   console.log(`[${podName}] Resolved column indices:`, COL);
 
@@ -487,7 +488,11 @@ function parseSheetData(data, podName) {
       }
     }
 
-    const hasAdAccountId = cellC && String(cellC).replace(/\s/g,'').length > 5 && /^\d+$/.test(String(cellC).replace(/\s/g,''));
+    // Try named "ad account id" column first, then fallback to column C
+    const adIdRaw = (COL.adAccountId >= 0 && row.c[COL.adAccountId] && row.c[COL.adAccountId].v)
+      ? String(row.c[COL.adAccountId].v) : String(cellC || '');
+    const rawAdId = adIdRaw.replace(/\s/g,'').replace(/^act_/i, '');
+    const hasAdAccountId = rawAdId.length > 3 && /^\d+$/.test(rawAdId);
 
     const cellBStr = String(cellB).trim();
     const cellBLower = cellBStr.toLowerCase();
@@ -499,7 +504,9 @@ function parseSheetData(data, podName) {
     // Account header row: has a name (cellA), no cycle label in cellB (or paused status), and is not a section
     if (cellA && !isCycleLabel && (!cellBStr || isPausedStatus)) {
       currentAccountName = cellA.trim();
-      currentAdAccountId = hasAdAccountId ? String(cellC).replace(/\s/g,'').trim() : '';
+      currentAdAccountId = hasAdAccountId ? rawAdId : '';
+      if (!hasAdAccountId && adIdRaw.trim()) console.warn(`[AdID] Could not parse ad account ID for "${currentAccountName}": raw="${adIdRaw}"`);
+      if (hasAdAccountId) console.log(`[AdID] ${currentAccountName} → ${currentAdAccountId}`);
 
       const mgr = getStr(row, 'manager');
       if (mgr) currentMgr = mgr;
