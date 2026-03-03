@@ -284,6 +284,61 @@ async function fetchSheetData(sheetName, gid) {
 }
 
 // CSV export bypasses Google Sheets filters (gviz only returns filtered/visible rows)
+// Fetch pod sheet as CSV to extract ad account IDs (gviz API misses this column)
+async function fetchAdIdMapCSV(gid) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+  try {
+    const resp = await fetch(url);
+    const text = await resp.text();
+    const lines = splitCSVLines(text);
+    if (lines.length < 2) return new Map();
+
+    const header = parseCSVRow(lines[0]);
+    // Find the ad account ID column and account name column by header
+    const adIdCol = header.findIndex(h => {
+      const low = h.toLowerCase().trim();
+      return low.includes('ad account') || low.includes('adaccount') || low === 'ad id' || low === 'ad_account_id';
+    });
+    const nameCol = header.findIndex(h => {
+      const low = h.toLowerCase().trim();
+      return low === 'account name' || low === 'account' || low === 'client' || low === 'client name';
+    });
+
+    // If we can't find by header name, fall back to column C (index 2) for ad ID and column A (index 0) for name
+    const finalAdIdCol = adIdCol >= 0 ? adIdCol : 2;
+    const finalNameCol = nameCol >= 0 ? nameCol : 0;
+
+    console.log(`[CSV-AdID] gid=${gid}: header columns found — nameCol=${finalNameCol} (${header[finalNameCol] || 'N/A'}), adIdCol=${finalAdIdCol} (${header[finalAdIdCol] || 'N/A'})`);
+
+    const map = new Map(); // accountName -> adAccountId
+    let currentAccount = '';
+    for (let i = 1; i < lines.length; i++) {
+      const cells = parseCSVRow(lines[i]);
+      const cellA = (cells[finalNameCol] || '').trim();
+      const cellAdId = (cells[finalAdIdCol] || '').trim();
+
+      // Track current account name (account header rows have a name in column A)
+      if (cellA && cellA.length > 1) currentAccount = cellA;
+
+      // Extract ad ID: look for a 12-17 digit number (with optional "act_" prefix)
+      if (cellAdId) {
+        const cleaned = cellAdId.replace(/[\s,]/g, '').replace(/^act_/i, '');
+        if (cleaned.length >= 10 && cleaned.length <= 20 && /^\d+$/.test(cleaned)) {
+          const acctName = cellA || currentAccount;
+          if (acctName && !map.has(acctName)) {
+            map.set(acctName, cleaned);
+          }
+        }
+      }
+    }
+    console.log(`[CSV-AdID] gid=${gid}: extracted ${map.size} account→adId mappings:`, Object.fromEntries(map));
+    return map;
+  } catch (e) {
+    console.error(`[CSV-AdID] Error fetching CSV for gid=${gid}:`, e);
+    return new Map();
+  }
+}
+
 async function fetchLeadData(sheetName, gid) {
   const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
   try {
@@ -510,16 +565,6 @@ function parseSheetData(data, podName) {
     const cellCraw = row.c[2] ? (row.c[2].f || row.c[2].v || '') : '';
     const cellC = String(cellCraw).replace(/,/g, '');
 
-    // DEBUG: dump ALL cell data for Good Guy rows
-    if (String(cellA).toLowerCase().includes('good guy') || (currentAccountName && currentAccountName.toLowerCase().includes('good guy') && cellB)) {
-      const cellDump = [];
-      for (let dc = 0; dc < Math.min(row.c.length, 25); dc++) {
-        const cell = row.c[dc];
-        if (cell && (cell.v !== null || cell.f)) cellDump.push(`col${dc}={v:${JSON.stringify(cell.v)},f:${JSON.stringify(cell.f)}}`);
-      }
-      console.log(`[DEBUG-GoodGuy] Row ${i}: A="${cellA}" B="${cellB}" C="${cellC}" | ${cellDump.join(' | ')}`);
-    }
-
     if (!cellA && !cellB && !cellC) continue;
 
     // Section/label row: has ONLY cellA, nothing in any other column (no B, no C, no data cols)
@@ -567,10 +612,7 @@ function parseSheetData(data, podName) {
     const rawAdId = adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '');
     const hasAdAccountId = rawAdId.length > 3 && /^\d+$/.test(rawAdId);
 
-    // Debug: log when we have cellA (account name) but no ad ID found
-    if (cellA && !hasAdAccountId && adIdSources.length > 0) {
-      console.warn(`[AdID-Debug] Row ${i} "${cellA}" / "${cellB}": no valid ID found. Sources:`, JSON.stringify(adIdSources), 'col2 raw cell:', JSON.stringify(row.c[2]));
-    }
+    // (ad IDs may be missing from gviz — CSV fallback in loadAllData will fix these)
 
     const cellBStr = String(cellB).trim();
     const cellBLower = cellBStr.toLowerCase();
@@ -688,11 +730,6 @@ function parseSheetData(data, podName) {
     console.warn(`[AdID-Missing] ${noAdId.length} accounts with cycles but no ad ID:`, noAdId.map(a => `${a.name} (${a.cycles.length} cycles)`));
   }
 
-  // Debug: for each account, log the ad ID status
-  accounts.forEach(a => {
-    console.log(`[AdID-Summary] ${a.name}: adAccountId="${a.adAccountId}", cycles=${a.cycles.length}, cycleAdIds=[${a.cycles.map(c => c.adAccountId || 'EMPTY').join(',')}]`);
-  });
-
   return { accounts, cycles };
 }
 
@@ -742,7 +779,7 @@ function getDate(row, idx) {
 async function loadAllData() {
   document.getElementById('loading-state').classList.remove('hidden');
 
-  const [podResults, leadResults] = await Promise.all([
+  const [podResults, leadResults, adIdMaps] = await Promise.all([
     Promise.all([
       fetchSheetData('Pod 2 - RoofIgnite', SHEETS['Pod 2 - RoofIgnite']),
       fetchSheetData('Pod 1 - RoofIgnite', SHEETS['Pod 1 - RoofIgnite'])
@@ -750,12 +787,43 @@ async function loadAllData() {
     Promise.all([
       fetchLeadData('ALL_ROOF', LEAD_SHEETS['ALL_ROOF']),
       fetchLeadData('ALL_CiGN', LEAD_SHEETS['ALL_CiGN'])
+    ]),
+    Promise.all([
+      fetchAdIdMapCSV(SHEETS['Pod 2 - RoofIgnite']),
+      fetchAdIdMapCSV(SHEETS['Pod 1 - RoofIgnite'])
     ])
   ]);
 
   allAccounts = [...podResults[0].accounts, ...podResults[1].accounts];
   allCycles = [...podResults[0].cycles, ...podResults[1].cycles];
   allLeads = [...leadResults[0], ...leadResults[1]];
+
+  // Merge CSV-derived ad account IDs into accounts and cycles
+  const combinedAdIdMap = new Map([...adIdMaps[0], ...adIdMaps[1]]);
+  console.log(`[CSV-AdID] Combined map has ${combinedAdIdMap.size} entries`);
+  let csvFixCount = 0;
+  allAccounts.forEach(acct => {
+    if (!acct.adAccountId) {
+      const csvId = combinedAdIdMap.get(acct.name);
+      if (csvId) {
+        acct.adAccountId = csvId;
+        csvFixCount++;
+        console.log(`[CSV-AdID] Fixed account "${acct.name}" → ${csvId}`);
+      }
+    }
+    // Also fix cycles for this account
+    (acct.cycles || []).forEach(c => {
+      if (!c.adAccountId && acct.adAccountId) c.adAccountId = acct.adAccountId;
+    });
+  });
+  // Fix global cycles too
+  allCycles.forEach(c => {
+    if (!c.adAccountId) {
+      const csvId = combinedAdIdMap.get(c.account);
+      if (csvId) c.adAccountId = csvId;
+    }
+  });
+  console.log(`[CSV-AdID] Fixed ${csvFixCount} accounts with CSV-derived ad IDs`);
 
   // Debug: log account count and manager distribution
   console.log(`Total accounts parsed: ${allAccounts.length}, Total cycles: ${allCycles.length}`);
