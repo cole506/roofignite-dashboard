@@ -57,6 +57,9 @@ tailwind.config = {
   .lead-booked { color: #22c55e; }
   .lead-client { color: #fbbf24; }
   .lead-cancelled { color: #ef4444; }
+  .metric-cell-green { background: rgba(34,197,94,0.13); color: #22c55e; }
+  .metric-cell-yellow { background: rgba(234,179,8,0.13); color: #eab308; }
+  .metric-cell-red { background: rgba(239,68,68,0.13); color: #ef4444; }
   .lead-open { color: #e2e8f0; }
   .filter-badge { display: inline-flex; align-items: center; padding: 4px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; }
   .filter-badge:hover { transform: scale(1.05); }
@@ -201,21 +204,27 @@ async function fetchMetaDailyInsights(adAccountId, dateStart, dateEnd) {
   if (metaDailyCache[cacheKey]) return metaDailyCache[cacheKey];
   const actId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
   try {
-    const url = `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,actions,cpc,cpm,ctr&time_range={"since":"${dateStart}","until":"${dateEnd}"}&time_increment=1&level=account&access_token=${META_ACCESS_TOKEN}`;
+    const url = `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,actions,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&time_increment=1&level=account&access_token=${META_ACCESS_TOKEN}`;
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const json = await resp.json();
     const days = (json.data || []).map(d => {
       const leads = (d.actions || []).find(a => a.action_type === 'lead' || a.action_type === 'offsite_conversion.fb_pixel_lead');
+      const obClicks = (d.outbound_clicks || []).find(a => a.action_type === 'outbound_click');
+      const outboundClicks = obClicks ? parseInt(obClicks.value || 0) : 0;
+      const impressions = parseInt(d.impressions || 0);
       return {
         date: d.date_start,
         spend: parseFloat(d.spend || 0),
-        impressions: parseInt(d.impressions || 0),
+        impressions,
         clicks: parseInt(d.clicks || 0),
         leads: leads ? parseInt(leads.value || 0) : 0,
         cpc: parseFloat(d.cpc || 0),
         cpm: parseFloat(d.cpm || 0),
         ctr: parseFloat(d.ctr || 0),
+        frequency: parseFloat(d.frequency || 0),
+        outboundClicks,
+        linkCTR: impressions > 0 ? (outboundClicks / impressions) * 100 : 0,
       };
     });
     metaDailyCache[cacheKey] = days;
@@ -229,10 +238,13 @@ async function fetchMetaDailyInsights(adAccountId, dateStart, dateEnd) {
 const KPI_TARGETS = {
   linkCTR: 0.90,    // 0.90% — values are already in percentage form
   linkCPC: 3.00,
+  cpcWarn: 5.00,    // CPC yellow threshold
   cpm: 20.00,
   frequency: 2.50,
+  frequencyHigh: 3.50, // danger threshold
   surveyPct: 2.00,
-  osaPct: 20         // 20% — values normalized to percentage form during parsing
+  osaPct: 20,         // 20% — values normalized to percentage form during parsing
+  osaHighAlert: 25,   // danger threshold
 };
 
 let allAccounts = [];
@@ -876,63 +888,102 @@ function pacingColor(status) {
   return '#22c55e';
 }
 
-// Performance Health Score (0–100) composite
-// Factors: CPA vs Goal (35%), On-Track (25%), OSA (15%), CTR (10%), Frequency (10%), Pacing (5%)
+// Get the cycle before the current one for trend comparison
+function getPreviousCycle(accountName, adAccountId, currentCycle) {
+  if (!currentCycle || !currentCycle.cycleStartDate) return null;
+  const acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
+  const sorted = acctCycles.filter(c => c.cycleStartDate && c.cycleStartDate < currentCycle.cycleStartDate)
+    .sort((a, b) => b.cycleStartDate.localeCompare(a.cycleStartDate));
+  return sorted.length > 0 ? sorted[0] : null;
+}
+
+// Performance Health Score (0–100) composite — v2
+// Weights: On-Track to Goal (40) · CPA vs Goal (25) · Trend Direction (15) · Lead Flow Health (15) · Pacing (5)
 function getHealthScore(acct, cycle) {
   if (!cycle) return null;
   let score = 0;
   let maxPossible = 0;
 
-  // CPA vs Goal (35 pts)
-  const cpaGoal = acct.cpaGoal || cycle.cpaGoal;
-  if (cpaGoal && cycle.cpa && cycle.cpa > 0) {
-    maxPossible += 35;
-    const ratio = cycle.cpa / cpaGoal;
-    if (ratio <= 0.8) score += 35;
-    else if (ratio <= 1.0) score += 30;
-    else if (ratio <= 1.15) score += 20;
-    else if (ratio <= 1.5) score += 10;
-    else score += 0;
-  }
-
-  // On-Track (25 pts)
+  // ── On-Track to Goal (40 pts) — MAJORITY WEIGHT ──
   if (cycle.estBookedAppts !== null && cycle.bookedGoal) {
-    maxPossible += 25;
+    maxPossible += 40;
     const ratio = cycle.estBookedAppts / cycle.bookedGoal;
-    if (ratio >= 1.0) score += 25;
-    else if (ratio >= 0.8) score += 20;
+    if (ratio >= 1.0) score += 40;
+    else if (ratio >= 0.9) score += 35;
+    else if (ratio >= 0.8) score += 25;
     else if (ratio >= 0.6) score += 10;
     else score += 0;
   }
 
-  // OSA Rate (15 pts) — lower is better, target <20%
-  if (cycle.osaPct !== null) {
+  // ── CPA vs Goal (25 pts) ──
+  const cpaGoal = acct.cpaGoal || cycle.cpaGoal;
+  if (cpaGoal && cycle.cpa && cycle.cpa > 0) {
+    maxPossible += 25;
+    const ratio = cycle.cpa / cpaGoal;
+    if (ratio <= 0.8) score += 25;
+    else if (ratio <= 1.0) score += 20;
+    else if (ratio <= 1.15) score += 12;
+    else if (ratio <= 1.5) score += 5;
+    else score += 0;
+  }
+
+  // ── Trend Direction (15 pts) — compare vs previous cycle ──
+  const prev = getPreviousCycle(acct.name, acct.adAccountId, cycle);
+  if (prev) {
     maxPossible += 15;
-    if (cycle.osaPct < 15) score += 15;
-    else if (cycle.osaPct < 20) score += 12;
-    else if (cycle.osaPct < 30) score += 6;
-    else score += 0;
+    let improvements = 0;
+    let comparisons = 0;
+    // CPA improving (lower is better)
+    if (prev.cpa && cycle.cpa && prev.cpa > 0) {
+      comparisons++;
+      if (cycle.cpa <= prev.cpa) improvements++;
+    }
+    // CTR improving (higher is better)
+    if (prev.linkCTR && cycle.linkCTR) {
+      comparisons++;
+      if (cycle.linkCTR >= prev.linkCTR) improvements++;
+    }
+    // Leads improving (higher is better)
+    if (prev.totalLeads !== null && cycle.totalLeads !== null && prev.totalLeads > 0) {
+      comparisons++;
+      if (cycle.totalLeads >= prev.totalLeads) improvements++;
+    }
+    if (comparisons > 0) {
+      score += Math.round((improvements / comparisons) * 15);
+    } else {
+      maxPossible -= 15; // no data to compare
+    }
   }
 
-  // CTR (10 pts)
-  if (cycle.linkCTR !== null && cycle.linkCTR > 0) {
-    maxPossible += 10;
-    if (cycle.linkCTR >= 1.2) score += 10;
-    else if (cycle.linkCTR >= 0.9) score += 8;
-    else if (cycle.linkCTR >= 0.6) score += 4;
-    else score += 0;
+  // ── Lead Flow Health (15 pts) — composite of OSA, CTR, Frequency ──
+  {
+    let subScore = 0;
+    let subMax = 0;
+    // OSA < 15%→5, <20%→3, else 0
+    if (cycle.osaPct !== null) {
+      subMax += 5;
+      if (cycle.osaPct < 15) subScore += 5;
+      else if (cycle.osaPct < 20) subScore += 3;
+    }
+    // CTR >= 1.2%→5, >=0.9%→3, else 0
+    if (cycle.linkCTR !== null && cycle.linkCTR > 0) {
+      subMax += 5;
+      if (cycle.linkCTR >= 1.2) subScore += 5;
+      else if (cycle.linkCTR >= 0.9) subScore += 3;
+    }
+    // Frequency <= 2.0→5, <=2.5→3, else 0
+    if (cycle.frequency !== null) {
+      subMax += 5;
+      if (cycle.frequency <= 2.0) subScore += 5;
+      else if (cycle.frequency <= 2.5) subScore += 3;
+    }
+    if (subMax > 0) {
+      maxPossible += 15;
+      score += Math.round((subScore / subMax) * 15);
+    }
   }
 
-  // Frequency (10 pts) — lower is better
-  if (cycle.frequency !== null) {
-    maxPossible += 10;
-    if (cycle.frequency <= 2.0) score += 10;
-    else if (cycle.frequency <= 2.5) score += 8;
-    else if (cycle.frequency <= 3.5) score += 4;
-    else score += 0;
-  }
-
-  // Spend Pacing (5 pts)
+  // ── Pacing (5 pts) ──
   const pacing = getSpendPacing(cycle);
   if (pacing) {
     maxPossible += 5;
@@ -1032,14 +1083,68 @@ function getAllAlerts() {
     const active = getActiveCycle(acct.name, acct.adAccountId);
     if (!active) return;
     const issues = [];
-    if (active.osaPct !== null && active.osaPct >= KPI_TARGETS.osaPct && active.totalLeads > 5) issues.push({ type: 'danger', msg: `High OSA: ${fmtPct(active.osaPct)}` });
-    if (acct.cpaGoal && active.cpa && active.cpa > acct.cpaGoal * 1.5) issues.push({ type: 'danger', msg: `CPA ${fmtDollar(active.cpa,2)} far exceeds goal` });
-    if (active.totalLeads !== null && active.totalLeads === 0) issues.push({ type: 'danger', msg: 'Zero leads this cycle' });
+    const cpaGoal = acct.cpaGoal || active.cpaGoal;
+
+    // ── Danger alerts ──
+    if (active.osaPct !== null && active.osaPct >= KPI_TARGETS.osaHighAlert && active.totalLeads > 5)
+      issues.push({ type: 'danger', msg: `OSA ${fmtPct(active.osaPct)} ≥ ${KPI_TARGETS.osaHighAlert}%`, current: fmtPct(active.osaPct), threshold: `< ${KPI_TARGETS.osaHighAlert}%` });
+    if (cpaGoal && active.cpa && active.cpa > cpaGoal * 1.2)
+      issues.push({ type: 'danger', msg: `CPA ${fmtDollar(active.cpa,2)} exceeds goal (${fmtDollar(cpaGoal,2)})`, current: fmtDollar(active.cpa,2), threshold: `≤ ${fmtDollar(cpaGoal,2)}` });
+    if (active.totalLeads !== null && active.totalLeads === 0)
+      issues.push({ type: 'danger', msg: 'Zero leads this cycle', current: '0', threshold: '> 0' });
+    if (active.frequency !== null && active.frequency > KPI_TARGETS.frequencyHigh)
+      issues.push({ type: 'danger', msg: `Frequency ${active.frequency.toFixed(1)} very high`, current: active.frequency.toFixed(1), threshold: `≤ ${KPI_TARGETS.frequencyHigh}` });
+
+    // ── Warning alerts ──
+    if (active.osaPct !== null && active.osaPct >= KPI_TARGETS.osaPct && active.osaPct < KPI_TARGETS.osaHighAlert && active.totalLeads > 5)
+      issues.push({ type: 'warning', msg: `OSA ${fmtPct(active.osaPct)} elevated`, current: fmtPct(active.osaPct), threshold: `< ${KPI_TARGETS.osaPct}%` });
+    if (active.frequency !== null && active.frequency > KPI_TARGETS.frequency && active.frequency <= KPI_TARGETS.frequencyHigh)
+      issues.push({ type: 'warning', msg: `Frequency ${active.frequency.toFixed(1)} rising`, current: active.frequency.toFixed(1), threshold: `≤ ${KPI_TARGETS.frequency}` });
+
     const track = isOnTrack(active);
-    if (track === false) issues.push({ type: 'warning', msg: `Off track: Est. ${fmt(active.estBookedAppts)} / ${fmt(active.bookedGoal)} goal` });
+    if (track === false)
+      issues.push({ type: 'warning', msg: `Off track: Est. ${fmt(active.estBookedAppts)} / ${fmt(active.bookedGoal)}`, current: fmt(active.estBookedAppts), threshold: fmt(active.bookedGoal) });
+
+    const pacing = getSpendPacing(active);
+    if (pacing && (pacing.pacingRatio < 0.7 || pacing.pacingRatio > 1.3))
+      issues.push({ type: 'warning', msg: `Pacing ${(pacing.pacingRatio*100).toFixed(0)}% of expected`, current: `${(pacing.pacingRatio*100).toFixed(0)}%`, threshold: '70-130%' });
+
+    // CTR decline vs previous cycle
+    const prev = getPreviousCycle(acct.name, acct.adAccountId, active);
+    if (prev && prev.linkCTR && active.linkCTR && prev.linkCTR > 0) {
+      const ctrDelta = ((active.linkCTR - prev.linkCTR) / prev.linkCTR) * 100;
+      if (ctrDelta < -20)
+        issues.push({ type: 'warning', msg: `CTR dropped ${Math.abs(ctrDelta).toFixed(0)}% vs prev cycle`, current: active.linkCTR.toFixed(2) + '%', threshold: prev.linkCTR.toFixed(2) + '%' });
+    }
+
     if (issues.length) alerts.push({ account: acct, active, issues });
   });
-  return alerts.sort((a, b) => b.issues.filter(i => i.type === 'danger').length - a.issues.filter(i => i.type === 'danger').length);
+  return alerts.sort((a, b) => {
+    const aDanger = a.issues.filter(i => i.type === 'danger').length;
+    const bDanger = b.issues.filter(i => i.type === 'danger').length;
+    if (bDanger !== aDanger) return bDanger - aDanger;
+    return b.issues.length - a.issues.length;
+  });
+}
+
+function calculateCycleDeltas(current, previous) {
+  if (!current || !previous) return null;
+  const delta = (cur, prev, lowerIsBetter) => {
+    if (cur == null || prev == null || prev === 0) return null;
+    const pctChange = ((cur - prev) / Math.abs(prev)) * 100;
+    const direction = cur > prev ? 'up' : cur < prev ? 'down' : 'flat';
+    const arrow = direction === 'up' ? '↑' : direction === 'down' ? '↓' : '→';
+    const isGood = lowerIsBetter ? (cur <= prev) : (cur >= prev);
+    return { current: cur, previous: prev, pctChange, direction, arrow, isGood };
+  };
+  return {
+    leads: delta(current.totalLeads, previous.totalLeads, false),
+    booked: delta(current.bookedAppts, previous.bookedAppts, false),
+    cpa: delta(current.cpa, previous.cpa, true),
+    ctr: delta(current.linkCTR, previous.linkCTR, false),
+    frequency: delta(current.frequency, previous.frequency, true),
+    spend: delta(current.amountSpent, previous.amountSpent, false),
+  };
 }
 
 function getAccountsByPod(podName) { return allAccounts.filter(a => a.pod === podName); }
@@ -1248,9 +1353,19 @@ function renderDashboard() {
       <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
         <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
         Account Health Scores
-        <span class="text-dark-400 text-xs font-normal ml-2">Composite: CPA vs Goal · On-Track · OSA · CTR · Frequency · Pacing</span>
+        <span class="text-dark-400 text-xs font-normal ml-2">On-Track (40%) · CPA vs Goal (25%) · Trend (15%) · Lead Flow (15%) · Pacing (5%)</span>
       </h3>
       <div class="flex flex-wrap gap-2" id="health-scoreboard"></div>
+    </div>
+
+    <!-- Attention Required (detailed watchlist) -->
+    <div class="glass rounded-xl p-5 mb-6" style="border: 1px solid rgba(239,68,68,0.25);">
+      <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-red-500 pulse"></span>
+        Attention Required
+        <span class="text-dark-400 text-xs font-normal ml-2" id="alert-count-label"></span>
+      </h3>
+      <div id="attention-table-wrap"></div>
     </div>
 
     <!-- Top Performers + Needs Attention -->
@@ -1299,6 +1414,29 @@ function renderDashboard() {
       </div>
     </div>
   `).join('') || '<div class="text-dark-400 text-sm text-center py-4">No data yet</div>';
+
+  // Detailed attention table
+  const attnWrap = document.getElementById('attention-table-wrap');
+  const attnLabel = document.getElementById('alert-count-label');
+  if (attnWrap) {
+    const dangerCount = alerts.reduce((s,a) => s + a.issues.filter(i=>i.type==='danger').length, 0);
+    const warnCount = alerts.reduce((s,a) => s + a.issues.filter(i=>i.type==='warning').length, 0);
+    attnLabel.textContent = `${dangerCount} critical · ${warnCount} warnings across ${alerts.length} accounts`;
+    if (alerts.length === 0) {
+      attnWrap.innerHTML = '<div class="text-dark-400 text-sm text-center py-4">✓ All accounts healthy — no alerts</div>';
+    } else {
+      attnWrap.innerHTML = `<div style="overflow-x:auto;"><table class="w-full text-sm">
+        <thead><tr class="text-dark-400 text-[10px] uppercase tracking-wider border-b border-dark-600">
+          <th class="text-left py-2 px-2">Account</th><th class="text-left py-2 px-2">Issues</th><th class="text-center py-2 px-2">Current</th><th class="text-center py-2 px-2">Threshold</th>
+        </tr></thead><tbody>${alerts.map(a => a.issues.map((iss, idx) => `
+          <tr class="table-row border-b border-dark-700 ${idx === 0 ? '' : 'border-t-0'}" style="cursor:pointer;" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
+            <td class="py-2 px-2 ${idx === 0 ? 'text-white font-medium' : 'text-transparent'}" style="${idx > 0 ? 'font-size:0;' : ''}">${idx === 0 ? a.account.name : ''}</td>
+            <td class="py-2 px-2"><span class="badge ${iss.type === 'danger' ? 'badge-red' : 'badge-yellow'}" style="font-size:10px;">${iss.type === 'danger' ? '●' : '▲'}</span> <span class="${iss.type === 'danger' ? 'text-red-400' : 'text-yellow-400'} text-xs">${iss.msg}</span></td>
+            <td class="py-2 px-2 text-center text-white text-xs">${iss.current || '—'}</td>
+            <td class="py-2 px-2 text-center text-dark-300 text-xs">${iss.threshold || '—'}</td>
+          </tr>`).join('')).join('')}</tbody></table></div>`;
+    }
+  }
 
   const attention = alerts.slice(0, 5);
   document.getElementById('needs-attention').innerHTML = attention.map(a => `
@@ -1655,6 +1793,41 @@ function renderAccountDetail(name, adAccountId) {
       </div>`;
     })()}
 
+    <!-- Cycle-over-Cycle Comparison -->
+    ${(() => {
+      if (!activeCyc) return '';
+      const prevCyc = getPreviousCycle(name, adAccountId, activeCyc);
+      if (!prevCyc) return '';
+      const deltas = calculateCycleDeltas(activeCyc, prevCyc);
+      if (!deltas) return '';
+      const metrics = [
+        { key: 'leads', label: 'Leads', fmt: v => fmt(v) },
+        { key: 'booked', label: 'Booked', fmt: v => fmt(v) },
+        { key: 'cpa', label: 'CPA', fmt: v => fmtDollar(v, 2) },
+        { key: 'ctr', label: 'Link CTR', fmt: v => v.toFixed(2) + '%' },
+        { key: 'frequency', label: 'Frequency', fmt: v => v.toFixed(1) },
+        { key: 'spend', label: 'Spend', fmt: v => fmtDollar(v, 0) },
+      ];
+      const cards = metrics.map(m => {
+        const d = deltas[m.key];
+        if (!d) return '';
+        const color = d.isGood ? '#22c55e' : '#ef4444';
+        const bgColor = d.isGood ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
+        const sign = d.pctChange > 0 ? '+' : '';
+        return `<div class="text-center p-3 rounded-lg" style="background:${bgColor};">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${m.label}</div>
+          <div class="text-white font-semibold text-sm">${m.fmt(d.current)}</div>
+          <div style="color:${color};" class="text-xs font-medium mt-1">${d.arrow} ${sign}${d.pctChange.toFixed(0)}%</div>
+          <div class="text-dark-400 text-[10px] mt-1">prev: ${m.fmt(d.previous)}</div>
+        </div>`;
+      }).filter(Boolean).join('');
+      if (!cards) return '';
+      return `<div class="glass rounded-xl p-4 mb-6">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-3">vs Previous Cycle <span class="text-dark-300">(${prevCyc.cycleStartDate || '?'} → ${prevCyc.cycleEndDate || '?'})</span></div>
+        <div class="grid grid-cols-3 md:grid-cols-6 gap-3">${cards}</div>
+      </div>`;
+    })()}
+
     <!-- Conversion Funnel -->
     ${(() => {
       const cycleLeads = activeCyc ? getLeadsForAccount(name, activeCyc.cycleStartDate, activeCyc.cycleEndDate) : [];
@@ -1693,19 +1866,31 @@ function renderAccountDetail(name, adAccountId) {
     <!-- Meta Daily Insights -->
     <div class="glass rounded-xl p-5 mb-6" id="meta-daily-section">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="text-white font-semibold">Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
+        <div class="flex items-center gap-3">
+          <h3 class="text-white font-semibold">Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
+          ${META_ACCESS_TOKEN && adId ? `
+          <div class="flex gap-1" id="meta-view-toggles">
+            <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle active" data-view="daily" style="background:rgba(251,146,60,0.2);color:#fdba74;">Daily</button>
+            <button class="text-[10px] px-2 py-0.5 rounded meta-view-toggle" data-view="weekly" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Weekly</button>
+          </div>
+          ` : ''}
+        </div>
         ${META_ACCESS_TOKEN && adId ? `
-        <div class="flex gap-2" id="meta-metric-toggles">
+        <div class="flex gap-1 flex-wrap" id="meta-metric-toggles">
           <button class="text-xs px-2 py-1 rounded meta-toggle active" data-metric="spend" style="background:rgba(59,130,246,0.2);color:#93c5fd;">Spend</button>
           <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="leads" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Leads</button>
           <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpl" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPL</button>
-          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="ctr" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CTR</button>
+          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="linkCtr" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Link CTR</button>
+          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpc" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPC</button>
+          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="frequency" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Freq</button>
+          <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpa" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPA</button>
         </div>
         ` : ''}
       </div>
       ${META_ACCESS_TOKEN && adId ? `
         <div class="chart-container" style="height:220px;"><canvas id="chart-meta-daily"></canvas></div>
-        <div id="meta-daily-summary" class="mt-3 grid grid-cols-5 gap-3 text-center"></div>
+        <div id="meta-daily-summary" class="mt-3 grid grid-cols-7 gap-2 text-center"></div>
+        <div id="meta-daily-table" class="mt-4"></div>
       ` : `
         <div class="text-center py-8">
           <div class="text-4xl mb-3">📊</div>
@@ -1788,7 +1973,7 @@ function renderAccountDetail(name, adAccountId) {
 
   // Load Meta daily insights for active cycle
   if (META_ACCESS_TOKEN && adId && activeCyc && activeCyc.cycleStartDate && activeCyc.cycleEndDate) {
-    loadMetaDailyInsights(adId, activeCyc.cycleStartDate, activeCyc.cycleEndDate);
+    loadMetaDailyInsights(adId, activeCyc.cycleStartDate, activeCyc.cycleEndDate, activeCyc);
   }
 
   renderLeadBreakdown(acct, cycles);
@@ -2018,8 +2203,116 @@ function renderAccountLeadsChart(cycles) {
 // ═══════════════════════════════════════════════
 let metaDailyChart = null;
 let metaDailyData = null;
+let metaWeeklyData = null;
+let metaCurrentView = 'daily'; // 'daily' or 'weekly'
+let metaCurrentCycle = null; // store cycle context for CPA calc
 
-async function loadMetaDailyInsights(adAccountId, startDate, endDate) {
+function aggregateToWeekly(dailyData, cycleStartDate) {
+  if (!dailyData || !dailyData.length) return [];
+  const startMs = new Date(cycleStartDate + 'T00:00:00').getTime();
+  const weeks = {};
+  dailyData.forEach(d => {
+    const dayMs = new Date(d.date + 'T00:00:00').getTime();
+    const weekNum = Math.floor((dayMs - startMs) / (7 * 86400000)) + 1;
+    if (!weeks[weekNum]) weeks[weekNum] = [];
+    weeks[weekNum].push(d);
+  });
+  return Object.keys(weeks).sort((a,b)=>a-b).map(wk => {
+    const days = weeks[wk];
+    const totalSpend = days.reduce((s,d)=>s+d.spend,0);
+    const totalLeads = days.reduce((s,d)=>s+d.leads,0);
+    const totalClicks = days.reduce((s,d)=>s+d.clicks,0);
+    const totalImpr = days.reduce((s,d)=>s+d.impressions,0);
+    const totalOB = days.reduce((s,d)=>s+d.outboundClicks,0);
+    return {
+      label: `Wk ${wk}`,
+      week: parseInt(wk),
+      days: days.length,
+      startDate: days[0].date,
+      endDate: days[days.length-1].date,
+      spend: totalSpend,
+      leads: totalLeads,
+      clicks: totalClicks,
+      impressions: totalImpr,
+      outboundClicks: totalOB,
+      cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
+      ctr: totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0,
+      linkCTR: totalImpr > 0 ? (totalOB / totalImpr) * 100 : 0,
+      frequency: days.reduce((s,d)=>s+d.frequency,0) / days.length,
+      cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
+    };
+  });
+}
+
+// Color coding helper for daily table cells
+function metricCellClass(metric, value, cycle) {
+  if (value === null || value === undefined || isNaN(value)) return '';
+  const cpaGoal = cycle ? (cycle.cpaGoal || 0) : 0;
+  const budget = cycle ? (cycle.monthlyBudget || cycle.budget || 0) : 0;
+  const dailyBudget = budget > 0 ? budget / 30 : 0;
+  const cplGoal = cycle && cycle.totalLeads > 0 && cycle.amountSpent > 0 ? cycle.amountSpent / cycle.totalLeads : 0;
+  switch(metric) {
+    case 'spend': return dailyBudget > 0 ? (value <= dailyBudget ? 'metric-cell-green' : value <= dailyBudget*1.2 ? 'metric-cell-yellow' : 'metric-cell-red') : '';
+    case 'leads': return value > 0 ? 'metric-cell-green' : 'metric-cell-red';
+    case 'cpl': return cplGoal > 0 ? (value <= cplGoal ? 'metric-cell-green' : value <= cplGoal*1.2 ? 'metric-cell-yellow' : 'metric-cell-red') : '';
+    case 'linkCTR': return value >= 0.90 ? 'metric-cell-green' : value >= 0.60 ? 'metric-cell-yellow' : 'metric-cell-red';
+    case 'cpc': return value <= 3 ? 'metric-cell-green' : value <= 5 ? 'metric-cell-yellow' : 'metric-cell-red';
+    case 'frequency': return value <= 2.5 ? 'metric-cell-green' : value <= 3.5 ? 'metric-cell-yellow' : 'metric-cell-red';
+    case 'cpa': return cpaGoal > 0 ? (value <= cpaGoal ? 'metric-cell-green' : value <= cpaGoal*1.2 ? 'metric-cell-yellow' : 'metric-cell-red') : '';
+    default: return '';
+  }
+}
+
+function renderMetaDailyTable(data, cycle) {
+  const el = document.getElementById('meta-daily-table');
+  if (!el || !data || !data.length) return;
+  const cpaGoal = cycle ? (cycle.cpaGoal || 0) : 0;
+  const bookedAppts = cycle ? (cycle.bookedAppts || 0) : 0;
+
+  // Build rows newest first
+  const rows = [...data].reverse();
+  let cumulativeSpend = data.reduce((s,d)=>s+d.spend,0);
+  let cumulativeLeads = data.reduce((s,d)=>s+d.leads,0);
+
+  el.innerHTML = `
+    <div class="overflow-x-auto rounded-lg border border-dark-600/50">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
+            <th class="py-2 px-2 text-left font-medium">Date</th>
+            <th class="py-2 px-2 text-right font-medium">Spend</th>
+            <th class="py-2 px-2 text-right font-medium">Leads</th>
+            <th class="py-2 px-2 text-right font-medium">CPL</th>
+            <th class="py-2 px-2 text-right font-medium">Link CTR</th>
+            <th class="py-2 px-2 text-right font-medium">CPC</th>
+            <th class="py-2 px-2 text-right font-medium">Freq</th>
+            <th class="py-2 px-2 text-right font-medium">CPA</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map(d => {
+            const dt = new Date(d.date + 'T12:00:00');
+            const dateStr = (dt.getMonth()+1) + '/' + dt.getDate();
+            const cpl = d.leads > 0 ? d.spend / d.leads : 0;
+            const cpa = bookedAppts > 0 ? cumulativeSpend / bookedAppts : 0;
+            return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
+              <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${dateStr}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('spend', d.spend, cycle)}">${fmtDollar(d.spend,0)}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('leads', d.leads, cycle)}">${d.leads}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', cpl, cycle)}">${d.leads > 0 ? fmtDollar(cpl,2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', d.linkCTR, cycle)}">${d.linkCTR > 0 ? d.linkCTR.toFixed(2)+'%' : '—'}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', d.cpc, cycle)}">${fmtDollar(d.cpc,2)}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', d.frequency, cycle)}">${d.frequency > 0 ? d.frequency.toFixed(2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle) {
   const section = document.getElementById('meta-daily-section');
   if (!section || !META_ACCESS_TOKEN) return;
   section.querySelector('h3').innerHTML = 'Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">Loading…</span>';
@@ -2029,58 +2322,129 @@ async function loadMetaDailyInsights(adAccountId, startDate, endDate) {
     return;
   }
   metaDailyData = data;
+  metaCurrentCycle = cycle || null;
+  metaWeeklyData = aggregateToWeekly(data, startDate);
+  metaCurrentView = 'daily';
   section.querySelector('h3').innerHTML = `Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">${data.length} days via Meta API</span>`;
 
-  // Summary stats
+  // Summary stats — expanded
   const totalSpend = data.reduce((s, d) => s + d.spend, 0);
   const totalLeads = data.reduce((s, d) => s + d.leads, 0);
   const totalClicks = data.reduce((s, d) => s + d.clicks, 0);
   const totalImpr = data.reduce((s, d) => s + d.impressions, 0);
+  const totalOB = data.reduce((s, d) => s + d.outboundClicks, 0);
   const avgCPL = totalLeads > 0 ? totalSpend / totalLeads : 0;
+  const avgFreq = data.reduce((s,d)=>s+d.frequency,0) / data.length;
+  const avgLinkCTR = totalImpr > 0 ? (totalOB / totalImpr) * 100 : 0;
   const summaryEl = document.getElementById('meta-daily-summary');
   if (summaryEl) {
     summaryEl.innerHTML = `
-      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Total Spend</div><div class="text-white font-bold text-sm">${fmtDollar(totalSpend,0)}</div></div>
-      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Total Leads</div><div class="text-white font-bold text-sm">${fmt(totalLeads)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Spend</div><div class="text-white font-bold text-sm">${fmtDollar(totalSpend,0)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Leads</div><div class="text-white font-bold text-sm">${fmt(totalLeads)}</div></div>
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Avg CPL</div><div class="text-white font-bold text-sm">${fmtDollar(avgCPL,2)}</div></div>
-      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Total Clicks</div><div class="text-white font-bold text-sm">${fmt(totalClicks)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Link CTR</div><div class="text-white font-bold text-sm ${ctrColor(avgLinkCTR)}">${avgLinkCTR.toFixed(2)}%</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Avg CPC</div><div class="text-white font-bold text-sm">${fmtDollar(totalClicks > 0 ? totalSpend/totalClicks : 0, 2)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Avg Freq</div><div class="text-white font-bold text-sm ${freqColor(avgFreq)}">${avgFreq.toFixed(2)}</div></div>
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Impressions</div><div class="text-white font-bold text-sm">${totalImpr > 1000 ? (totalImpr/1000).toFixed(1)+'K' : fmt(totalImpr)}</div></div>
     `;
   }
 
   renderMetaDailyChart('spend');
+  renderMetaDailyTable(data, cycle);
 
-  // Toggle buttons
+  // Metric toggle buttons
+  const metricColors = {
+    spend: 'rgba(59,130,246,0.2)', leads: 'rgba(34,197,94,0.2)', cpl: 'rgba(249,115,22,0.2)',
+    linkCtr: 'rgba(20,184,166,0.2)', cpc: 'rgba(236,72,153,0.2)', frequency: 'rgba(245,158,11,0.2)', cpa: 'rgba(239,68,68,0.2)'
+  };
+  const metricTextColors = {
+    spend: '#93c5fd', leads: '#86efac', cpl: '#fdba74',
+    linkCtr: '#5eead4', cpc: '#f9a8d4', frequency: '#fcd34d', cpa: '#fca5a5'
+  };
   document.querySelectorAll('.meta-toggle').forEach(btn => {
     btn.onclick = () => {
       document.querySelectorAll('.meta-toggle').forEach(b => { b.style.background = 'rgba(100,116,139,0.15)'; b.style.color = '#94a3b8'; b.classList.remove('active'); });
       btn.classList.add('active');
-      const colors = { spend: 'rgba(59,130,246,0.2)', leads: 'rgba(34,197,94,0.2)', cpl: 'rgba(249,115,22,0.2)', ctr: 'rgba(168,85,247,0.2)' };
-      const textColors = { spend: '#93c5fd', leads: '#86efac', cpl: '#fdba74', ctr: '#c4b5fd' };
       const m = btn.dataset.metric;
-      btn.style.background = colors[m] || colors.spend;
-      btn.style.color = textColors[m] || textColors.spend;
+      btn.style.background = metricColors[m] || metricColors.spend;
+      btn.style.color = metricTextColors[m] || metricTextColors.spend;
       renderMetaDailyChart(m);
+    };
+  });
+
+  // View toggle (Daily/Weekly)
+  document.querySelectorAll('.meta-view-toggle').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.meta-view-toggle').forEach(b => { b.style.background = 'rgba(100,116,139,0.15)'; b.style.color = '#94a3b8'; b.classList.remove('active'); });
+      btn.classList.add('active');
+      btn.style.background = 'rgba(251,146,60,0.2)';
+      btn.style.color = '#fdba74';
+      metaCurrentView = btn.dataset.view;
+      const activeMetric = document.querySelector('.meta-toggle.active');
+      renderMetaDailyChart(activeMetric ? activeMetric.dataset.metric : 'spend');
+      if (metaCurrentView === 'daily') renderMetaDailyTable(metaDailyData, metaCurrentCycle);
+      else renderMetaWeeklyTable(metaWeeklyData, metaCurrentCycle);
     };
   });
 }
 
+function renderMetaWeeklyTable(weeklyData, cycle) {
+  const el = document.getElementById('meta-daily-table');
+  if (!el || !weeklyData || !weeklyData.length) return;
+  el.innerHTML = `
+    <div class="overflow-x-auto rounded-lg border border-dark-600/50">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
+            <th class="py-2 px-2 text-left font-medium">Week</th>
+            <th class="py-2 px-2 text-right font-medium">Spend</th>
+            <th class="py-2 px-2 text-right font-medium">Leads</th>
+            <th class="py-2 px-2 text-right font-medium">CPL</th>
+            <th class="py-2 px-2 text-right font-medium">Link CTR</th>
+            <th class="py-2 px-2 text-right font-medium">CPC</th>
+            <th class="py-2 px-2 text-right font-medium">Freq</th>
+            <th class="py-2 px-2 text-right font-medium">Days</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${weeklyData.map(w => `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
+            <td class="py-1.5 px-2 text-dark-200 font-medium">${w.label}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('spend', w.spend/w.days, cycle)}">${fmtDollar(w.spend,0)}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('leads', w.leads, cycle)}">${w.leads}</td>
+            <td class="py-1.5 px-2 text-right">${w.leads > 0 ? fmtDollar(w.cpl,2) : '—'}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', w.cpc, cycle)}">${fmtDollar(w.cpc,2)}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
+            <td class="py-1.5 px-2 text-right text-dark-400">${w.days}d</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
 function renderMetaDailyChart(metric) {
-  if (!metaDailyData) return;
+  const sourceData = metaCurrentView === 'weekly' ? metaWeeklyData : metaDailyData;
+  if (!sourceData || !sourceData.length) return;
   const ctx = document.getElementById('chart-meta-daily');
   if (!ctx) return;
   if (metaDailyChart) metaDailyChart.destroy();
 
-  const labels = metaDailyData.map(d => {
-    const dt = new Date(d.date + 'T12:00:00');
-    return (dt.getMonth()+1) + '/' + dt.getDate();
-  });
+  const labels = metaCurrentView === 'weekly'
+    ? sourceData.map(d => d.label)
+    : sourceData.map(d => { const dt = new Date(d.date + 'T12:00:00'); return (dt.getMonth()+1) + '/' + dt.getDate(); });
+
+  const bookedAppts = metaCurrentCycle ? (metaCurrentCycle.bookedAppts || 0) : 0;
+  const totalMetaSpend = metaDailyData ? metaDailyData.reduce((s,d)=>s+d.spend,0) : 0;
 
   const configs = {
-    spend: { label: 'Daily Spend', data: metaDailyData.map(d => d.spend), color: '#3b82f6', fill: 'rgba(59,130,246,0.1)', prefix: '$' },
-    leads: { label: 'Daily Leads', data: metaDailyData.map(d => d.leads), color: '#22c55e', fill: 'rgba(34,197,94,0.1)', prefix: '' },
-    cpl:   { label: 'Cost Per Lead', data: metaDailyData.map(d => d.leads > 0 ? d.spend / d.leads : 0), color: '#f97316', fill: 'rgba(249,115,22,0.1)', prefix: '$' },
-    ctr:   { label: 'CTR %', data: metaDailyData.map(d => d.ctr), color: '#a855f7', fill: 'rgba(168,85,247,0.1)', prefix: '' },
+    spend:     { label: 'Spend', data: sourceData.map(d => d.spend), color: '#3b82f6', fill: 'rgba(59,130,246,0.1)', prefix: '$' },
+    leads:     { label: 'Leads', data: sourceData.map(d => d.leads), color: '#22c55e', fill: 'rgba(34,197,94,0.1)', prefix: '' },
+    cpl:       { label: 'Cost Per Lead', data: sourceData.map(d => d.leads > 0 ? d.spend / d.leads : 0), color: '#f97316', fill: 'rgba(249,115,22,0.1)', prefix: '$' },
+    linkCtr:   { label: 'Link CTR %', data: sourceData.map(d => d.linkCTR), color: '#14b8a6', fill: 'rgba(20,184,166,0.1)', prefix: '', suffix: '%' },
+    cpc:       { label: 'CPC', data: sourceData.map(d => d.cpc), color: '#ec4899', fill: 'rgba(236,72,153,0.1)', prefix: '$' },
+    frequency: { label: 'Frequency', data: sourceData.map(d => d.frequency), color: '#f59e0b', fill: 'rgba(245,158,11,0.1)', prefix: '' },
+    cpa:       { label: 'CPA', data: sourceData.map(() => bookedAppts > 0 ? totalMetaSpend / bookedAppts : 0), color: '#ef4444', fill: 'rgba(239,68,68,0.1)', prefix: '$' },
   };
   const cfg = configs[metric] || configs.spend;
 
@@ -2091,7 +2455,7 @@ function renderMetaDailyChart(metric) {
       datasets: [{
         label: cfg.label, data: cfg.data,
         borderColor: cfg.color, backgroundColor: cfg.fill,
-        borderWidth: 2, pointRadius: 2, pointHoverRadius: 5,
+        borderWidth: 2, pointRadius: metaCurrentView === 'weekly' ? 4 : 2, pointHoverRadius: 6,
         fill: true, tension: 0.3
       }]
     },
@@ -2099,7 +2463,10 @@ function renderMetaDailyChart(metric) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (tip) => cfg.prefix ? `${cfg.label}: ${cfg.prefix}${tip.raw.toFixed(2)}` : `${cfg.label}: ${tip.raw.toFixed(2)}` } }
+        tooltip: { callbacks: { label: (tip) => {
+          const v = tip.raw.toFixed(2);
+          return cfg.prefix ? `${cfg.label}: ${cfg.prefix}${v}` : `${cfg.label}: ${v}${cfg.suffix || ''}`;
+        }}}
       },
       scales: {
         x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45 }, grid: { display: false } },
