@@ -20,164 +20,398 @@ tailwind.config = {
 }
 </script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-  * { font-family: 'Inter', sans-serif; }
-  body { background: #0f172a; color: #e2e8f0; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #1e293b; }
-  ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #64748b; }
-  .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(148, 163, 184, 0.1); }
-  .glow { box-shadow: 0 0 20px rgba(249, 115, 22, 0.15); }
-  .kpi-card:hover { transform: translateY(-2px); transition: all 0.2s; }
-  .kpi-card { transition: all 0.2s; }
-  .pulse { animation: pulse 2s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-  .status-green { color: #22c55e; }
-  .status-red { color: #ef4444; }
-  .status-yellow { color: #eab308; }
-  .fade-in { animation: fadeIn 0.3s ease-in; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .table-row:hover { background: rgba(249, 115, 22, 0.05); }
-  .nav-item { position: relative; }
-  .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 60%; background: #f97316; border-radius: 0 4px 4px 0; }
-  .sidebar { width: 260px; min-width: 260px; }
-  select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; }
-  .chart-container { position: relative; height: 220px; border-radius: 8px; }
-  .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
-  .badge-green { background: rgba(34,197,94,0.15); color: #22c55e; }
-  .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
-  .badge-yellow { background: rgba(234,179,8,0.15); color: #eab308; }
-  .badge-blue { background: rgba(59,130,246,0.15); color: #3b82f6; }
-  .badge-gray { background: rgba(148,163,184,0.15); color: #94a3b8; }
-  .metric-good { color: #22c55e; }
-  .metric-bad { color: #ef4444; }
-  .metric-warn { color: #eab308; }
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+  * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+
+  /* ══════ BACKGROUND & BASE ══════ */
+  body {
+    background: #060b18;
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.12), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(249,115,22,0.08), transparent),
+      radial-gradient(ellipse 40% 30% at 10% 60%, rgba(59,130,246,0.06), transparent);
+    color: #e2e8f0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ══════ SCROLLBARS ══════ */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.3); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.5); }
+
+  /* ══════ GLASS MORPHISM ══════ */
+  .glass {
+    background: linear-gradient(135deg, rgba(15,23,42,0.8), rgba(30,41,59,0.6));
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    border: 1px solid rgba(148,163,184,0.08);
+    transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+  }
+  .glass:hover {
+    border-color: rgba(148,163,184,0.15);
+  }
+
+  .glow { box-shadow: 0 0 30px rgba(249,115,22,0.12), 0 0 60px rgba(249,115,22,0.05); }
+
+  /* ══════ KPI CARDS ══════ */
+  .kpi-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(249,115,22,0.4), transparent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.3), 0 0 0 1px rgba(249,115,22,0.1);
+  }
+  .kpi-card:hover::before { opacity: 1; }
+
+  /* ══════ ANIMATIONS ══════ */
+  .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  .slide-in { animation: slideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+  @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
+
+  .scale-in { animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+  @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .shimmer-loading {
+    background: linear-gradient(90deg, rgba(30,41,59,0.5) 25%, rgba(51,65,85,0.5) 50%, rgba(30,41,59,0.5) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(249,115,22,0.2); }
+    50% { box-shadow: 0 0 20px rgba(249,115,22,0.4); }
+  }
+
+  /* Staggered card animations */
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+  .stagger-5 { animation-delay: 0.25s; }
+  .stagger-6 { animation-delay: 0.3s; }
+  .stagger-7 { animation-delay: 0.35s; }
+
+  /* ══════ STATUS COLORS ══════ */
+  .status-green { color: #34d399; }
+  .status-red { color: #f87171; }
+  .status-yellow { color: #fbbf24; }
+
+  /* ══════ TABLES ══════ */
+  .table-row { transition: background 0.2s, box-shadow 0.2s; }
+  .table-row:hover { background: rgba(249,115,22,0.04); box-shadow: inset 3px 0 0 rgba(249,115,22,0.5); }
+
+  /* ══════ SIDEBAR ══════ */
+  .sidebar {
+    width: 260px; min-width: 260px;
+    background: linear-gradient(180deg, rgba(15,23,42,0.95), rgba(6,11,24,0.98));
+    border-right: 1px solid rgba(148,163,184,0.06);
+  }
+  .nav-item { position: relative; transition: all 0.2s; border-radius: 10px; margin: 2px 8px; }
+  .nav-item:hover { background: rgba(148,163,184,0.06); }
+  .nav-item.active { background: rgba(249,115,22,0.08); }
+  .nav-item.active::before {
+    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 55%; background: linear-gradient(180deg, #f97316, #fb923c);
+    border-radius: 0 4px 4px 0;
+    box-shadow: 0 0 10px rgba(249,115,22,0.3);
+  }
+
+  /* ══════ SELECT / FORM ══════ */
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center;
+    transition: all 0.2s;
+  }
+  select:focus { outline: none; border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.12); }
+
+  /* ══════ CHARTS ══════ */
+  .chart-container {
+    position: relative; height: 220px; border-radius: 12px;
+    background: rgba(15,23,42,0.4);
+    border: 1px solid rgba(148,163,184,0.05);
+  }
+
+  /* ══════ BADGES ══════ */
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
+  .badge-green { background: rgba(34,197,94,0.12); color: #34d399; border: 1px solid rgba(34,197,94,0.15); }
+  .badge-red { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.15); }
+  .badge-yellow { background: rgba(234,179,8,0.12); color: #fbbf24; border: 1px solid rgba(234,179,8,0.15); }
+  .badge-blue { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.15); }
+  .badge-gray { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.1); }
+
+  /* ══════ METRICS ══════ */
+  .metric-good { color: #34d399; }
+  .metric-bad { color: #f87171; }
+  .metric-warn { color: #fbbf24; }
   .metric-neutral { color: #e2e8f0; }
-  .lead-booked { color: #22c55e; }
+  .lead-booked { color: #34d399; }
   .lead-client { color: #fbbf24; }
-  .lead-cancelled { color: #ef4444; }
-  .metric-cell-green { background: rgba(34,197,94,0.13); color: #22c55e; }
-  .metric-cell-yellow { background: rgba(234,179,8,0.13); color: #eab308; }
-  .metric-cell-red { background: rgba(239,68,68,0.13); color: #ef4444; }
+  .lead-cancelled { color: #f87171; }
   .lead-open { color: #e2e8f0; }
-  .filter-badge { display: inline-flex; align-items: center; padding: 4px 14px; border-radius: 9999px; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; user-select: none; }
-  .filter-badge:hover { transform: scale(1.05); }
-  .filter-badge.active { border-color: white; box-shadow: 0 0 12px rgba(255,255,255,0.2); }
-  .filter-badge.fb-green { background: rgba(34,197,94,0.25); color: #22c55e; }
-  .filter-badge.fb-red { background: rgba(239,68,68,0.25); color: #ef4444; }
-  .filter-badge.fb-white { background: rgba(226,232,240,0.15); color: #e2e8f0; }
-  .filter-badge.fb-yellow { background: rgba(251,191,36,0.2); color: #fbbf24; }
-  .filter-badge.fb-blue { background: rgba(59,130,246,0.25); color: #3b82f6; }
-  .cycle-row-clickable { cursor: pointer; transition: background 0.15s; }
-  .cycle-row-clickable:hover { background: rgba(59,130,246,0.1) !important; }
-  .pacing-bar { height: 6px; border-radius: 3px; background: rgba(100,116,139,0.2); overflow: hidden; }
-  .pacing-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
-  .health-ring { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
-  .funnel-bar { height: 24px; border-radius: 4px; transition: width 0.3s; display: flex; align-items: center; padding: 0 8px; font-size: 11px; font-weight: 600; }
-  .tab-btn { padding: 6px 16px; border-radius: 8px; font-size: 13px; cursor: pointer; transition: all 0.2s; }
-  .tab-btn.active { background: rgba(249,115,22,0.15); color: #fb923c; font-weight: 600; }
+
+  .metric-cell-green { background: rgba(34,197,94,0.1); color: #34d399; border-radius: 4px; }
+  .metric-cell-yellow { background: rgba(234,179,8,0.1); color: #fbbf24; border-radius: 4px; }
+  .metric-cell-red { background: rgba(239,68,68,0.1); color: #f87171; border-radius: 4px; }
+
+  /* ══════ FILTER BADGES ══════ */
+  .filter-badge {
+    display: inline-flex; align-items: center; padding: 5px 16px; border-radius: 9999px;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1.5px solid transparent; user-select: none; letter-spacing: 0.01em;
+  }
+  .filter-badge:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+  .filter-badge.active { border-color: rgba(255,255,255,0.8); box-shadow: 0 0 16px rgba(255,255,255,0.15); }
+  .filter-badge.fb-green { background: rgba(34,197,94,0.15); color: #34d399; }
+  .filter-badge.fb-red { background: rgba(239,68,68,0.15); color: #f87171; }
+  .filter-badge.fb-white { background: rgba(226,232,240,0.1); color: #e2e8f0; }
+  .filter-badge.fb-yellow { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .filter-badge.fb-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
+
+  /* ══════ CYCLE ROWS ══════ */
+  .cycle-row-clickable { cursor: pointer; transition: all 0.2s; }
+  .cycle-row-clickable:hover { background: rgba(59,130,246,0.08) !important; box-shadow: inset 3px 0 0 rgba(59,130,246,0.4); }
+
+  /* ══════ PACING BAR ══════ */
+  .pacing-bar { height: 8px; border-radius: 4px; background: rgba(100,116,139,0.15); overflow: hidden; }
+  .pacing-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+
+  /* ══════ HEALTH RING ══════ */
+  .health-ring {
+    width: 46px; height: 46px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .health-ring:hover { transform: scale(1.1); }
+
+  /* ══════ FUNNEL ══════ */
+  .funnel-bar {
+    height: 28px; border-radius: 6px; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex; align-items: center; padding: 0 10px; font-size: 11px; font-weight: 600;
+  }
+
+  /* ══════ TABS ══════ */
+  .tab-btn {
+    padding: 7px 18px; border-radius: 10px; font-size: 13px; cursor: pointer;
+    transition: all 0.25s; font-weight: 500;
+  }
+  .tab-btn.active { background: linear-gradient(135deg, rgba(249,115,22,0.15), rgba(249,115,22,0.08)); color: #fb923c; font-weight: 600; box-shadow: 0 0 0 1px rgba(249,115,22,0.2); }
   .tab-btn:not(.active) { color: #94a3b8; }
-  .tab-btn:not(.active):hover { color: #e2e8f0; background: rgba(100,116,139,0.1); }
-  /* UX polish: smoother transitions, better focus states */
-  .glass { transition: border-color 0.2s, box-shadow 0.2s; }
-  .meta-view-toggle { min-width: 70px; min-height: 28px; font-size: 11px !important; font-weight: 500; transition: all 0.15s; }
-  .meta-view-toggle:hover { opacity: 0.85; }
-  .meta-view-toggle.active { font-weight: 600; }
-  select:focus { outline: none; border-color: #f97316; box-shadow: 0 0 0 2px rgba(249,115,22,0.15); }
-  .back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; font-size: 13px; color: #94a3b8; transition: all 0.15s; }
-  .back-btn:hover { background: rgba(100,116,139,0.15); color: #e2e8f0; }
-  .section-divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(148,163,184,0.1), transparent); margin: 24px 0; }
-  .health-scroll { max-height: 280px; overflow-y: auto; padding-right: 4px; }
+  .tab-btn:not(.active):hover { color: #e2e8f0; background: rgba(100,116,139,0.08); }
+
+  /* ══════ META VIEW TOGGLES ══════ */
+  .meta-view-toggle {
+    min-width: 72px; min-height: 30px; font-size: 11px !important; font-weight: 500;
+    transition: all 0.2s; border-radius: 8px;
+  }
+  .meta-view-toggle:hover { opacity: 0.85; transform: translateY(-1px); }
+  .meta-view-toggle.active { font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+  /* ══════ BACK BUTTON ══════ */
+  .back-btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
+    border-radius: 10px; font-size: 13px; color: #94a3b8; font-weight: 500;
+    transition: all 0.2s; border: 1px solid transparent;
+  }
+  .back-btn:hover { background: rgba(100,116,139,0.12); color: #e2e8f0; border-color: rgba(148,163,184,0.1); }
+
+  /* ══════ SECTION DIVIDER ══════ */
+  .section-divider {
+    height: 1px; margin: 28px 0;
+    background: linear-gradient(90deg, transparent, rgba(148,163,184,0.12), transparent);
+  }
+
+  /* ══════ HEALTH SCROLL ══════ */
+  .health-scroll { max-height: 300px; overflow-y: auto; padding-right: 4px; }
+
+  /* ══════ SMOOTH VIEW TRANSITIONS ══════ */
+  .view-container { animation: viewEnter 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+  @keyframes viewEnter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ══════ CARD GROUP HOVER LIFT ══════ */
+  .glass-lift { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+  .glass-lift:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(148,163,184,0.08); }
+
+  /* ══════ METRIC NUMBER TRANSITIONS ══════ */
+  .metric-value { transition: color 0.3s; }
+
+  /* ══════ FOCUS RING FOR ACCESSIBILITY ══════ */
+  button:focus-visible, select:focus-visible, .nav-item:focus-visible { outline: 2px solid rgba(249,115,22,0.5); outline-offset: 2px; border-radius: 8px; }
+
+  /* ══════ LOADING SKELETON ══════ */
+  .skeleton { background: linear-gradient(90deg, rgba(30,41,59,0.6) 0%, rgba(51,65,85,0.4) 50%, rgba(30,41,59,0.6) 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
+
+  /* ══════ SECTION HEADER ══════ */
+  .section-title {
+    font-size: 18px; font-weight: 700; color: #f1f5f9;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::before {
+    content: '';
+    width: 4px; height: 20px;
+    background: linear-gradient(180deg, #f97316, #fb923c);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  /* ══════ RESPONSIVE ══════ */
   @media (max-width: 1400px) { .kpi-grid-7 { grid-template-columns: repeat(4, 1fr) !important; } }
   @media (max-width: 1100px) { .kpi-grid-7 { grid-template-columns: repeat(3, 1fr) !important; } }
+  @media (max-width: 900px) { .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; } }
+
+  /* ══════ FANCY BORDERS ══════ */
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::after {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(249,115,22,0.2), transparent 40%, transparent 60%, rgba(59,130,246,0.15));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* ══════ TOOLTIP ══════ */
+  .tooltip-container { position: relative; }
+  .tooltip-container:hover .tooltip-text { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .tooltip-text {
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(4px);
+    background: rgba(15,23,42,0.95); border: 1px solid rgba(148,163,184,0.15);
+    padding: 6px 12px; border-radius: 8px; font-size: 11px; color: #e2e8f0;
+    white-space: nowrap; pointer-events: none; opacity: 0; transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 50;
+  }
+
+  /* ══════ LOADING SPINNER ══════ */
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid rgba(249,115,22,0.1);
+    border-top-color: #f97316;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body class="min-h-screen">
 
 <div id="app" class="flex min-h-screen">
   <!-- Sidebar -->
-  <aside class="sidebar glass fixed left-0 top-0 h-screen flex flex-col z-50 border-r border-dark-600">
-    <div class="p-5 border-b border-dark-600">
+  <aside class="sidebar fixed left-0 top-0 h-screen flex flex-col z-50">
+    <div class="p-5 border-b border-dark-600/50">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center">
-          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-lg shadow-brand-500/20" style="animation: glow-pulse 3s infinite">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
         <div>
-          <div class="font-bold text-sm text-white tracking-tight">RoofIgnite</div>
-          <div class="text-[10px] text-dark-300 uppercase tracking-widest">Command Center</div>
+          <div class="font-extrabold text-sm text-white tracking-tight">RoofIgnite</div>
+          <div class="text-[9px] text-dark-300 uppercase tracking-[0.2em] font-medium">Command Center</div>
         </div>
       </div>
     </div>
 
-    <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-      <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-1">Overview</div>
-      <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
-        Leadership Dashboard
+    <nav class="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
+      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-1">Overview</div>
+      <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
+        <span class="font-medium">Dashboard</span>
       </button>
 
-      <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Managers</div>
-      <button onclick="navigate('manager', 'Cole')" id="nav-mgr-cole" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-        Cole
-        <span id="alert-badge-cole" class="ml-auto badge badge-red hidden">0</span>
+      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Managers</div>
+      <button onclick="navigate('manager', 'Cole')" id="nav-mgr-cole" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center text-[10px] font-bold text-blue-400 border border-blue-500/20">C</div>
+        <span class="font-medium">Cole</span>
+        <span id="alert-badge-cole" class="ml-auto badge badge-red hidden text-[10px]">0</span>
       </button>
-      <button onclick="navigate('manager', 'Jonathan')" id="nav-mgr-jonathan" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-        Jonathan
-        <span id="alert-badge-jonathan" class="ml-auto badge badge-red hidden">0</span>
+      <button onclick="navigate('manager', 'Jonathan')" id="nav-mgr-jonathan" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/20">J</div>
+        <span class="font-medium">Jonathan</span>
+        <span id="alert-badge-jonathan" class="ml-auto badge badge-red hidden text-[10px]">0</span>
       </button>
-      <button onclick="navigate('manager', 'Tyler')" id="nav-mgr-tyler" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-        Tyler
-        <span id="alert-badge-tyler" class="ml-auto badge badge-red hidden">0</span>
-      </button>
-
-      <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Pods</div>
-      <button onclick="navigate('pod', 'Pod 2 - RoofIgnite')" id="nav-pod2" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        Pod 2
-      </button>
-      <button onclick="navigate('pod', 'Pod 1 - RoofIgnite')" id="nav-pod1" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        Pod 1
+      <button onclick="navigate('manager', 'Tyler')" id="nav-mgr-tyler" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center text-[10px] font-bold text-purple-400 border border-purple-500/20">T</div>
+        <span class="font-medium">Tyler</span>
+        <span id="alert-badge-tyler" class="ml-auto badge badge-red hidden text-[10px]">0</span>
       </button>
 
-      <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Accounts</div>
-      <div class="px-2">
-        <select id="account-select" onchange="navigateToAccount(this.value)" class="w-full bg-dark-700 border border-dark-600 rounded-lg text-sm text-dark-200 px-3 py-2 appearance-none pr-8 focus:outline-none focus:border-brand-500">
-          <option value="">Select an account…</option>
+      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Pods</div>
+      <button onclick="navigate('pod', 'Pod 2 - RoofIgnite')" id="nav-pod2" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500/15 to-amber-600/15 flex items-center justify-center text-[10px] font-bold text-amber-400 border border-amber-500/15">2</div>
+        <span class="font-medium">Pod 2</span>
+      </button>
+      <button onclick="navigate('pod', 'Pod 1 - RoofIgnite')" id="nav-pod1" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500/15 to-cyan-600/15 flex items-center justify-center text-[10px] font-bold text-cyan-400 border border-cyan-500/15">1</div>
+        <span class="font-medium">Pod 1</span>
+      </button>
+
+      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Quick Jump</div>
+      <div class="px-3">
+        <select id="account-select" onchange="navigateToAccount(this.value)" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-dark-200 px-3 py-2.5 appearance-none pr-8 focus:outline-none focus:border-brand-500">
+          <option value="">Search accounts…</option>
         </select>
       </div>
 
-      <div class="text-[10px] uppercase tracking-widest text-dark-400 px-3 mb-2 mt-5">Billing</div>
-      <button onclick="navigate('billing')" id="nav-billing" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-dark-200 hover:bg-dark-700 hover:text-white transition-all">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Billing Tracker
+      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Finance</div>
+      <button onclick="navigate('billing')" id="nav-billing" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span class="font-medium">Billing Tracker</span>
       </button>
     </nav>
 
-    <div class="p-4 border-t border-dark-600">
-      <div class="flex items-center gap-2 text-xs text-dark-400">
+    <div class="p-4 border-t border-dark-600/30">
+      <div class="flex items-center gap-2.5 text-xs text-dark-400">
         <div id="data-status" class="w-2 h-2 rounded-full bg-yellow-500 pulse"></div>
-        <span id="data-status-text">Connecting to Sheets...</span>
+        <span id="data-status-text" class="font-medium">Connecting…</span>
       </div>
-      <button onclick="refreshData()" class="mt-2 w-full text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1 justify-center py-1">
-        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      <button onclick="refreshData()" class="mt-3 w-full text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1.5 justify-center py-1.5 rounded-lg hover:bg-brand-500/5 transition-all font-medium">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         Refresh Data
       </button>
     </div>
   </aside>
 
   <!-- Main Content -->
-  <main class="flex-1 ml-[260px] p-6">
+  <main class="flex-1 ml-[260px] p-8 main-content" style="height:100vh;overflow-y:auto">
     <div id="loading-state" class="flex items-center justify-center h-96">
-      <div class="text-center">
-        <div class="w-12 h-12 border-3 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p class="text-dark-300 text-sm">Fetching live data from Google Sheets...</p>
+      <div class="text-center fade-in">
+        <div class="relative mx-auto mb-6" style="width:56px;height:56px;">
+          <div style="position:absolute;inset:0;border-radius:50%;border:3px solid rgba(100,116,139,0.15);"></div>
+          <div style="position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:#f97316;animation:spin 0.8s linear infinite;"></div>
+          <div style="position:absolute;inset:6px;border-radius:50%;border:2px solid transparent;border-top-color:#3b82f6;animation:spin 1.2s linear infinite reverse;"></div>
+        </div>
+        <p class="text-white text-base font-semibold mb-1">Loading Command Center</p>
+        <p class="text-dark-300 text-sm">Fetching live data from all sources…</p>
       </div>
     </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
     <div id="view-dashboard" class="hidden fade-in"></div>
     <div id="view-pod" class="hidden fade-in"></div>
     <div id="view-manager" class="hidden fade-in"></div>
@@ -742,7 +976,27 @@ function parseSheetData(data, podName) {
     console.warn(`[AdID-Missing] ${noAdId.length} accounts with cycles but no ad ID:`, noAdId.map(a => `${a.name} (${a.cycles.length} cycles)`));
   }
 
-  return { accounts, cycles };
+  // Filter out ghost accounts — section headers/manager names that were incorrectly parsed as accounts.
+  // Real accounts always have at least one cycle row. Items with 0 cycles are section labels
+  // (e.g. "Pending", "Cole", "Tyler", "RoofIgnite", "EXPANSION", etc.) that slipped through detection.
+  const knownSectionLabels = ['pending', 'roofignite', 'roofers ignite', 'expansion', 'kpi', 'active', 'inactive'];
+  const managerNames = [...new Set(accounts.map(a => (a.manager || '').toLowerCase()).filter(Boolean))];
+  const beforeCount = accounts.length;
+  const filtered = accounts.filter(a => {
+    if (a.cycles.length > 0) return true; // has cycles = real account
+    const nameLower = a.name.toLowerCase().trim();
+    // Drop if name matches a known section label or a manager name
+    if (knownSectionLabels.includes(nameLower)) return false;
+    if (managerNames.includes(nameLower)) return false;
+    // Drop any zero-cycle account with no goals, no budget, no ad ID — almost certainly a section header
+    if (!a.adAccountId && !a.bookedGoal && !a.monthlyBudget && !a.cpaGoal) return false;
+    return true;
+  });
+  if (filtered.length < beforeCount) {
+    console.log(`[Parse] Filtered out ${beforeCount - filtered.length} ghost accounts (section headers with 0 cycles)`);
+  }
+
+  return { accounts: filtered, cycles };
 }
 
 function getNum(row, idx) {
@@ -1362,6 +1616,9 @@ function navigate(view, param) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   currentView = view;
 
+  // Smooth scroll to top on view change
+  document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
+
   switch(view) {
     case 'dashboard':
       document.getElementById('nav-dashboard').classList.add('active');
@@ -1388,6 +1645,10 @@ function navigate(view, param) {
       renderBilling();
       break;
   }
+
+  // Add entrance animation to the active view
+  const activeView = document.querySelector('[id^="view-"]:not(.hidden)');
+  if (activeView) { activeView.classList.remove('view-container'); void activeView.offsetWidth; activeView.classList.add('view-container'); }
 }
 
 function navigateToAccount(val) {
@@ -1454,133 +1715,190 @@ function renderDashboard() {
   const p2 = podStats(getAccountsByPod('Pod 2 - RoofIgnite'));
 
   el.innerHTML = `
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-white">Leadership Dashboard</h1>
-      <p class="text-dark-300 text-sm mt-1">Real-time overview · ${active.length} active, ${inactive.length} inactive · ${allLeads.length} leads tracked</p>
+    <div class="mb-8 fade-in">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500/20 to-brand-600/10 flex items-center justify-center border border-brand-500/15">
+          <svg class="w-6 h-6 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-3xl font-extrabold text-white tracking-tight">Leadership Dashboard</h1>
+          <p class="text-dark-300 text-sm mt-1 font-medium">${active.length} active accounts · ${inactive.length} inactive · ${allLeads.length} leads tracked</p>
+        </div>
+        <div class="ml-auto text-right">
+          <div class="flex items-center gap-2 text-dark-300">
+            <div class="w-2 h-2 rounded-full bg-emerald-400" style="animation:pulse 2s infinite"></div>
+            <span class="text-xs font-medium">Live Data</span>
+          </div>
+          <p class="text-dark-400 text-[10px] mt-1">${new Date().toLocaleString('en-US', {month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true})}</p>
+        </div>
+      </div>
     </div>
 
-    <div class="grid grid-cols-6 gap-4 mb-6">
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Active Accounts</div>
-        <div class="text-2xl font-bold text-white">${active.length}</div>
-        <div class="text-xs text-dark-300 mt-1">${inactive.length} inactive</div>
+    <div class="grid grid-cols-6 gap-4 mb-8">
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-1" style="opacity:0">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Active Accounts</div>
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
+        </div>
+        <div class="text-3xl font-extrabold text-white">${active.length}</div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">${inactive.length} inactive</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Active Cycle Leads</div>
-        <div class="text-2xl font-bold text-white">${fmt(totalLeads)}</div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-2" style="opacity:0">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Cycle Leads</div>
+          <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
+        </div>
+        <div class="text-3xl font-extrabold text-white">${fmt(totalLeads)}</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Total Bookings</div>
-        <div class="text-2xl font-bold text-green-400">${fmt(totalBooked)}</div>
-        <div class="text-xs text-dark-300 mt-1">${totalLeads > 0 ? (totalBooked/totalLeads*100).toFixed(1) : 0}% book rate</div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-3" style="opacity:0">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Total Bookings</div>
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        </div>
+        <div class="text-3xl font-extrabold text-emerald-400">${fmt(totalBooked)}</div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">${totalLeads > 0 ? (totalBooked/totalLeads*100).toFixed(1) : 0}% book rate</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Avg CPA</div>
-        <div class="text-2xl font-bold text-white">${fmtDollar(avgCPA, 2)}</div>
-        <div class="text-xs text-dark-300 mt-1">across active</div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-4" style="opacity:0">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Avg CPA</div>
+          <div class="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/></svg></div>
+        </div>
+        <div class="text-3xl font-extrabold text-white">${fmtDollar(avgCPA, 2)}</div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">across active</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Avg OSA Rate</div>
-        <div class="text-2xl font-bold ${osaColor(avgOSA)} mt-0">${fmtPct(avgOSA)}</div>
-        <div class="text-xs text-dark-300 mt-1">target: &lt; 20%</div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-5" style="opacity:0">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Avg OSA</div>
+          <div class="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        </div>
+        <div class="text-3xl font-extrabold ${osaColor(avgOSA)}">${fmtPct(avgOSA)}</div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">target: &lt; 20%</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card ${alerts.length > 0 ? 'glow border-red-500/30' : ''}">
-        <div class="text-dark-400 text-xs uppercase tracking-wider mb-1">Alerts</div>
-        <div class="text-2xl font-bold ${alerts.length > 0 ? 'text-red-400' : 'text-green-400'}">${alerts.length}</div>
-        <div class="text-xs text-dark-300 mt-1">${alerts.filter(a=>a.issues.some(i=>i.type==='danger')).length} critical</div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-6 ${alerts.length > 0 ? 'glow' : ''}" style="opacity:0;${alerts.length > 0 ? 'border-color:rgba(239,68,68,0.2)' : ''}">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Alerts</div>
+          <div class="w-8 h-8 rounded-lg ${alerts.length > 0 ? 'bg-red-500/10' : 'bg-emerald-500/10'} flex items-center justify-center"><svg class="w-4 h-4 ${alerts.length > 0 ? 'text-red-400' : 'text-emerald-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
+        </div>
+        <div class="text-3xl font-extrabold ${alerts.length > 0 ? 'text-red-400' : 'text-emerald-400'}">${alerts.length}</div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">${alerts.filter(a=>a.issues.some(i=>i.type==='danger')).length} critical</div>
       </div>
     </div>
 
     <!-- Manager Cards -->
-    <div class="grid grid-cols-3 gap-4 mb-6">
-      ${managers.map(m => {
+    <div class="section-title mb-4 fade-in stagger-2" style="opacity:0">Team Performance</div>
+    <div class="grid grid-cols-3 gap-4 mb-8">
+      ${managers.map((m, mi) => {
         const s = mgrStats(m);
+        const colors = {Cole:'from-blue-500/15 to-blue-600/5',Jonathan:'from-emerald-500/15 to-emerald-600/5',Tyler:'from-purple-500/15 to-purple-600/5'};
+        const initColors = {Cole:'from-blue-400 to-blue-600',Jonathan:'from-emerald-400 to-emerald-600',Tyler:'from-purple-400 to-purple-600'};
+        const textColors = {Cole:'text-blue-400',Jonathan:'text-emerald-400',Tyler:'text-purple-400'};
         return `
-        <div class="glass rounded-xl p-5 cursor-pointer hover:border-brand-500/30 transition-all" onclick="navigate('manager','${m}')">
+        <div class="glass rounded-2xl p-5 cursor-pointer hover:border-brand-500/20 transition-all fade-in stagger-${mi+3}" style="opacity:0;background:linear-gradient(135deg,${(colors[m]||'from-slate-500/15 to-slate-600/5').split(' ').map(c=>c.replace('from-','').replace('to-','')).join(', ')});" onclick="navigate('manager','${m}')">
           <div class="flex items-center justify-between mb-4">
-            <div>
-              <h3 class="text-white font-semibold">${m}</h3>
-              <p class="text-dark-400 text-xs">${s.count} active accounts</p>
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-gradient-to-br ${initColors[m]||'from-slate-400 to-slate-600'} flex items-center justify-center text-sm font-bold text-white shadow-lg">${m.charAt(0)}</div>
+              <div>
+                <h3 class="text-white font-bold text-[15px]">${m}</h3>
+                <p class="text-dark-400 text-xs">${s.count} active accounts</p>
+              </div>
             </div>
             <div class="flex items-center gap-2">
-              ${s.alertCount > 0 ? `<span class="badge badge-red">${s.alertCount} alert${s.alertCount>1?'s':''}</span>` : ''}
-              <span class="text-brand-400 text-xs hover:text-brand-300">View →</span>
+              ${s.alertCount > 0 ? `<span class="badge badge-red">${s.alertCount} alert${s.alertCount>1?'s':''}</span>` : '<span class="badge badge-green">Clear</span>'}
             </div>
           </div>
-          <div class="grid grid-cols-3 gap-3">
-            <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(s.leads)}</div></div>
-            <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(s.booked)}</div></div>
-            <div><div class="text-dark-400 text-[10px] uppercase">Avg CPA</div><div class="text-white font-semibold">${fmtDollar(s.avgCPA,2)}</div></div>
+          <div class="grid grid-cols-4 gap-3 pt-3 border-t border-white/5">
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-lg mt-0.5">${fmt(s.leads)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Booked</div><div class="text-emerald-400 font-bold text-lg mt-0.5">${fmt(s.booked)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Spent</div><div class="text-white font-bold text-lg mt-0.5">${fmtDollar(s.spent,0)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPA</div><div class="${textColors[m]||'text-white'} font-bold text-lg mt-0.5">${fmtDollar(s.avgCPA,2)}</div></div>
           </div>
         </div>`;
       }).join('')}
     </div>
 
     <!-- Pod Comparison -->
-    <div class="grid grid-cols-2 gap-4 mb-6">
-      <div class="glass rounded-xl p-5">
+    <div class="section-title mb-4">Pod Overview</div>
+    <div class="grid grid-cols-2 gap-4 mb-8">
+      ${[[p2,'Pod 2','Pod 2 - RoofIgnite','amber'],[p1,'Pod 1','Pod 1 - RoofIgnite','cyan']].map(([p, label, key, accent]) => `
+      <div class="glass rounded-2xl p-5 transition-all hover:border-${accent === 'amber' ? 'brand' : 'cyan'}-500/20">
         <div class="flex items-center justify-between mb-4">
-          <div><h3 class="text-white font-semibold">Pod 2</h3><p class="text-dark-400 text-xs">${p2.count} active</p></div>
-          <button onclick="navigate('pod','Pod 2 - RoofIgnite')" class="text-brand-400 text-xs hover:text-brand-300">View All →</button>
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-${accent}-500/10 flex items-center justify-center text-sm font-bold text-${accent}-400 border border-${accent}-500/15">${label.slice(-1)}</div>
+            <div><h3 class="text-white font-bold">${label}</h3><p class="text-dark-400 text-xs">${p.count} active accounts</p></div>
+          </div>
+          <button onclick="navigate('pod','${key}')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-all">View All →</button>
         </div>
-        <div class="grid grid-cols-3 gap-3">
-          <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p2.leads)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p2.booked)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPA</div><div class="text-white font-semibold">${fmtDollar(p2.avgCPA,2)}</div></div>
+        <div class="grid grid-cols-4 gap-3 pt-3 border-t border-white/5">
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-lg mt-0.5">${fmt(p.leads)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Booked</div><div class="text-emerald-400 font-bold text-lg mt-0.5">${fmt(p.booked)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Spent</div><div class="text-white font-bold text-lg mt-0.5">${fmtDollar(p.spent,0)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPA</div><div class="text-${accent}-400 font-bold text-lg mt-0.5">${fmtDollar(p.avgCPA,2)}</div></div>
         </div>
-      </div>
-      <div class="glass rounded-xl p-5">
-        <div class="flex items-center justify-between mb-4">
-          <div><h3 class="text-white font-semibold">Pod 1</h3><p class="text-dark-400 text-xs">${p1.count} active</p></div>
-          <button onclick="navigate('pod','Pod 1 - RoofIgnite')" class="text-brand-400 text-xs hover:text-brand-300">View All →</button>
-        </div>
-        <div class="grid grid-cols-3 gap-3">
-          <div><div class="text-dark-400 text-[10px] uppercase">Leads</div><div class="text-white font-semibold">${fmt(p1.leads)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Booked</div><div class="text-white font-semibold">${fmt(p1.booked)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase">Avg CPA</div><div class="text-white font-semibold">${fmtDollar(p1.avgCPA,2)}</div></div>
-        </div>
-      </div>
+      </div>`).join('')}
     </div>
 
     <!-- Health Scorecard -->
-    <div class="glass rounded-xl p-5 mb-6">
-      <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
-        <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-        Account Health Scores
-        <span class="text-dark-400 text-xs font-normal ml-2">On-Track (40%) · CPA vs Goal (25%) · Trend (15%) · Lead Flow (15%) · Pacing (5%)</span>
-      </h3>
+    <div class="glass rounded-2xl p-5 mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <div class="section-title">Account Health Scores</div>
+        <div class="text-dark-400 text-[10px] tracking-wide flex items-center gap-4">
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span>80+</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-yellow-400"></span>60–79</span>
+          <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-red-400"></span>&lt;60</span>
+        </div>
+      </div>
       <div class="flex flex-wrap gap-2 health-scroll" id="health-scoreboard"></div>
     </div>
 
     <!-- Attention Required (detailed watchlist) -->
-    <div class="glass rounded-xl p-5 mb-6" style="border: 1px solid rgba(239,68,68,0.25);">
-      <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-red-500 pulse"></span>
-        Attention Required
-        <span class="text-dark-400 text-xs font-normal ml-2" id="alert-count-label"></span>
-      </h3>
+    <div class="glass rounded-2xl p-5 mb-8" style="border: 1px solid rgba(239,68,68,0.18); background: linear-gradient(135deg, rgba(239,68,68,0.03), rgba(15,23,42,0.8));">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 pulse"></span>
+          </div>
+          <div>
+            <h3 class="text-white font-bold">Attention Required</h3>
+            <span class="text-dark-400 text-xs" id="alert-count-label"></span>
+          </div>
+        </div>
+      </div>
       <div id="attention-table-wrap"></div>
     </div>
 
     <!-- Top Performers + Needs Attention -->
-    <div class="grid grid-cols-2 gap-4 mb-6">
-      <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-500"></span> On Track</h3>
-        <div class="space-y-2" id="top-performers"></div>
+    <div class="grid grid-cols-2 gap-4 mb-8">
+      <div class="glass rounded-2xl p-5" style="border: 1px solid rgba(34,197,94,0.12);">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
+          <h3 class="text-white font-bold">On Track</h3>
+        </div>
+        <div class="space-y-1" id="top-performers"></div>
       </div>
-      <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500"></span> Needs Attention</h3>
-        <div class="space-y-2" id="needs-attention"></div>
+      <div class="glass rounded-2xl p-5" style="border: 1px solid rgba(239,68,68,0.12);">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div>
+          <h3 class="text-white font-bold">Needs Attention</h3>
+        </div>
+        <div class="space-y-1" id="needs-attention"></div>
       </div>
     </div>
 
+    <!-- Distribution Charts -->
+    <div class="section-title mb-4">Portfolio Analytics</div>
     <div class="grid grid-cols-2 gap-4">
-      <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">CPA Distribution (Active Cycle)</h3>
+      <div class="glass rounded-2xl p-5">
+        <h3 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-brand-400"></div>
+          CPA Distribution
+        </h3>
         <div class="chart-container"><canvas id="chart-cpa-dist"></canvas></div>
       </div>
-      <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">OSA Rate by Account</h3>
+      <div class="glass rounded-2xl p-5">
+        <h3 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+          OSA Rate by Account
+        </h3>
         <div class="chart-container"><canvas id="chart-osa"></canvas></div>
       </div>
     </div>
@@ -1681,12 +1999,14 @@ function renderCPADistChart() {
     data: {
       labels: data.map(d => d.name.length > 15 ? d.name.substring(0,15)+'...' : d.name),
       datasets: [{ label: 'CPA', data: data.map(d => d.cpa),
-        backgroundColor: data.map(d => d.goal && d.cpa > d.goal ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)'), borderRadius: 4 }]
+        backgroundColor: data.map(d => d.goal && d.cpa > d.goal ? 'rgba(239,68,68,0.5)' : 'rgba(34,197,94,0.5)'),
+        borderColor: data.map(d => d.goal && d.cpa > d.goal ? 'rgba(239,68,68,0.8)' : 'rgba(34,197,94,0.8)'),
+        borderWidth: 1, borderRadius: 6, borderSkipped: false }]
     },
     options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: '#64748b', callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.1)' } } }
+      plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: 'rgba(148,163,184,0.15)', borderWidth: 1, cornerRadius: 8, padding: 10 } },
+      scales: { x: { ticks: { color: '#64748b', font: { size: 9, family: 'Inter' } }, grid: { display: false } },
+        y: { ticks: { color: '#64748b', font: { family: 'Inter' }, callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.06)' } } }
     }
   });
 }
@@ -1705,12 +2025,17 @@ function renderOSAChart() {
     data: {
       labels: data.map(d => d.name.length > 15 ? d.name.substring(0,15)+'...' : d.name),
       datasets: [{ label: 'OSA %', data: data.map(d => d.osa),
-        backgroundColor: data.map(d => d.osa < 20 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)'), borderRadius: 4 }]
+        backgroundColor: data.map(d => d.osa < 20 ? 'rgba(34,197,94,0.55)' : d.osa < 25 ? 'rgba(250,204,21,0.55)' : 'rgba(239,68,68,0.55)'),
+        borderColor: data.map(d => d.osa < 20 ? 'rgba(34,197,94,0.8)' : d.osa < 25 ? 'rgba(250,204,21,0.8)' : 'rgba(239,68,68,0.8)'),
+        borderWidth: 1, borderRadius: 6, borderSkipped: false }]
     },
     options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-      plugins: { legend: { display: false } },
-      scales: { x: { ticks: { color: '#64748b', callback: v => v+'%' }, grid: { color: 'rgba(100,116,139,0.1)' } },
-        y: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } } }
+      plugins: { legend: { display: false },
+        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', titleColor: '#f1f5f9', bodyColor: '#cbd5e1', borderColor: 'rgba(100,116,139,0.2)', borderWidth: 1, cornerRadius: 8, padding: 10,
+          titleFont: { family: 'Inter', weight: '600' }, bodyFont: { family: 'Inter' },
+          callbacks: { label: tip => `OSA: ${tip.raw.toFixed(1)}%` } } },
+      scales: { x: { ticks: { color: '#64748b', callback: v => v+'%' }, grid: { color: 'rgba(100,116,139,0.06)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10, family: 'Inter' } }, grid: { display: false } } }
     }
   });
 }
@@ -1727,21 +2052,28 @@ function renderManagerView(mgrName) {
   const inactive = accounts.filter(a => !hasActiveCycle(a));
   const alerts = getAlertAccountsForManager(mgrName);
 
+  const initColors = {Cole:'from-blue-400 to-blue-600',Jonathan:'from-emerald-400 to-emerald-600',Tyler:'from-purple-400 to-purple-600'};
   el.innerHTML = `
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-white">${mgrName}</h1>
-      <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${inactive.length} inactive</p>
+    <div class="mb-8 fade-in">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br ${initColors[mgrName]||'from-slate-400 to-slate-600'} flex items-center justify-center text-xl font-bold text-white shadow-lg">${mgrName.charAt(0)}</div>
+        <div>
+          <h1 class="text-2xl font-extrabold text-white">${mgrName}</h1>
+          <p class="text-dark-300 text-sm mt-1">${active.length} active accounts · ${inactive.length} inactive</p>
+        </div>
+      </div>
     </div>
 
     ${alerts.length > 0 ? `
-    <div class="glass rounded-xl p-5 mb-6 border-red-500/20">
-      <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
-        <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-        Alerts & Flags <span class="badge badge-red ml-2">${alerts.length}</span>
-      </h3>
+    <div class="glass rounded-2xl p-5 mb-6" style="border:1px solid rgba(239,68,68,0.18);background:linear-gradient(135deg,rgba(239,68,68,0.03),rgba(15,23,42,0.8));">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center"><span class="w-2 h-2 rounded-full bg-red-500 pulse"></span></div>
+        <h3 class="text-white font-bold">Alerts & Flags</h3>
+        <span class="badge badge-red">${alerts.length}</span>
+      </div>
       <div class="space-y-2">
         ${alerts.map(a => `
-          <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer bg-dark-800/50" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
+          <div class="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-dark-700/50 cursor-pointer transition-all" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
             <div class="flex items-center gap-3">
               <div class="text-white font-medium text-sm">${a.account.name}</div>
               <span class="badge badge-blue text-[10px]">${a.active.cycle}</span>
@@ -1753,10 +2085,10 @@ function renderManagerView(mgrName) {
         `).join('')}
       </div>
     </div>` : `
-    <div class="glass rounded-xl p-4 mb-6 border-green-500/20">
-      <div class="flex items-center gap-2 text-green-400 text-sm">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-        All accounts within KPI targets
+    <div class="glass rounded-2xl p-4 mb-6" style="border:1px solid rgba(34,197,94,0.15);">
+      <div class="flex items-center gap-3 text-green-400">
+        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
+        <span class="text-sm font-medium">All accounts within KPI targets</span>
       </div>
     </div>`}
 
@@ -1776,10 +2108,17 @@ function renderPodView(podName) {
   const inactive = accounts.filter(a => !hasActiveCycle(a));
   const podLabel = podName.replace(' - RoofIgnite', '');
 
+  const podNum = podLabel.replace(/[^0-9]/g,'');
+  const podAccent = podNum === '2' ? 'amber' : 'cyan';
   el.innerHTML = `
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-white">${podLabel}</h1>
-      <p class="text-dark-300 text-sm mt-1">${active.length} active accounts, ${inactive.length} inactive</p>
+    <div class="mb-8 fade-in">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-${podAccent}-500/10 flex items-center justify-center text-xl font-bold text-${podAccent}-400 border border-${podAccent}-500/15">${podNum || '?'}</div>
+        <div>
+          <h1 class="text-2xl font-extrabold text-white">${podLabel}</h1>
+          <p class="text-dark-300 text-sm mt-1">${active.length} active accounts · ${inactive.length} inactive</p>
+        </div>
+      </div>
     </div>
     ${renderAccountTable(active, inactive)}
   `;
@@ -1787,11 +2126,11 @@ function renderPodView(podName) {
 
 function renderAccountTable(active, inactive, mgrName) {
   return `
-    <div class="glass rounded-xl overflow-hidden">
+    <div class="glass rounded-2xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b border-dark-600 text-dark-400 text-xs uppercase tracking-wider">
+            <tr class="border-b border-dark-600 text-dark-400 text-[10px] uppercase tracking-wider" style="background:rgba(15,23,42,0.5);">
               <th class="text-center py-3 px-3 font-medium">HP</th>
               <th class="text-left py-3 px-3 font-medium">Account</th>
               <th class="text-left py-3 px-3 font-medium">Cycle</th>
@@ -1881,58 +2220,63 @@ function renderAccountDetail(name, adAccountId) {
   const isActive = hasActiveCycle(acct);
 
   el.innerHTML = `
-    <div class="mb-6">
-      <button onclick="navigate(currentManager ? 'manager' : currentPod ? 'pod' : 'dashboard', currentManager || currentPod)" class="back-btn mb-3">
+    <div class="mb-8 fade-in">
+      <button onclick="navigate(currentManager ? 'manager' : currentPod ? 'pod' : 'dashboard', currentManager || currentPod)" class="back-btn mb-4">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
       </button>
-      <div class="flex items-center gap-3">
-        <h1 class="text-2xl font-bold text-white">${acct.name}</h1>
-        ${isActive ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}
-        ${activeCyc ? onTrackBadge(activeCyc) : ''}
+      <div class="flex items-center gap-4">
+        ${(() => {
+          const hs = getHealthScore(acct, activeCyc);
+          if (hs === null) return '<div class="w-14 h-14 rounded-2xl bg-dark-700/50 flex items-center justify-center text-dark-500 text-lg font-bold border border-dark-600">—</div>';
+          const hc = healthScoreColor(hs);
+          return '<div class="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-extrabold shadow-lg" style="background:'+hc.bg+';color:'+hc.text+';border:2px solid '+hc.text+'22;">'+hs+'</div>';
+        })()}
+        <div>
+          <div class="flex items-center gap-3">
+            <h1 class="text-2xl font-extrabold text-white">${acct.name}</h1>
+            ${isActive ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}
+            ${activeCyc ? onTrackBadge(activeCyc) : ''}
+          </div>
+          <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} · Manager: ${acct.manager} · Ad Account: ${acct.adAccountId || 'N/A'}</p>
+        </div>
       </div>
-      <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} · Manager: ${acct.manager} · Ad Account: ${acct.adAccountId}${(() => {
-        const hs = getHealthScore(acct, activeCyc);
-        if (hs === null) return '';
-        const hc = healthScoreColor(hs);
-        return ` · <span style="color:${hc.text};font-weight:600;">Health: ${hs}/100</span>`;
-      })()}</p>
     </div>
 
     ${activeCyc ? `
     <div class="grid gap-3 mb-6 kpi-grid-7" style="grid-template-columns: repeat(7, 1fr);">
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Total Leads</div>
-        <div class="text-xl font-bold text-white mt-1">${fmt(activeCyc.totalLeads)}</div>
+      <div class="glass rounded-2xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Total Leads</div>
+        <div class="text-xl font-extrabold text-white mt-1">${fmt(activeCyc.totalLeads)}</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Booked Appts</div>
-        <div class="text-xl font-bold text-green-400 mt-1">${fmt(activeCyc.bookedAppts)}</div>
-        <div class="text-xs text-dark-400">Goal: ${fmt(activeCyc.bookedGoal)}</div>
+      <div class="glass rounded-2xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Booked Appts</div>
+        <div class="text-xl font-extrabold text-emerald-400 mt-1">${fmt(activeCyc.bookedAppts)}</div>
+        <div class="text-xs text-dark-400 mt-0.5">Goal: ${fmt(activeCyc.bookedGoal)}</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">OSA Rate</div>
-        <div class="text-xl font-bold ${osaColor(activeCyc.osaPct)} mt-1">${fmtPct(activeCyc.osaPct)}</div>
-        <div class="text-xs text-dark-400">target &lt;20%</div>
+      <div class="glass rounded-2xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">OSA Rate</div>
+        <div class="text-xl font-extrabold ${osaColor(activeCyc.osaPct)} mt-1">${fmtPct(activeCyc.osaPct)}</div>
+        <div class="text-xs text-dark-400 mt-0.5">target &lt;20%</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Est. Booked</div>
-        <div class="text-xl font-bold ${isOnTrack(activeCyc) === true ? 'metric-good' : isOnTrack(activeCyc) === false ? 'metric-bad' : 'text-white'} mt-1">${fmt(activeCyc.estBookedAppts)}</div>
-        <div class="text-xs text-dark-400">80% = ${activeCyc.bookedGoal ? fmt(Math.ceil(activeCyc.bookedGoal * 0.8)) : '—'}</div>
+      <div class="glass rounded-2xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Est. Booked</div>
+        <div class="text-xl font-extrabold ${isOnTrack(activeCyc) === true ? 'metric-good' : isOnTrack(activeCyc) === false ? 'metric-bad' : 'text-white'} mt-1">${fmt(activeCyc.estBookedAppts)}</div>
+        <div class="text-xs text-dark-400 mt-0.5">80% = ${activeCyc.bookedGoal ? fmt(Math.ceil(activeCyc.bookedGoal * 0.8)) : '—'}</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">CPA</div>
-        <div class="text-xl font-bold ${cpaColor(activeCyc.cpa, cpaGoal)} mt-1">${fmtDollar(activeCyc.cpa,2)}</div>
-        <div class="text-xs text-dark-400">Goal: ${fmtDollar(cpaGoal,2)}</div>
+      <div class="glass rounded-2xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">CPA</div>
+        <div class="text-xl font-extrabold ${cpaColor(activeCyc.cpa, cpaGoal)} mt-1">${fmtDollar(activeCyc.cpa,2)}</div>
+        <div class="text-xs text-dark-400 mt-0.5">Goal: ${fmtDollar(cpaGoal,2)}</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Amount Spent</div>
-        <div class="text-xl font-bold text-white mt-1">${fmtDollar(activeCyc.amountSpent,2)}</div>
-        <div class="text-xs text-dark-400">Active Budget: ${fmtDollar(activeCyc.monthlyBudget || acct.monthlyBudget)}</div>
+      <div class="glass rounded-2xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Amount Spent</div>
+        <div class="text-xl font-extrabold text-white mt-1">${fmtDollar(activeCyc.amountSpent,2)}</div>
+        <div class="text-xs text-dark-400 mt-0.5">Budget: ${fmtDollar(activeCyc.monthlyBudget || acct.monthlyBudget)}</div>
       </div>
-      <div class="glass rounded-xl p-4 kpi-card">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider">Frequency</div>
-        <div class="text-xl font-bold ${freqColor(activeCyc.frequency)} mt-1">${activeCyc.frequency ? activeCyc.frequency.toFixed(2) : '—'}</div>
-        <div class="text-xs text-dark-400">Target: ≤ 2.50</div>
+      <div class="glass rounded-2xl p-4 kpi-card">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Frequency</div>
+        <div class="text-xl font-extrabold ${freqColor(activeCyc.frequency)} mt-1">${activeCyc.frequency ? activeCyc.frequency.toFixed(2) : '—'}</div>
+        <div class="text-xs text-dark-400 mt-0.5">Target: ≤ 2.50</div>
       </div>
     </div>
     <!-- Booking Pacing + L2B Rate + Greg CPL -->
@@ -2002,9 +2346,12 @@ function renderAccountDetail(name, adAccountId) {
       const cancelled = cycleLeads.filter(l => isCancelledStatus(l.status)).length;
       const open = cycleLeads.filter(l => isOpenStatus(l.status)).length;
       const bkRate = total > 0 ? (booked/total*100).toFixed(1) : '0';
-      return `<div class="glass rounded-xl p-4 mb-6">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-3">Conversion Funnel — Active Cycle</div>
-        <div class="space-y-2">
+      return `<div class="glass rounded-2xl p-5 mb-6">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg></div>
+          <span class="text-dark-300 text-xs font-semibold uppercase tracking-wider">Conversion Funnel — Active Cycle</span>
+        </div>
+        <div class="space-y-2.5">
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="text-dark-200">Total Leads</span><span class="text-white font-semibold">${total}</span></div><div class="funnel-bar" style="width:100%;background:rgba(59,130,246,0.3);color:#93c5fd;">100%</div></div>
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-booked">Booked</span><span class="text-white font-semibold">${booked}</span></div><div class="funnel-bar" style="width:${Math.max(5,booked/total*100)}%;background:rgba(34,197,94,0.3);color:#86efac;">${bkRate}%</div></div>
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-client">Other</span><span class="text-white font-semibold">${client}</span></div><div class="funnel-bar" style="width:${Math.max(3,client/total*100)}%;background:rgba(251,191,36,0.2);color:#fde68a;">${(client/total*100).toFixed(1)}%</div></div>
@@ -2017,21 +2364,21 @@ function renderAccountDetail(name, adAccountId) {
 
     <!-- Trend Charts -->
     <div class="grid grid-cols-2 gap-4 mb-6">
-      <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">CPA Trend</h3>
+      <div class="glass rounded-2xl p-5">
+        <h3 class="text-white font-bold text-sm mb-3 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-brand-400"></div>CPA Trend</h3>
         <div class="chart-container"><canvas id="chart-acct-cpa"></canvas></div>
       </div>
-      <div class="glass rounded-xl p-5">
-        <h3 class="text-white font-semibold mb-3">Leads & Bookings</h3>
+      <div class="glass rounded-2xl p-5">
+        <h3 class="text-white font-bold text-sm mb-3 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-emerald-400"></div>Leads & Bookings</h3>
         <div class="chart-container"><canvas id="chart-acct-leads"></canvas></div>
       </div>
     </div>
 
     <!-- Meta Ad Performance -->
-    <div class="glass rounded-xl p-5 mb-6" id="meta-daily-section">
-      <div class="flex items-center justify-between mb-3">
+    <div class="glass rounded-2xl p-5 mb-6" id="meta-daily-section">
+      <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-          <h3 class="text-white font-semibold">Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
+          <h3 class="text-white font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-blue-400"></div>Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
           ${META_ACCESS_TOKEN && adId && cycles.length > 0 ? `
           <select id="meta-cycle-select" onchange="switchMetaCycle()" class="text-xs bg-dark-700 border border-dark-600 text-dark-200 rounded px-2 py-1 appearance-none pr-7 cursor-pointer" style="min-width:180px;">
             ${(() => {
@@ -2073,8 +2420,8 @@ function renderAccountDetail(name, adAccountId) {
     <div id="lead-breakdown" class="mb-6"></div>
 
     <!-- Full Cycle History Table -->
-    <div class="glass rounded-xl overflow-hidden">
-      <div class="p-4 border-b border-dark-600"><h3 class="text-white font-semibold">Cycle History</h3></div>
+    <div class="glass rounded-2xl overflow-hidden">
+      <div class="p-5 border-b border-dark-600"><h3 class="text-white font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-indigo-400"></div>Cycle History</h3></div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
@@ -2343,14 +2690,17 @@ function renderAccountCPAChart(cycles, goalCPA) {
     data: {
       labels,
       datasets: [
-        { label: 'CPA', data: cycles.map(c => c.cpa), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.1)', fill: true, tension: 0.3, pointRadius: 4, pointBackgroundColor: '#f97316' },
-        ...(goalCPA ? [{ label: 'Goal', data: cycles.map(() => goalCPA), borderColor: 'rgba(148,163,184,0.4)', borderDash: [5,5], pointRadius: 0, fill: false }] : [])
+        { label: 'CPA', data: cycles.map(c => c.cpa), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.08)', fill: true, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: '#f97316', pointBorderColor: '#1e293b', pointBorderWidth: 2, borderWidth: 2.5 },
+        ...(goalCPA ? [{ label: 'Goal', data: cycles.map(() => goalCPA), borderColor: 'rgba(148,163,184,0.35)', borderDash: [6,4], pointRadius: 0, fill: false, borderWidth: 1.5 }] : [])
       ]
     },
     options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10 } } } },
-      scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: '#64748b', callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.1)' } } }
+      plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10, family: 'Inter' }, usePointStyle: true, pointStyle: 'circle', padding: 16 } },
+        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', titleColor: '#f1f5f9', bodyColor: '#cbd5e1', borderColor: 'rgba(100,116,139,0.2)', borderWidth: 1, cornerRadius: 8, padding: 10,
+          titleFont: { family: 'Inter', weight: '600' }, bodyFont: { family: 'Inter' },
+          callbacks: { label: tip => `${tip.dataset.label}: $${tip.raw.toFixed(2)}` } } },
+      scales: { x: { ticks: { color: '#64748b', font: { size: 9, family: 'Inter' } }, grid: { display: false } },
+        y: { ticks: { color: '#64748b', callback: v => '$'+v }, grid: { color: 'rgba(100,116,139,0.06)' } } }
     }
   });
 }
@@ -2364,14 +2714,16 @@ function renderAccountLeadsChart(cycles) {
     data: {
       labels,
       datasets: [
-        { label: 'Total Leads', data: cycles.map(c => c.totalLeads), backgroundColor: 'rgba(59,130,246,0.5)', borderRadius: 4 },
-        { label: 'Booked', data: cycles.map(c => c.bookedAppts), backgroundColor: 'rgba(34,197,94,0.5)', borderRadius: 4 }
+        { label: 'Total Leads', data: cycles.map(c => c.totalLeads), backgroundColor: 'rgba(59,130,246,0.5)', borderColor: 'rgba(59,130,246,0.7)', borderWidth: 1, borderRadius: 6, borderSkipped: false },
+        { label: 'Booked', data: cycles.map(c => c.bookedAppts), backgroundColor: 'rgba(34,197,94,0.5)', borderColor: 'rgba(34,197,94,0.7)', borderWidth: 1, borderRadius: 6, borderSkipped: false }
       ]
     },
     options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10 } } } },
-      scales: { x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { display: false } },
-        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(100,116,139,0.1)' } } }
+      plugins: { legend: { display: true, labels: { color: '#94a3b8', font: { size: 10, family: 'Inter' }, usePointStyle: true, pointStyle: 'rect', padding: 16 } },
+        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', titleColor: '#f1f5f9', bodyColor: '#cbd5e1', borderColor: 'rgba(100,116,139,0.2)', borderWidth: 1, cornerRadius: 8, padding: 10,
+          titleFont: { family: 'Inter', weight: '600' }, bodyFont: { family: 'Inter' } } },
+      scales: { x: { ticks: { color: '#64748b', font: { size: 9, family: 'Inter' } }, grid: { display: false } },
+        y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(100,116,139,0.06)' } } }
     }
   });
 }
@@ -2687,20 +3039,23 @@ function renderMetaDailyChart(metric) {
       labels,
       datasets: [{
         label: 'Spend', data: sourceData.map(d => d.spend),
-        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)',
-        borderWidth: 2, pointRadius: pointSize, pointHoverRadius: 6,
-        fill: true, tension: 0.3
+        borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.06)',
+        borderWidth: 2.5, pointRadius: pointSize, pointHoverRadius: 7,
+        pointBackgroundColor: '#3b82f6', pointBorderColor: '#1e293b', pointBorderWidth: 2,
+        fill: true, tension: 0.4
       }]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (tip) => `Spend: $${tip.raw.toFixed(2)}` } }
+        tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', titleColor: '#f1f5f9', bodyColor: '#cbd5e1', borderColor: 'rgba(100,116,139,0.2)', borderWidth: 1, cornerRadius: 8, padding: 10,
+          titleFont: { family: 'Inter', weight: '600' }, bodyFont: { family: 'Inter' },
+          callbacks: { label: (tip) => `Spend: $${tip.raw.toFixed(2)}` } }
       },
       scales: {
-        x: { ticks: { color: '#64748b', font: { size: 9 }, maxRotation: 45 }, grid: { display: false } },
-        y: { ticks: { color: '#64748b', callback: (v) => '$' + (v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)) }, grid: { color: 'rgba(100,116,139,0.1)' } }
+        x: { ticks: { color: '#64748b', font: { size: 9, family: 'Inter' }, maxRotation: 45 }, grid: { display: false } },
+        y: { ticks: { color: '#64748b', callback: (v) => '$' + (v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toFixed(0)) }, grid: { color: 'rgba(100,116,139,0.06)' } }
       }
     }
   });
@@ -2795,23 +3150,64 @@ function renderBilling() {
   }
 
   el.innerHTML = `
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold text-white">Billing Tracker</h1>
-      <p class="text-dark-300 text-sm mt-1">Cycle-based billing status</p>
+    <div class="mb-8 fade-in">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center border border-emerald-500/15">
+          <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-2xl font-extrabold text-white">Billing Tracker</h1>
+          <p class="text-dark-300 text-sm mt-1">Cycle-based billing status across all accounts</p>
+        </div>
+      </div>
     </div>
-    <div class="grid grid-cols-5 gap-4 mb-6">
-      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Overdue</div><div class="text-2xl font-bold text-red-400">${overdue.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalOverdue)}</div></div>
-      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Ready to Bill</div><div class="text-2xl font-bold text-yellow-400">${readyToBill.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalReady)}</div></div>
-      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Due Soon</div><div class="text-2xl font-bold text-orange-400">${dueSoon.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalDueSoon)}</div></div>
-      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Billed</div><div class="text-2xl font-bold text-green-400">${billed.length}</div><div class="text-xs text-dark-400">${fmtDollar(totalBilled)}</div></div>
-      <div class="glass rounded-xl p-4 kpi-card"><div class="text-dark-400 text-xs uppercase">Total Cycles</div><div class="text-2xl font-bold text-white">${billingData.length}</div></div>
+    <div class="grid grid-cols-5 gap-4 mb-8">
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-1" style="opacity:0;${overdue.length > 0 ? 'border-color:rgba(239,68,68,0.2);' : ''}">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Overdue</div>
+          <div class="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        </div>
+        <div class="text-2xl font-extrabold text-red-400">${overdue.length}</div>
+        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalOverdue)}</div>
+      </div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-2" style="opacity:0">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Ready to Bill</div>
+          <div class="w-7 h-7 rounded-lg bg-yellow-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        </div>
+        <div class="text-2xl font-extrabold text-yellow-400">${readyToBill.length}</div>
+        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalReady)}</div>
+      </div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-3" style="opacity:0">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Due Soon</div>
+          <div class="w-7 h-7 rounded-lg bg-brand-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        </div>
+        <div class="text-2xl font-extrabold text-brand-400">${dueSoon.length}</div>
+        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalDueSoon)}</div>
+      </div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-4" style="opacity:0">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Billed</div>
+          <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
+        </div>
+        <div class="text-2xl font-extrabold text-emerald-400">${billed.length}</div>
+        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalBilled)}</div>
+      </div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-5" style="opacity:0">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Total Cycles</div>
+          <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></div>
+        </div>
+        <div class="text-2xl font-extrabold text-white">${billingData.length}</div>
+      </div>
     </div>
 
     ${overdue.length ? `
-    <div class="glass rounded-xl overflow-hidden mb-4 border border-red-500/30">
-      <div class="p-4 border-b border-dark-600 flex items-center gap-2 bg-red-500/10">
+    <div class="glass rounded-2xl overflow-hidden mb-4 border border-red-500/20" style="background:linear-gradient(135deg,rgba(239,68,68,0.03),rgba(15,23,42,0.8));">
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-        <h3 class="text-red-400 font-semibold">Overdue — Cycle Ended, Not Billed (${overdue.length})</h3>
+        <h3 class="text-red-400 font-bold">Overdue — Cycle Ended, Not Billed (${overdue.length})</h3>
       </div>
       ${sectionTable(overdue, b => billingRow(b,
         b.isRetry
@@ -2821,10 +3217,10 @@ function renderBilling() {
     </div>` : ''}
 
     ${dueSoon.length ? `
-    <div class="glass rounded-xl overflow-hidden mb-4 border border-orange-500/30">
-      <div class="p-4 border-b border-dark-600 flex items-center gap-2 bg-orange-500/10">
+    <div class="glass rounded-2xl overflow-hidden mb-4 border border-orange-500/15">
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-orange-500"></span>
-        <h3 class="text-orange-400 font-semibold">Billing Due Soon — Within 7 Days (${dueSoon.length})</h3>
+        <h3 class="text-orange-400 font-bold">Billing Due Soon — Within 7 Days (${dueSoon.length})</h3>
       </div>
       ${sectionTable(dueSoon, b => billingRow(b,
         '<span class="text-orange-400 text-xs font-medium">' + daysUntil(b.cycleEndDate) + '</span>'
@@ -2832,10 +3228,10 @@ function renderBilling() {
     </div>` : ''}
 
     ${readyToBill.length ? `
-    <div class="glass rounded-xl overflow-hidden mb-4">
+    <div class="glass rounded-2xl overflow-hidden mb-4">
       <div class="p-4 border-b border-dark-600 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-yellow-500"></span>
-        <h3 class="text-yellow-400 font-semibold">Ready to Bill (${readyToBill.length})</h3>
+        <h3 class="text-yellow-400 font-bold">Ready to Bill (${readyToBill.length})</h3>
       </div>
       ${sectionTable(readyToBill, b => billingRow(b,
         '<span class="badge" style="background:rgba(250,204,21,0.15);color:#facc15;">Ready</span>'
@@ -2843,10 +3239,10 @@ function renderBilling() {
     </div>` : ''}
 
     ${billed.length ? `
-    <div class="glass rounded-xl overflow-hidden mb-4">
+    <div class="glass rounded-2xl overflow-hidden mb-4">
       <div class="p-4 border-b border-dark-600 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-green-500"></span>
-        <h3 class="text-white font-semibold">Billed (${billed.length})</h3>
+        <h3 class="text-white font-bold">Billed (${billed.length})</h3>
       </div>
       ${sectionTable(billed, b => billingRow(b,
         '<span class="badge badge-green">Billed</span>'
