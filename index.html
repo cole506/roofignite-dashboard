@@ -1661,19 +1661,30 @@ function renderAccountDetail(name, adAccountId) {
     </div>
 
     <!-- Meta Daily Insights -->
-    ${META_ACCESS_TOKEN && adId ? `
+    ${adId ? `
     <div class="glass rounded-xl p-5 mb-6" id="meta-daily-section">
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-white font-semibold">Daily Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">via Meta API</span></h3>
+        ${META_ACCESS_TOKEN ? `
         <div class="flex gap-2" id="meta-metric-toggles">
           <button class="text-xs px-2 py-1 rounded meta-toggle active" data-metric="spend" style="background:rgba(59,130,246,0.2);color:#93c5fd;">Spend</button>
           <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="leads" style="background:rgba(100,116,139,0.15);color:#94a3b8;">Leads</button>
           <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="cpl" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CPL</button>
           <button class="text-xs px-2 py-1 rounded meta-toggle" data-metric="ctr" style="background:rgba(100,116,139,0.15);color:#94a3b8;">CTR</button>
         </div>
+        ` : ''}
       </div>
-      <div class="chart-container" style="height:220px;"><canvas id="chart-meta-daily"></canvas></div>
-      <div id="meta-daily-summary" class="mt-3 grid grid-cols-5 gap-3 text-center"></div>
+      ${META_ACCESS_TOKEN ? `
+        <div class="chart-container" style="height:220px;"><canvas id="chart-meta-daily"></canvas></div>
+        <div id="meta-daily-summary" class="mt-3 grid grid-cols-5 gap-3 text-center"></div>
+      ` : `
+        <div class="text-center py-8">
+          <div class="text-4xl mb-3">📊</div>
+          <div class="text-dark-200 font-medium mb-1">Meta API Not Connected</div>
+          <div class="text-dark-400 text-sm mb-3">Add your Meta access token to see daily spend, leads, CPL & CTR charts</div>
+          <div class="text-dark-500 text-xs font-mono bg-dark-800/50 inline-block px-3 py-1.5 rounded">Line 191: const META_ACCESS_TOKEN = 'your_token_here';</div>
+        </div>
+      `}
     </div>
     ` : ''}
 
