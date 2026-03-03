@@ -474,7 +474,8 @@ function parseSheetData(data, podName) {
 
     const cellA = row.c[0] ? (row.c[0].v || '') : '';
     const cellB = row.c[1] ? (row.c[1].v || '') : '';
-    const cellC = row.c[2] ? (row.c[2].v || '') : '';
+    const cellCraw = row.c[2] ? (row.c[2].f || row.c[2].v || '') : '';
+    const cellC = String(cellCraw).replace(/,/g, '');
 
     if (!cellA && !cellB && !cellC) continue;
 
@@ -489,9 +490,10 @@ function parseSheetData(data, podName) {
     }
 
     // Try named "ad account id" column first, then fallback to column C
-    const adIdRaw = (COL.adAccountId >= 0 && row.c[COL.adAccountId] && row.c[COL.adAccountId].v)
-      ? String(row.c[COL.adAccountId].v) : String(cellC || '');
-    const rawAdId = adIdRaw.replace(/\s/g,'').replace(/^act_/i, '');
+    // Use .f (formatted string) over .v (numeric value) to avoid JS number precision loss on 17+ digit IDs
+    const adIdCell = COL.adAccountId >= 0 && row.c[COL.adAccountId] ? row.c[COL.adAccountId] : null;
+    const adIdRaw = adIdCell ? String(adIdCell.f || adIdCell.v || '') : String(cellC || '');
+    const rawAdId = adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '');
     const hasAdAccountId = rawAdId.length > 3 && /^\d+$/.test(rawAdId);
 
     const cellBStr = String(cellB).trim();
@@ -529,6 +531,13 @@ function parseSheetData(data, podName) {
     }
 
     if (isCycleLabel && currentAccountName) {
+      // If account header didn't have ad ID, try picking it up from cycle row
+      if (!currentAdAccountId && hasAdAccountId) {
+        currentAdAccountId = rawAdId;
+        const parentAcctFix = accounts.find(a => a.name === currentAccountName && !a.adAccountId);
+        if (parentAcctFix) parentAcctFix.adAccountId = currentAdAccountId;
+        console.log(`[AdID] ${currentAccountName} (from cycle row) → ${currentAdAccountId}`);
+      }
       const rowMgr = getStr(row, 'manager');
       if (rowMgr) currentMgr = rowMgr;
 
@@ -1509,17 +1518,21 @@ function renderAccountTable(active, inactive, mgrName) {
 // RENDER: ACCOUNT DETAIL
 // ═══════════════════════════════════════════════
 function renderAccountDetail(name, adAccountId) {
+  console.log('[RenderAcct] name:', name, 'adAccountId:', JSON.stringify(adAccountId), 'type:', typeof adAccountId);
   const el = document.getElementById('view-account');
   el.classList.remove('hidden');
 
-  const acct = allAccounts.find(a => a.name === name && a.adAccountId === adAccountId);
+  // Flexible match: try exact first, then name-only fallback
+  let acct = allAccounts.find(a => a.name === name && a.adAccountId === adAccountId);
+  if (!acct) acct = allAccounts.find(a => a.name === name);
   if (!acct) { el.innerHTML = '<p class="text-dark-400">Account not found</p>'; return; }
+  console.log('[RenderAcct] Found acct:', acct.name, 'stored adAccountId:', JSON.stringify(acct.adAccountId));
 
   const cycles = acct.cycles || [];
-  const activeCyc = getActiveCycle(name, adAccountId);
+  const adId = acct.adAccountId || adAccountId || '';
+  const activeCyc = getActiveCycle(name, adId || adAccountId);
   const cpaGoal = acct.cpaGoal || (activeCyc && activeCyc.cpaGoal);
   const isActive = hasActiveCycle(acct);
-  const adId = adAccountId;
 
   el.innerHTML = `
     <div class="mb-6">
