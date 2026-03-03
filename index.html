@@ -1512,6 +1512,7 @@ function renderAccountDetail(name, adAccountId) {
   const activeCyc = getActiveCycle(name, adAccountId);
   const cpaGoal = acct.cpaGoal || (activeCyc && activeCyc.cpaGoal);
   const isActive = hasActiveCycle(acct);
+  const adId = adAccountId;
 
   el.innerHTML = `
     <div class="mb-6">
