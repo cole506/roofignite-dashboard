@@ -1797,41 +1797,6 @@ function renderAccountDetail(name, adAccountId) {
       </div>`;
     })()}
 
-    <!-- Cycle-over-Cycle Comparison -->
-    ${(() => {
-      if (!activeCyc) return '';
-      const prevCyc = getPreviousCycle(name, adAccountId, activeCyc);
-      if (!prevCyc) return '';
-      const deltas = calculateCycleDeltas(activeCyc, prevCyc);
-      if (!deltas) return '';
-      const metrics = [
-        { key: 'leads', label: 'Leads', fmt: v => fmt(v) },
-        { key: 'booked', label: 'Booked', fmt: v => fmt(v) },
-        { key: 'cpa', label: 'CPA', fmt: v => fmtDollar(v, 2) },
-        { key: 'ctr', label: 'Link CTR', fmt: v => v.toFixed(2) + '%' },
-        { key: 'frequency', label: 'Frequency', fmt: v => v.toFixed(1) },
-        { key: 'spend', label: 'Spend', fmt: v => fmtDollar(v, 0) },
-      ];
-      const cards = metrics.map(m => {
-        const d = deltas[m.key];
-        if (!d) return '';
-        const color = d.isGood ? '#22c55e' : '#ef4444';
-        const bgColor = d.isGood ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)';
-        const sign = d.pctChange > 0 ? '+' : '';
-        return `<div class="text-center p-3 rounded-lg" style="background:${bgColor};">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${m.label}</div>
-          <div class="text-white font-semibold text-sm">${m.fmt(d.current)}</div>
-          <div style="color:${color};" class="text-xs font-medium mt-1">${d.arrow} ${sign}${d.pctChange.toFixed(0)}%</div>
-          <div class="text-dark-400 text-[10px] mt-1">prev: ${m.fmt(d.previous)}</div>
-        </div>`;
-      }).filter(Boolean).join('');
-      if (!cards) return '';
-      return `<div class="glass rounded-xl p-4 mb-6">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-3">vs Previous Cycle <span class="text-dark-300">(${prevCyc.cycleStartDate || '?'} → ${prevCyc.cycleEndDate || '?'})</span></div>
-        <div class="grid grid-cols-3 md:grid-cols-6 gap-3">${cards}</div>
-      </div>`;
-    })()}
-
     <!-- Conversion Funnel -->
     ${(() => {
       const cycleLeads = activeCyc ? getLeadsForAccount(name, activeCyc.cycleStartDate, activeCyc.cycleEndDate) : [];
@@ -1965,7 +1930,7 @@ function renderAccountDetail(name, adAccountId) {
 
   // Load Meta daily insights for active cycle
   if (META_ACCESS_TOKEN && adId && activeCyc && activeCyc.cycleStartDate && activeCyc.cycleEndDate) {
-    loadMetaDailyInsights(adId, activeCyc.cycleStartDate, activeCyc.cycleEndDate, activeCyc);
+    loadMetaDailyInsights(adId, activeCyc.cycleStartDate, activeCyc.cycleEndDate, activeCyc, name);
   }
 
   renderLeadBreakdown(acct, cycles);
@@ -2197,6 +2162,7 @@ let metaDailyChart = null;
 let metaDailyData = null;
 let metaCurrentView = 'daily'; // 'daily', 'quarters', or 'full'
 let metaCurrentCycle = null; // store cycle context for CPA calc
+let metaAccountName = '';
 
 function aggregateDays(dayArray) {
   const totalSpend = dayArray.reduce((s,d)=>s+d.spend,0);
@@ -2204,6 +2170,7 @@ function aggregateDays(dayArray) {
   const totalClicks = dayArray.reduce((s,d)=>s+d.clicks,0);
   const totalImpr = dayArray.reduce((s,d)=>s+d.impressions,0);
   const totalOB = dayArray.reduce((s,d)=>s+d.outboundClicks,0);
+  const totalBookings = dayArray.reduce((s,d)=>s+(d.dailyBookings||0),0);
   return {
     days: dayArray.length,
     startDate: dayArray[0].date,
@@ -2213,22 +2180,23 @@ function aggregateDays(dayArray) {
     clicks: totalClicks,
     impressions: totalImpr,
     outboundClicks: totalOB,
+    bookings: totalBookings,
     cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
     ctr: totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0,
     linkCTR: totalImpr > 0 ? (totalOB / totalImpr) * 100 : 0,
     frequency: dayArray.reduce((s,d)=>s+d.frequency,0) / dayArray.length,
     cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
+    cpa: totalBookings > 0 ? totalSpend / totalBookings : 0,
   };
 }
 
-// Split cycle into 4 equal quarters
+// Split cycle into 4 quarters of 7 days each (28-day cycle)
 function aggregateToQuarters(dailyData) {
   if (!dailyData || !dailyData.length) return [];
-  const total = dailyData.length;
-  const qSize = Math.ceil(total / 4);
+  const qSize = 7; // 28-day cycle = 4 quarters of 7 days
   const quarters = [];
   for (let i = 0; i < 4; i++) {
-    const slice = dailyData.slice(i * qSize, Math.min((i + 1) * qSize, total));
+    const slice = dailyData.slice(i * qSize, (i + 1) * qSize);
     if (!slice.length) continue;
     const agg = aggregateDays(slice);
     agg.label = `Q${i + 1}`;
@@ -2267,13 +2235,8 @@ function metricCellClass(metric, value, cycle) {
 function renderMetaDailyTable(data, cycle) {
   const el = document.getElementById('meta-daily-table');
   if (!el || !data || !data.length) return;
-  const cpaGoal = cycle ? (cycle.cpaGoal || 0) : 0;
-  const bookedAppts = cycle ? (cycle.bookedAppts || 0) : 0;
-
   // Build rows newest first
   const rows = [...data].reverse();
-  let cumulativeSpend = data.reduce((s,d)=>s+d.spend,0);
-  let cumulativeLeads = data.reduce((s,d)=>s+d.leads,0);
 
   el.innerHTML = `
     <div class="overflow-x-auto rounded-lg border border-dark-600/50">
@@ -2298,7 +2261,8 @@ function renderMetaDailyTable(data, cycle) {
             const dt = new Date(d.date + 'T12:00:00');
             const dateStr = (dt.getMonth()+1) + '/' + dt.getDate();
             const cpl = d.leads > 0 ? d.spend / d.leads : 0;
-            const cpa = bookedAppts > 0 ? cumulativeSpend / bookedAppts : 0;
+            const dailyBookings = d.dailyBookings || 0;
+            const cpa = dailyBookings > 0 ? d.spend / dailyBookings : 0;
             const linkCPC = d.outboundClicks > 0 ? d.spend / d.outboundClicks : 0;
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
               <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${dateStr}</td>
@@ -2358,7 +2322,7 @@ function switchMetaView(view) {
   }
 }
 
-async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle) {
+async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle, accountName) {
   const section = document.getElementById('meta-daily-section');
   if (!section || !META_ACCESS_TOKEN) return;
   section.querySelector('h3').innerHTML = 'Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">Loading…</span>';
@@ -2367,10 +2331,26 @@ async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle) {
     section.querySelector('h3').innerHTML = 'Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">No data available</span>';
     return;
   }
+
+  // Enrich daily data with booking counts from lead data for accurate daily CPA
+  if (accountName) {
+    const cycleLeads = getLeadsForAccount(accountName, startDate, endDate);
+    const bookedByDate = {};
+    cycleLeads.forEach(l => {
+      if (isBookedStatus(l.status) && l.date) {
+        bookedByDate[l.date] = (bookedByDate[l.date] || 0) + 1;
+      }
+    });
+    data.forEach(d => {
+      d.dailyBookings = bookedByDate[d.date] || 0;
+    });
+  }
+
   metaDailyData = data;
   metaCurrentCycle = cycle || null;
   metaCurrentView = 'daily';
-  section.querySelector('h3').innerHTML = `Ad Performance <span class="text-dark-400 text-xs font-normal ml-2">${data.length} days via Meta API</span>`;
+  metaAccountName = accountName || '';
+  section.querySelector('h3').textContent = 'Ad Performance';
 
   renderMetaSummary(data);
   renderMetaDailyChart('spend');
@@ -2391,7 +2371,6 @@ async function loadMetaDailyInsights(adAccountId, startDate, endDate, cycle) {
 function renderMetaAggTable(aggData, cycle) {
   const el = document.getElementById('meta-daily-table');
   if (!el || !aggData || !aggData.length) return;
-  const bookedAppts = cycle ? (cycle.bookedAppts || 0) : 0;
   el.innerHTML = `
     <div class="overflow-x-auto rounded-lg border border-dark-600/50">
       <table class="w-full text-xs">
@@ -2410,7 +2389,6 @@ function renderMetaAggTable(aggData, cycle) {
         </thead>
         <tbody>
           ${aggData.map(w => {
-            const cpa = bookedAppts > 0 ? w.spend / (bookedAppts * (w.days / metaDailyData.length)) : 0;
             const dateRange = w.startDate !== w.endDate ? `<div class="text-dark-400 text-[9px]">${w.startDate.slice(5)} → ${w.endDate.slice(5)}</div>` : '';
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
             <td class="py-1.5 px-2 text-dark-200 font-medium">${w.label}${dateRange}</td>
@@ -2420,7 +2398,7 @@ function renderMetaAggTable(aggData, cycle) {
             <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', w.cpc, cycle)}">${fmtDollar(w.cpc,2)}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', w.cpa, cycle)}">${w.cpa > 0 ? fmtDollar(w.cpa,0) : '—'}</td>
             <td class="py-1.5 px-2 text-right text-dark-400">${w.days}d</td>
           </tr>`;}).join('')}
         </tbody>
