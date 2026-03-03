@@ -384,6 +384,12 @@ tailwind.config = {
         <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         <span class="font-medium">Billing Tracker</span>
       </button>
+
+      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Admin</div>
+      <button onclick="navigate('admin')" id="nav-admin" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="font-medium">Manage Clients</span>
+      </button>
     </nav>
 
     <div class="p-4 border-t border-dark-600/30">
@@ -417,6 +423,7 @@ tailwind.config = {
     <div id="view-manager" class="hidden fade-in"></div>
     <div id="view-account" class="hidden fade-in"></div>
     <div id="view-billing" class="hidden fade-in"></div>
+    <div id="view-admin" class="hidden fade-in"></div>
   </main>
 </div>
 
@@ -802,6 +809,23 @@ function parseSheetData(data, podName) {
     return vVal || fVal;
   }
 
+  // === PRE-SCAN: Identify real account names by finding cellA values that appear in cycle rows ===
+  const knownAccountNames = new Set();
+  for (let pi = 1; pi < rows.length; pi++) {
+    const pr = rows[pi];
+    if (!pr.c) continue;
+    const pA = pr.c[0] ? String(pr.c[0].v || '').trim() : '';
+    const pB = pr.c[1] ? String(pr.c[1].v || '').trim() : '';
+    const pBL = pB.toLowerCase();
+    if (pA && pB && (pBL.startsWith('cycle') || (pBL.includes('winter') && pBL.includes('cycle')))) {
+      knownAccountNames.add(pA);
+    }
+  }
+  console.log(`[${podName}] Pre-scan found ${knownAccountNames.size} account names from cycle rows:`, [...knownAccountNames]);
+
+  // Known sub-section labels that are NOT manager names
+  const knownSubSections = ['kpi','roof ignite','roofignite','roofers ignite','hvac ignite','pending','expansion','active','inactive','cign ignite','solar ignite','contractorsignite','contractors ignite','paused','pause','winter'];
+
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row.c) continue;
@@ -813,14 +837,19 @@ function parseSheetData(data, podName) {
 
     if (!cellA && !cellB && !cellC) continue;
 
-    // Section/label row: has ONLY cellA, nothing in any other column (no B, no C, no data cols)
-    // This catches manager names (Cole, Tyler), sub-headers (RoofIgnite, Pending), section labels (EXPANSION, KPI), etc.
-    if (cellA && !cellB && !cellC) {
-      const hasAnyData = row.c.slice(3).some(c => c && c.v !== null && c.v !== undefined && c.v !== '');
-      if (!hasAnyData) {
-        currentSection = cellA;
-        continue;
+    const cellATrimmed = String(cellA).trim();
+
+    // SECTION HEADER: cellA is NOT a known account name (never appears in a cycle row)
+    // This catches manager names (Cole, Tyler), sub-headers (RoofIgnite, HVAC Ignite, Pending), etc.
+    // Works even when section rows have data beyond column C (e.g. KPI targets in manager rows)
+    if (cellATrimmed && !cellB && !knownAccountNames.has(cellATrimmed)) {
+      currentSection = cellATrimmed;
+      // If it's not a known sub-section label, it's likely a manager name
+      if (!knownSubSections.includes(cellATrimmed.toLowerCase())) {
+        currentMgr = cellATrimmed;
+        console.log(`[${podName}] Manager set from section header: "${cellATrimmed}"`);
       }
+      continue;
     }
 
     // Try ALL possible sources for ad account ID, in priority order
@@ -867,9 +896,10 @@ function parseSheetData(data, podName) {
     const isPausedStatus = cellBStr && !isCycleLabel &&
       (cellBStr.toUpperCase() === 'PAUSED' || cellBStr.toUpperCase() === 'PAUSE' || cellBStr.toUpperCase() === 'WINTER');
 
-    // Account header row: has a name (cellA), no cycle label in cellB (or paused status), and is not a section
-    if (cellA && !isCycleLabel && (!cellBStr || isPausedStatus)) {
-      currentAccountName = cellA.trim();
+    // Account header row: cellA is a known account name AND this is NOT a cycle row.
+    // Handles: empty cellB (traditional header), "Q1 Onboarded", "PAUSED", or any non-cycle status label.
+    if (cellATrimmed && knownAccountNames.has(cellATrimmed) && !isCycleLabel) {
+      currentAccountName = cellATrimmed;
       currentAdAccountId = hasAdAccountId ? rawAdId : '';
       if (!hasAdAccountId && adIdRaw.trim()) console.warn(`[AdID] Could not parse ad account ID for "${currentAccountName}": raw="${adIdRaw}"`);
       if (hasAdAccountId) console.log(`[AdID] ${currentAccountName} → ${currentAdAccountId}`);
@@ -877,20 +907,29 @@ function parseSheetData(data, podName) {
       const mgr = getStr(row, 'manager');
       if (mgr) currentMgr = mgr;
 
-      accounts.push({
-        name: currentAccountName,
-        adAccountId: currentAdAccountId,
-        pod: podName,
-        section: currentSection,
-        manager: currentMgr || 'Unassigned',
-        isPaused: isPausedStatus,
-        bookedGoal:    COL.bookedGoal >= 0 ? getNum(row, COL.bookedGoal) : null,
-        gregGoal:      COL.gregGoal >= 0 ? getNum(row, COL.gregGoal) : null,
-        cpaGoal:       COL.cpaGoal >= 0 ? getNum(row, COL.cpaGoal) : null,
-        dailyBudget:   COL.dailyBudget >= 0 ? getNum(row, COL.dailyBudget) : null,
-        monthlyBudget: COL.monthlyBudget >= 0 ? getNum(row, COL.monthlyBudget) : null,
-        cycles: []
-      });
+      // Don't create duplicate account if we already have one with this name
+      const existingAcct = accounts.find(a => a.name === currentAccountName);
+      if (!existingAcct) {
+        accounts.push({
+          name: currentAccountName,
+          adAccountId: currentAdAccountId,
+          pod: podName,
+          section: currentSection,
+          manager: currentMgr || 'Unassigned',
+          isPaused: isPausedStatus,
+          status: cellBStr || '',
+          bookedGoal:    COL.bookedGoal >= 0 ? getNum(row, COL.bookedGoal) : null,
+          gregGoal:      COL.gregGoal >= 0 ? getNum(row, COL.gregGoal) : null,
+          cpaGoal:       COL.cpaGoal >= 0 ? getNum(row, COL.cpaGoal) : null,
+          dailyBudget:   COL.dailyBudget >= 0 ? getNum(row, COL.dailyBudget) : null,
+          monthlyBudget: COL.monthlyBudget >= 0 ? getNum(row, COL.monthlyBudget) : null,
+          cycles: []
+        });
+        console.log(`[Parse] Created account: "${currentAccountName}" manager="${currentMgr}" section="${currentSection}" status="${cellBStr}"`);
+      } else {
+        // Update existing account with new data if this row has better info
+        if (hasAdAccountId && !existingAcct.adAccountId) existingAcct.adAccountId = currentAdAccountId;
+      }
       continue;
     }
 
@@ -976,25 +1015,25 @@ function parseSheetData(data, podName) {
     console.warn(`[AdID-Missing] ${noAdId.length} accounts with cycles but no ad ID:`, noAdId.map(a => `${a.name} (${a.cycles.length} cycles)`));
   }
 
-  // Filter out ghost accounts — section headers/manager names that were incorrectly parsed as accounts.
-  // Real accounts always have at least one cycle row. Items with 0 cycles are section labels
-  // (e.g. "Pending", "Cole", "Tyler", "RoofIgnite", "EXPANSION", etc.) that slipped through detection.
-  const knownSectionLabels = ['pending', 'roofignite', 'roofers ignite', 'expansion', 'kpi', 'active', 'inactive'];
-  const managerNames = [...new Set(accounts.map(a => (a.manager || '').toLowerCase()).filter(Boolean))];
+  // Ghost account filter — now much simpler since the two-pass approach properly identifies sections.
+  // Only accounts from knownAccountNames can be created, so section headers are already excluded.
+  // Just filter out any 0-cycle accounts that have absolutely no data as a safety net.
   const beforeCount = accounts.length;
   const filtered = accounts.filter(a => {
-    if (a.cycles.length > 0) return true; // has cycles = real account
-    const nameLower = a.name.toLowerCase().trim();
-    // Drop if name matches a known section label or a manager name
-    if (knownSectionLabels.includes(nameLower)) return false;
-    if (managerNames.includes(nameLower)) return false;
-    // Drop any zero-cycle account with no goals, no budget, no ad ID — almost certainly a section header
-    if (!a.adAccountId && !a.bookedGoal && !a.monthlyBudget && !a.cpaGoal) return false;
-    return true;
+    if (a.cycles.length > 0) return true;
+    // Keep if account has any meaningful data (goals, budget, ad ID, or status)
+    if (a.adAccountId || a.bookedGoal || a.monthlyBudget || a.cpaGoal || a.status) return true;
+    console.log(`[Parse] Filtering ghost account: "${a.name}" (0 cycles, no data)`);
+    return false;
   });
   if (filtered.length < beforeCount) {
-    console.log(`[Parse] Filtered out ${beforeCount - filtered.length} ghost accounts (section headers with 0 cycles)`);
+    console.log(`[Parse] Filtered out ${beforeCount - filtered.length} ghost accounts`);
   }
+
+  console.log(`[${podName}] Final: ${filtered.length} accounts, ${cycles.length} cycles`);
+  const mgrDist = {};
+  filtered.forEach(a => { mgrDist[a.manager] = (mgrDist[a.manager]||0) + 1; });
+  console.log(`[${podName}] Manager distribution:`, mgrDist);
 
   return { accounts: filtered, cycles };
 }
@@ -1643,6 +1682,10 @@ function navigate(view, param) {
     case 'billing':
       document.getElementById('nav-billing').classList.add('active');
       renderBilling();
+      break;
+    case 'admin':
+      document.getElementById('nav-admin').classList.add('active');
+      renderAdminView();
       break;
   }
 
@@ -3260,6 +3303,586 @@ function renderBilling() {
 // UTILITY
 // ═══════════════════════════════════════════════
 function esc(str) { return str.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+
+// ═══════════════════════════════════════════════
+// ADMIN: CRUD — Manage Clients
+// ═══════════════════════════════════════════════
+
+// Google Apps Script Web App URL for write operations
+// Cole will need to deploy a GAS web app and paste the URL here
+let APPS_SCRIPT_URL = '';
+
+// Admin state
+let adminFilter = 'all'; // all, active, paused, manager-X
+let adminSearch = '';
+let adminEditingAccount = null; // name of account being edited
+let adminEditingCycle = null;   // {account, cycleIndex}
+let adminShowNewClient = false;
+
+function getManagers() {
+  const mgrs = new Set();
+  allAccounts.forEach(a => mgrs.add(a.manager));
+  return [...mgrs].sort();
+}
+
+function getFilteredAdminAccounts() {
+  let accts = [...allAccounts];
+  if (adminSearch) {
+    const q = adminSearch.toLowerCase();
+    accts = accts.filter(a => a.name.toLowerCase().includes(q) || a.manager.toLowerCase().includes(q) || (a.section || '').toLowerCase().includes(q));
+  }
+  if (adminFilter === 'active') accts = accts.filter(a => hasActiveCycle(a) && !a.isPaused);
+  else if (adminFilter === 'paused') accts = accts.filter(a => a.isPaused || !hasActiveCycle(a));
+  else if (adminFilter.startsWith('manager-')) {
+    const mgr = adminFilter.replace('manager-', '');
+    accts = accts.filter(a => a.manager === mgr);
+  }
+  return accts.sort((a, b) => a.manager.localeCompare(b.manager) || a.name.localeCompare(b.name));
+}
+
+function renderAdminView() {
+  const el = document.getElementById('view-admin');
+  el.classList.remove('hidden');
+
+  const managers = getManagers();
+  const accts = getFilteredAdminAccounts();
+  const hasGAS = !!APPS_SCRIPT_URL;
+
+  el.innerHTML = `
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-3xl font-extrabold text-white tracking-tight">Manage Clients</h1>
+        <p class="text-dark-300 text-sm mt-1">${allAccounts.length} total clients across ${managers.length} managers</p>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="adminShowNewClient=true;renderAdminView()" class="flex items-center gap-2 bg-gradient-to-r from-brand-500 to-brand-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:from-brand-600 hover:to-brand-700 transition-all shadow-lg shadow-brand-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+          New Client
+        </button>
+        <button onclick="refreshData()" class="flex items-center gap-2 bg-dark-700/60 text-dark-200 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-dark-600/60 border border-dark-600/50 transition-all">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    ${!hasGAS ? `
+    <div class="glass rounded-2xl p-5 mb-6 border-l-4 border-yellow-500/60">
+      <div class="flex items-start gap-3">
+        <svg class="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+        <div>
+          <p class="text-yellow-300 font-semibold text-sm">Write Access Not Configured</p>
+          <p class="text-dark-300 text-xs mt-1">Changes are saved locally until you connect a Google Apps Script. To enable write-back to your Google Sheet, deploy the Apps Script web app and paste the URL in the dashboard code.</p>
+          <button onclick="showAppsScriptSetup()" class="mt-2 text-yellow-400 hover:text-yellow-300 text-xs font-medium underline">Show Setup Instructions</button>
+        </div>
+      </div>
+    </div>` : ''}
+
+    ${adminShowNewClient ? renderNewClientForm(managers) : ''}
+
+    <!-- Filters -->
+    <div class="flex items-center gap-3 mb-6">
+      <div class="flex-1 relative">
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-dark-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text" id="admin-search" placeholder="Search clients..." value="${adminSearch}" oninput="adminSearch=this.value;renderAdminView()"
+          class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white pl-10 pr-4 py-2.5 focus:outline-none focus:border-brand-500 transition-all" />
+      </div>
+      <div class="flex gap-1.5 bg-dark-800/60 rounded-xl p-1 border border-dark-600/30">
+        ${[
+          {id:'all', label:'All'},
+          {id:'active', label:'Active'},
+          {id:'paused', label:'Paused'},
+        ].map(f => `<button onclick="adminFilter='${f.id}';renderAdminView()" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${adminFilter === f.id ? 'bg-brand-500/20 text-brand-400' : 'text-dark-300 hover:text-white'}">${f.label}</button>`).join('')}
+        ${managers.map(m => `<button onclick="adminFilter='manager-${esc(m)}';renderAdminView()" class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${adminFilter === 'manager-'+m ? 'bg-brand-500/20 text-brand-400' : 'text-dark-300 hover:text-white'}">${m}</button>`).join('')}
+      </div>
+    </div>
+
+    <!-- Client Table -->
+    <div class="glass rounded-2xl overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-dark-600/50 text-dark-300">
+            <th class="text-left px-5 py-3 font-semibold">Client</th>
+            <th class="text-left px-4 py-3 font-semibold">Manager</th>
+            <th class="text-left px-4 py-3 font-semibold">Pod</th>
+            <th class="text-center px-4 py-3 font-semibold">Cycles</th>
+            <th class="text-center px-4 py-3 font-semibold">Status</th>
+            <th class="text-center px-4 py-3 font-semibold">Greg</th>
+            <th class="text-right px-5 py-3 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${accts.map((a, idx) => {
+            const latestCycle = a.cycles.length ? a.cycles[a.cycles.length - 1] : null;
+            const gregGoal = latestCycle?.gregGoal || a.gregGoal;
+            const gregOn = gregGoal && gregGoal > 0;
+            const isActive = hasActiveCycle(a) && !a.isPaused;
+            const isEditing = adminEditingAccount === a.name;
+            return `
+          <tr class="border-b border-dark-600/20 hover:bg-dark-700/30 transition-all ${idx % 2 === 0 ? '' : 'bg-dark-800/20'}">
+            <td class="px-5 py-3">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br ${isActive ? 'from-green-500/20 to-green-600/20 border-green-500/20' : 'from-dark-500/20 to-dark-600/20 border-dark-500/20'} border flex items-center justify-center text-[10px] font-bold ${isActive ? 'text-green-400' : 'text-dark-400'}">${a.name.charAt(0)}</div>
+                <div>
+                  <button onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${esc(a.adAccountId||'')}'})" class="font-semibold text-white hover:text-brand-400 transition-colors text-left">${a.name}</button>
+                  <div class="text-[10px] text-dark-400 mt-0.5">${a.section || '—'} ${a.adAccountId ? '· act_' + a.adAccountId.slice(0,6) + '...' : ''}</div>
+                </div>
+              </div>
+            </td>
+            <td class="px-4 py-3">
+              ${isEditing ? `
+                <select id="edit-mgr-${idx}" class="bg-dark-700 border border-dark-500 rounded-lg text-xs px-2 py-1 text-white">
+                  ${managers.map(m => `<option value="${m}" ${m === a.manager ? 'selected':''}>${m}</option>`).join('')}
+                </select>
+              ` : `<span class="text-dark-200">${a.manager}</span>`}
+            </td>
+            <td class="px-4 py-3 text-dark-300 text-xs">${a.pod ? a.pod.replace(' - RoofIgnite','') : '—'}</td>
+            <td class="px-4 py-3 text-center">
+              <button onclick="adminEditingCycle={account:'${esc(a.name)}',cycleIndex:${a.cycles.length-1}};renderAdminView()" class="text-brand-400 hover:text-brand-300 font-medium text-xs">${a.cycles.length} cycle${a.cycles.length !== 1 ? 's' : ''}</button>
+            </td>
+            <td class="px-4 py-3 text-center">
+              <button onclick="toggleAccountStatus('${esc(a.name)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all ${isActive ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-dark-600/40 text-dark-400 hover:bg-dark-500/40'}">
+                <span class="w-1.5 h-1.5 rounded-full ${isActive ? 'bg-green-400' : 'bg-dark-500'}"></span>
+                ${isActive ? 'Active' : a.isPaused ? 'Paused' : 'Inactive'}
+              </button>
+            </td>
+            <td class="px-4 py-3 text-center">
+              <button onclick="toggleGreg('${esc(a.name)}')" class="relative w-10 h-5 rounded-full transition-all ${gregOn ? 'bg-brand-500' : 'bg-dark-600'}" title="${gregOn ? 'Greg ON — Goal: '+gregGoal : 'Greg OFF'}">
+                <span class="absolute top-0.5 ${gregOn ? 'right-0.5' : 'left-0.5'} w-4 h-4 bg-white rounded-full shadow transition-all"></span>
+              </button>
+            </td>
+            <td class="px-5 py-3 text-right">
+              ${isEditing ? `
+                <button onclick="saveAccountEdit('${esc(a.name)}', ${idx})" class="text-green-400 hover:text-green-300 text-xs font-medium mr-2">Save</button>
+                <button onclick="adminEditingAccount=null;renderAdminView()" class="text-dark-400 hover:text-dark-200 text-xs">Cancel</button>
+              ` : `
+                <button onclick="adminEditingAccount='${esc(a.name)}';renderAdminView()" class="text-dark-400 hover:text-brand-400 transition-colors p-1" title="Edit">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                </button>
+              `}
+            </td>
+          </tr>`;
+          }).join('')}
+          ${accts.length === 0 ? `<tr><td colspan="7" class="text-center py-10 text-dark-400">No clients match your filter</td></tr>` : ''}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Cycle Editor Modal -->
+    ${adminEditingCycle ? renderCycleEditor() : ''}
+  `;
+
+  // Restore focus to search input
+  const searchEl = document.getElementById('admin-search');
+  if (searchEl && adminSearch) { searchEl.focus(); searchEl.setSelectionRange(searchEl.value.length, searchEl.value.length); }
+}
+
+function renderNewClientForm(managers) {
+  return `
+    <div class="glass rounded-2xl p-6 mb-6 border border-brand-500/30">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+          <svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+          Add New Client
+        </h2>
+        <button onclick="adminShowNewClient=false;renderAdminView()" class="text-dark-400 hover:text-white transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Client Name *</label>
+          <input id="new-client-name" type="text" placeholder="e.g. Apex Roofing" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Account Manager *</label>
+          <select id="new-client-manager" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
+            ${managers.map(m => `<option value="${m}">${m}</option>`).join('')}
+            <option value="_new">+ New Manager</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Pod</label>
+          <select id="new-client-pod" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
+            <option value="Pod 2 - RoofIgnite">Pod 2</option>
+            <option value="Pod 1 - RoofIgnite">Pod 1</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Meta Ad Account ID</label>
+          <input id="new-client-adid" type="text" placeholder="e.g. 1234567890" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        </div>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Booked Goal</label>
+          <input id="new-client-booked-goal" type="number" placeholder="6" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Greg Goal</label>
+          <input id="new-client-greg-goal" type="number" placeholder="0 = off" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">CPA Goal ($)</label>
+          <input id="new-client-cpa-goal" type="number" placeholder="200" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Daily Budget ($)</label>
+          <input id="new-client-daily" type="number" placeholder="50" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Monthly Budget ($)</label>
+          <input id="new-client-monthly" type="number" placeholder="1500" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        </div>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button onclick="adminShowNewClient=false;renderAdminView()" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-300 hover:text-white bg-dark-700/50 hover:bg-dark-600/50 border border-dark-600/30 transition-all">Cancel</button>
+        <button onclick="createNewClient()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-lg shadow-brand-500/20 transition-all">Create Client</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderCycleEditor() {
+  const acct = allAccounts.find(a => a.name === adminEditingCycle.account);
+  if (!acct) return '';
+  const cycles = acct.cycles;
+
+  return `
+    <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onclick="if(event.target===this){adminEditingCycle=null;renderAdminView()}">
+      <div class="glass rounded-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden" onclick="event.stopPropagation()">
+        <div class="p-5 border-b border-dark-600/50 flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-white">${acct.name}</h2>
+            <p class="text-dark-300 text-xs mt-0.5">${cycles.length} cycles · Manager: ${acct.manager}</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <button onclick="addNewCycle('${esc(acct.name)}')" class="text-brand-400 hover:text-brand-300 text-xs font-semibold flex items-center gap-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+              Add Cycle
+            </button>
+            <button onclick="adminEditingCycle=null;renderAdminView()" class="text-dark-400 hover:text-white transition-colors">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="overflow-y-auto max-h-[calc(80vh-80px)] p-5">
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="text-dark-300 border-b border-dark-600/40">
+                  <th class="text-left px-3 py-2 font-semibold">Cycle</th>
+                  <th class="text-left px-3 py-2 font-semibold">Start</th>
+                  <th class="text-left px-3 py-2 font-semibold">End</th>
+                  <th class="text-right px-3 py-2 font-semibold">Booked Goal</th>
+                  <th class="text-right px-3 py-2 font-semibold">Greg Goal</th>
+                  <th class="text-right px-3 py-2 font-semibold">CPA Goal</th>
+                  <th class="text-right px-3 py-2 font-semibold">Daily $</th>
+                  <th class="text-right px-3 py-2 font-semibold">Monthly $</th>
+                  <th class="text-right px-3 py-2 font-semibold">Leads</th>
+                  <th class="text-right px-3 py-2 font-semibold">Booked</th>
+                  <th class="text-right px-3 py-2 font-semibold">Spent</th>
+                  <th class="text-center px-3 py-2 font-semibold">Edit</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${cycles.map((c, ci) => {
+                  const isEditingThis = adminEditingCycle.editIndex === ci;
+                  return `
+                <tr class="border-b border-dark-600/20 hover:bg-dark-700/30 ${ci === cycles.length - 1 ? 'bg-brand-500/5' : ''}">
+                  <td class="px-3 py-2 font-semibold text-white">${c.cycle}${ci === cycles.length - 1 ? ' <span class="text-brand-400 text-[9px]">CURRENT</span>' : ''}</td>
+                  <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-start" type="date" value="'+(c.cycleStartDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleStartDate || '—')}</td>
+                  <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-end" type="date" value="'+(c.cycleEndDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleEndDate || '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-bgoal" type="number" value="'+(c.bookedGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.bookedGoal ?? '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-ggoal" type="number" value="'+(c.gregGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.gregGoal ?? '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-cpa" type="number" value="'+(c.cpaGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.cpaGoal ? '$'+c.cpaGoal : '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-daily" type="number" value="'+(c.dailyBudget||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.dailyBudget ? '$'+c.dailyBudget : '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-monthly" type="number" value="'+(c.monthlyBudget||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-20 text-right"/>' : (c.monthlyBudget ? '$'+Number(c.monthlyBudget).toLocaleString() : '—')}</td>
+                  <td class="px-3 py-2 text-right ${c.totalLeads > 0 ? 'text-white font-medium' : 'text-dark-400'}">${c.totalLeads ?? '—'}</td>
+                  <td class="px-3 py-2 text-right ${c.bookedAppts > 0 ? 'text-white font-medium' : 'text-dark-400'}">${c.bookedAppts ?? '—'}</td>
+                  <td class="px-3 py-2 text-right text-dark-200">${c.amountSpent ? '$'+Number(c.amountSpent).toLocaleString() : '—'}</td>
+                  <td class="px-3 py-2 text-center">
+                    ${isEditingThis ? `
+                      <button onclick="saveCycleEdit('${esc(acct.name)}',${ci})" class="text-green-400 hover:text-green-300 text-[10px] font-semibold mr-1">Save</button>
+                      <button onclick="adminEditingCycle.editIndex=null;renderAdminView()" class="text-dark-400 hover:text-white text-[10px]">✕</button>
+                    ` : `
+                      <button onclick="adminEditingCycle.editIndex=${ci};renderAdminView()" class="text-dark-400 hover:text-brand-400 transition-colors">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                      </button>
+                    `}
+                  </td>
+                </tr>`;
+                }).join('')}
+                ${cycles.length === 0 ? '<tr><td colspan="12" class="text-center py-6 text-dark-400">No cycles yet</td></tr>' : ''}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ═══ CRUD Actions ═══
+
+function createNewClient() {
+  const name = document.getElementById('new-client-name')?.value?.trim();
+  const manager = document.getElementById('new-client-manager')?.value;
+  const pod = document.getElementById('new-client-pod')?.value;
+  const adId = document.getElementById('new-client-adid')?.value?.trim()?.replace(/^act_/i, '');
+  const bookedGoal = parseFloat(document.getElementById('new-client-booked-goal')?.value) || null;
+  const gregGoal = parseFloat(document.getElementById('new-client-greg-goal')?.value) || null;
+  const cpaGoal = parseFloat(document.getElementById('new-client-cpa-goal')?.value) || null;
+  const dailyBudget = parseFloat(document.getElementById('new-client-daily')?.value) || null;
+  const monthlyBudget = parseFloat(document.getElementById('new-client-monthly')?.value) || null;
+
+  if (!name) { showToast('Please enter a client name', 'error'); return; }
+  if (allAccounts.find(a => a.name.toLowerCase() === name.toLowerCase())) { showToast('Client already exists', 'error'); return; }
+
+  let mgr = manager;
+  if (manager === '_new') {
+    mgr = prompt('Enter new manager name:');
+    if (!mgr) return;
+  }
+
+  const newAcct = {
+    name, manager: mgr, pod, adAccountId: adId || '', section: '',
+    isPaused: false, status: 'Q1 Onboarded',
+    bookedGoal, gregGoal, cpaGoal, dailyBudget, monthlyBudget, cycles: []
+  };
+
+  allAccounts.push(newAcct);
+  adminShowNewClient = false;
+  showToast(`Created "${name}" under ${mgr}`, 'success');
+
+  if (APPS_SCRIPT_URL) {
+    writeToSheet('createClient', newAcct);
+  }
+
+  renderAdminView();
+}
+
+function saveAccountEdit(name, rowIdx) {
+  const acct = allAccounts.find(a => a.name === name);
+  if (!acct) return;
+
+  const mgrSelect = document.getElementById('edit-mgr-' + rowIdx);
+  if (mgrSelect) {
+    const newMgr = mgrSelect.value;
+    if (newMgr !== acct.manager) {
+      const oldMgr = acct.manager;
+      acct.manager = newMgr;
+      acct.cycles.forEach(c => c.manager = newMgr);
+      showToast(`Moved "${name}" from ${oldMgr} to ${newMgr}`, 'success');
+      if (APPS_SCRIPT_URL) writeToSheet('updateManager', { name, manager: newMgr });
+    }
+  }
+
+  adminEditingAccount = null;
+  renderAdminView();
+}
+
+function toggleAccountStatus(name) {
+  const acct = allAccounts.find(a => a.name === name);
+  if (!acct) return;
+
+  acct.isPaused = !acct.isPaused;
+  showToast(`${name}: ${acct.isPaused ? 'Paused' : 'Activated'}`, acct.isPaused ? 'warning' : 'success');
+
+  if (APPS_SCRIPT_URL) writeToSheet('toggleStatus', { name, isPaused: acct.isPaused });
+  renderAdminView();
+}
+
+function toggleGreg(name) {
+  const acct = allAccounts.find(a => a.name === name);
+  if (!acct) return;
+
+  const latestCycle = acct.cycles.length ? acct.cycles[acct.cycles.length - 1] : null;
+  if (latestCycle) {
+    const wasOn = latestCycle.gregGoal && latestCycle.gregGoal > 0;
+    if (wasOn) {
+      latestCycle.gregGoal = 0;
+      showToast(`Greg OFF for ${name}`, 'warning');
+    } else {
+      const goal = prompt(`Set Greg goal for ${name}:`, '10');
+      if (!goal) return;
+      latestCycle.gregGoal = parseFloat(goal) || 0;
+      showToast(`Greg ON for ${name} — Goal: ${latestCycle.gregGoal}`, 'success');
+    }
+    if (APPS_SCRIPT_URL) writeToSheet('toggleGreg', { name, cycle: latestCycle.cycle, gregGoal: latestCycle.gregGoal });
+  } else {
+    // No cycles yet — set on account level
+    const wasOn = acct.gregGoal && acct.gregGoal > 0;
+    if (wasOn) {
+      acct.gregGoal = 0;
+      showToast(`Greg OFF for ${name}`, 'warning');
+    } else {
+      const goal = prompt(`Set Greg goal for ${name}:`, '10');
+      if (!goal) return;
+      acct.gregGoal = parseFloat(goal) || 0;
+      showToast(`Greg ON for ${name} — Goal: ${acct.gregGoal}`, 'success');
+    }
+  }
+
+  renderAdminView();
+}
+
+function saveCycleEdit(accountName, cycleIndex) {
+  const acct = allAccounts.find(a => a.name === accountName);
+  if (!acct || !acct.cycles[cycleIndex]) return;
+  const c = acct.cycles[cycleIndex];
+
+  const start = document.getElementById('ce-start')?.value;
+  const end = document.getElementById('ce-end')?.value;
+  const bGoal = document.getElementById('ce-bgoal')?.value;
+  const gGoal = document.getElementById('ce-ggoal')?.value;
+  const cpa = document.getElementById('ce-cpa')?.value;
+  const daily = document.getElementById('ce-daily')?.value;
+  const monthly = document.getElementById('ce-monthly')?.value;
+
+  if (start) c.cycleStartDate = start;
+  if (end) c.cycleEndDate = end;
+  if (bGoal !== '') c.bookedGoal = parseFloat(bGoal) || null;
+  if (gGoal !== '') c.gregGoal = parseFloat(gGoal) || null;
+  if (cpa !== '') c.cpaGoal = parseFloat(cpa) || null;
+  if (daily !== '') c.dailyBudget = parseFloat(daily) || null;
+  if (monthly !== '') c.monthlyBudget = parseFloat(monthly) || null;
+
+  showToast(`Updated ${c.cycle} for ${accountName}`, 'success');
+
+  if (APPS_SCRIPT_URL) {
+    writeToSheet('updateCycle', {
+      name: accountName, cycle: c.cycle,
+      cycleStartDate: c.cycleStartDate, cycleEndDate: c.cycleEndDate,
+      bookedGoal: c.bookedGoal, gregGoal: c.gregGoal, cpaGoal: c.cpaGoal,
+      dailyBudget: c.dailyBudget, monthlyBudget: c.monthlyBudget
+    });
+  }
+
+  adminEditingCycle.editIndex = null;
+  renderAdminView();
+}
+
+function addNewCycle(accountName) {
+  const acct = allAccounts.find(a => a.name === accountName);
+  if (!acct) return;
+
+  const nextNum = acct.cycles.length + 1;
+  const cycleName = 'Cycle ' + nextNum;
+
+  const today = new Date();
+  const startDate = today.toISOString().split('T')[0];
+  const endDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+  // Inherit goals from previous cycle if exists
+  const prev = acct.cycles.length ? acct.cycles[acct.cycles.length - 1] : null;
+
+  const newCycle = {
+    account: accountName,
+    adAccountId: acct.adAccountId,
+    pod: acct.pod,
+    manager: acct.manager,
+    cycle: cycleName,
+    cycleStartDate: startDate,
+    cycleEndDate: endDate,
+    bookedGoal: prev?.bookedGoal || acct.bookedGoal || null,
+    gregGoal: prev?.gregGoal || acct.gregGoal || null,
+    totalLeads: null,
+    osaPct: null,
+    bookedAppts: null,
+    estBookedAppts: null,
+    cpaGoal: prev?.cpaGoal || acct.cpaGoal || null,
+    cpa: null,
+    dailyBudget: prev?.dailyBudget || acct.dailyBudget || null,
+    monthlyBudget: prev?.monthlyBudget || acct.monthlyBudget || null,
+    amountSpent: null,
+    linkCTR: null, linkCPC: null, cpm: null, frequency: null, surveyPct: null,
+    accountManager: acct.manager, notes: '', goodToBill: '', billed: '', billingNotes: ''
+  };
+
+  acct.cycles.push(newCycle);
+  showToast(`Added ${cycleName} to ${accountName}`, 'success');
+
+  if (APPS_SCRIPT_URL) writeToSheet('addCycle', newCycle);
+  renderAdminView();
+}
+
+// ═══ Toast Notification ═══
+
+function showToast(message, type = 'info') {
+  const colors = { success: 'from-green-500 to-green-600', error: 'from-red-500 to-red-600', warning: 'from-yellow-500 to-yellow-600', info: 'from-blue-500 to-blue-600' };
+  const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
+
+  const toast = document.createElement('div');
+  toast.className = 'fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium bg-gradient-to-r ' + (colors[type] || colors.info);
+  toast.style.cssText = 'animation: slideIn 0.3s ease-out; opacity: 0; transform: translateY(20px);';
+  toast.innerHTML = `<span class="text-lg">${icons[type] || icons.info}</span> ${message}`;
+
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; toast.style.transition = 'all 0.3s'; });
+  setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(20px)'; setTimeout(() => toast.remove(), 300); }, 3000);
+}
+
+// ═══ Google Apps Script Write-Back ═══
+
+async function writeToSheet(action, data) {
+  if (!APPS_SCRIPT_URL) {
+    console.log('[GAS] No Apps Script URL configured. Action:', action, 'Data:', data);
+    return;
+  }
+
+  try {
+    const resp = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, ...data }),
+      mode: 'no-cors' // GAS requires no-cors for POST
+    });
+    console.log('[GAS] Write sent:', action);
+  } catch (e) {
+    console.error('[GAS] Write failed:', e);
+    showToast('Failed to save to Google Sheet: ' + e.message, 'error');
+  }
+}
+
+function showAppsScriptSetup() {
+  const modal = document.createElement('div');
+  modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="glass rounded-2xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
+      <h2 class="text-lg font-bold text-white mb-4">🔧 Google Apps Script Setup</h2>
+      <div class="text-sm text-dark-200 space-y-3">
+        <p><strong class="text-white">Step 1:</strong> Open your Google Sheet → Extensions → Apps Script</p>
+        <p><strong class="text-white">Step 2:</strong> Replace Code.gs with the script below</p>
+        <p><strong class="text-white">Step 3:</strong> Click Deploy → New deployment → Web app</p>
+        <p><strong class="text-white">Step 4:</strong> Set "Execute as: Me" and "Who has access: Anyone"</p>
+        <p><strong class="text-white">Step 5:</strong> Copy the web app URL and paste it below</p>
+        <div class="bg-dark-900 rounded-xl p-4 mt-4 mb-4 text-[11px] font-mono text-green-400 overflow-x-auto whitespace-pre">function doPost(e) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pod 2 - RoofIgnite');
+  const data = JSON.parse(e.postData.contents);
+  const action = data.action;
+
+  if (action === 'createClient') {
+    // Append new account row
+    sheet.appendRow([data.name, 'Q1 Onboarded', data.adAccountId || '', '', '',
+      data.gregGoal || '', data.bookedGoal || '', '', '', '', '',
+      '', '', data.dailyBudget || '', data.monthlyBudget || '']);
+  }
+  // Add more handlers as needed...
+
+  return ContentService.createTextOutput(JSON.stringify({ok:true}))
+    .setMimeType(ContentService.MimeType.JSON);
+}</div>
+        <div class="flex gap-3 items-center">
+          <input id="gas-url-input" type="text" placeholder="Paste Apps Script URL..." class="flex-1 bg-dark-800 border border-dark-600 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+          <button onclick="const u=document.getElementById('gas-url-input').value.trim();if(u){APPS_SCRIPT_URL=u;showToast('Apps Script connected!','success');this.closest('.fixed').remove();renderAdminView();}else{showToast('Please paste a URL','error');}" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-all">Connect</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
 
 // ═══════════════════════════════════════════════
 // INIT
