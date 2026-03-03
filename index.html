@@ -3340,8 +3340,8 @@ function esc(str) { return str.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
 // ═══════════════════════════════════════════════
 
 // Google Apps Script Web App URL for write operations
-// Cole will need to deploy a GAS web app and paste the URL here
-let APPS_SCRIPT_URL = '';
+// Persisted in localStorage so it survives page reloads
+let APPS_SCRIPT_URL = localStorage.getItem('roofignite_gas_url') || '';
 
 // Admin state
 let adminFilter = 'all'; // all, active, paused, manager-X
@@ -3371,26 +3371,50 @@ function getGregMode(accountName, managerName) {
   return gregConfig.managerModes[managerName] || gregConfig.defaultMode;
 }
 
-function setManagerGregMode(manager, mode) {
+async function setManagerGregMode(manager, mode) {
   gregConfig.managerModes[manager] = mode;
-  showToast(`Greg → ${mode} for all of ${manager}'s accounts`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
-  if (APPS_SCRIPT_URL) writeToSheet('setManagerGregMode', { manager, mode });
   renderAdminView();
+
+  if (APPS_SCRIPT_URL) {
+    const result = await writeToSheet('setManagerGregMode', { manager, mode });
+    if (result.ok) {
+      showToast(`Greg → ${mode} for all of ${manager}'s accounts ✓ Saved to Sheet`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+    } else {
+      showToast(`⚠️ Greg set to ${mode} locally, but failed to save to Sheet`, 'error');
+    }
+  } else {
+    showToast(`Greg → ${mode} for all of ${manager}'s accounts (local only)`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+  }
 }
 
-function setAccountGregMode(accountName, mode) {
+async function setAccountGregMode(accountName, mode) {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct) return;
   const managerMode = gregConfig.managerModes[acct.manager] || gregConfig.defaultMode;
   if (mode === managerMode) {
     delete gregConfig.accountModes[accountName];
-    showToast(`${accountName}: Greg reset to manager default (${managerMode})`, 'info');
   } else {
     gregConfig.accountModes[accountName] = mode;
-    showToast(`${accountName}: Greg → ${mode}`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
   }
-  if (APPS_SCRIPT_URL) writeToSheet('setAccountGregMode', { name: accountName, mode: mode === managerMode ? null : mode });
   renderAdminView();
+
+  const sendMode = mode === managerMode ? null : mode;
+  if (APPS_SCRIPT_URL) {
+    const result = await writeToSheet('setAccountGregMode', { name: accountName, mode: sendMode });
+    if (result.ok) {
+      const msg = sendMode === null
+        ? `${accountName}: Greg reset to manager default (${managerMode}) ✓ Saved`
+        : `${accountName}: Greg → ${mode} ✓ Saved to Sheet`;
+      showToast(msg, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+    } else {
+      showToast(`⚠️ ${accountName}: Greg set locally, but failed to save to Sheet`, 'error');
+    }
+  } else {
+    const msg = sendMode === null
+      ? `${accountName}: Greg reset to manager default (${managerMode}) (local only)`
+      : `${accountName}: Greg → ${mode} (local only)`;
+    showToast(msg, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+  }
 }
 
 function getManagers() {
@@ -3436,6 +3460,9 @@ function renderAdminView() {
         <button onclick="refreshData()" class="flex items-center gap-2 bg-dark-700/60 text-dark-200 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-dark-600/60 border border-dark-600/50 transition-all">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
           Refresh
+        </button>
+        <button onclick="showAppsScriptSetup()" class="flex items-center gap-2 bg-dark-700/60 text-dark-200 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-dark-600/60 border border-dark-600/50 transition-all" title="Apps Script Settings">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
         </button>
       </div>
     </div>
@@ -3738,7 +3765,7 @@ function renderCycleEditor() {
 
 // ═══ CRUD Actions ═══
 
-function createNewClient() {
+async function createNewClient() {
   const name = document.getElementById('new-client-name')?.value?.trim();
   const manager = document.getElementById('new-client-manager')?.value;
   const pod = document.getElementById('new-client-pod')?.value;
@@ -3766,16 +3793,21 @@ function createNewClient() {
 
   allAccounts.push(newAcct);
   adminShowNewClient = false;
-  showToast(`Created "${name}" under ${mgr}`, 'success');
+  renderAdminView();
 
   if (APPS_SCRIPT_URL) {
-    writeToSheet('createClient', newAcct);
+    const result = await writeToSheet('createClient', newAcct);
+    if (result.ok) {
+      showToast(`Created "${name}" under ${mgr} ✓ Saved to Sheet`, 'success');
+    } else {
+      showToast(`⚠️ "${name}" created locally, but failed to save to Sheet`, 'error');
+    }
+  } else {
+    showToast(`Created "${name}" under ${mgr} (local only — connect Apps Script to save)`, 'warning');
   }
-
-  renderAdminView();
 }
 
-function saveAccountEdit(name, rowIdx) {
+async function saveAccountEdit(name, rowIdx) {
   const acct = allAccounts.find(a => a.name === name);
   if (!acct) return;
 
@@ -3786,8 +3818,20 @@ function saveAccountEdit(name, rowIdx) {
       const oldMgr = acct.manager;
       acct.manager = newMgr;
       acct.cycles.forEach(c => c.manager = newMgr);
-      showToast(`Moved "${name}" from ${oldMgr} to ${newMgr}`, 'success');
-      if (APPS_SCRIPT_URL) writeToSheet('updateManager', { name, manager: newMgr });
+      adminEditingAccount = null;
+      renderAdminView();
+
+      if (APPS_SCRIPT_URL) {
+        const result = await writeToSheet('updateManager', { name, manager: newMgr });
+        if (result.ok) {
+          showToast(`Moved "${name}" from ${oldMgr} to ${newMgr} ✓ Saved`, 'success');
+        } else {
+          showToast(`⚠️ "${name}" moved locally, but failed to save to Sheet`, 'error');
+        }
+      } else {
+        showToast(`Moved "${name}" from ${oldMgr} to ${newMgr} (local only)`, 'success');
+      }
+      return;
     }
   }
 
@@ -3795,21 +3839,29 @@ function saveAccountEdit(name, rowIdx) {
   renderAdminView();
 }
 
-function toggleAccountStatus(name) {
+async function toggleAccountStatus(name) {
   const acct = allAccounts.find(a => a.name === name);
   if (!acct) return;
 
   acct.isPaused = !acct.isPaused;
-  showToast(`${name}: ${acct.isPaused ? 'Paused' : 'Activated'}`, acct.isPaused ? 'warning' : 'success');
-
-  if (APPS_SCRIPT_URL) writeToSheet('toggleStatus', { name, isPaused: acct.isPaused });
   renderAdminView();
+
+  if (APPS_SCRIPT_URL) {
+    const result = await writeToSheet('toggleStatus', { name, isPaused: acct.isPaused });
+    if (result.ok) {
+      showToast(`${name}: ${acct.isPaused ? 'Paused' : 'Activated'} ✓ Saved`, acct.isPaused ? 'warning' : 'success');
+    } else {
+      showToast(`⚠️ ${name} toggled locally, but failed to save to Sheet`, 'error');
+    }
+  } else {
+    showToast(`${name}: ${acct.isPaused ? 'Paused' : 'Activated'} (local only)`, acct.isPaused ? 'warning' : 'success');
+  }
 }
 
 // Greg toggle replaced by 3-mode system: setManagerGregMode() and setAccountGregMode()
 // defined above in the Greg Configuration State section
 
-function saveCycleEdit(accountName, cycleIndex) {
+async function saveCycleEdit(accountName, cycleIndex) {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct || !acct.cycles[cycleIndex]) return;
   const c = acct.cycles[cycleIndex];
@@ -3830,22 +3882,27 @@ function saveCycleEdit(accountName, cycleIndex) {
   if (daily !== '') c.dailyBudget = parseFloat(daily) || null;
   if (monthly !== '') c.monthlyBudget = parseFloat(monthly) || null;
 
-  showToast(`Updated ${c.cycle} for ${accountName}`, 'success');
+  adminEditingCycle.editIndex = null;
+  renderAdminView();
 
   if (APPS_SCRIPT_URL) {
-    writeToSheet('updateCycle', {
+    const result = await writeToSheet('updateCycle', {
       name: accountName, cycle: c.cycle,
       cycleStartDate: c.cycleStartDate, cycleEndDate: c.cycleEndDate,
       bookedGoal: c.bookedGoal, gregGoal: c.gregGoal, cpaGoal: c.cpaGoal,
       dailyBudget: c.dailyBudget, monthlyBudget: c.monthlyBudget
     });
+    if (result.ok) {
+      showToast(`Updated ${c.cycle} for ${accountName} ✓ Saved`, 'success');
+    } else {
+      showToast(`⚠️ ${c.cycle} updated locally, but failed to save to Sheet`, 'error');
+    }
+  } else {
+    showToast(`Updated ${c.cycle} for ${accountName} (local only)`, 'success');
   }
-
-  adminEditingCycle.editIndex = null;
-  renderAdminView();
 }
 
-function addNewCycle(accountName) {
+async function addNewCycle(accountName) {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct) return;
 
@@ -3883,10 +3940,18 @@ function addNewCycle(accountName) {
   };
 
   acct.cycles.push(newCycle);
-  showToast(`Added ${cycleName} to ${accountName}`, 'success');
-
-  if (APPS_SCRIPT_URL) writeToSheet('addCycle', newCycle);
   renderAdminView();
+
+  if (APPS_SCRIPT_URL) {
+    const result = await writeToSheet('addCycle', newCycle);
+    if (result.ok) {
+      showToast(`Added ${cycleName} to ${accountName} ✓ Saved`, 'success');
+    } else {
+      showToast(`⚠️ ${cycleName} added locally, but failed to save to Sheet`, 'error');
+    }
+  } else {
+    showToast(`Added ${cycleName} to ${accountName} (local only)`, 'warning');
+  }
 }
 
 // ═══ Toast Notification ═══
@@ -3910,20 +3975,41 @@ function showToast(message, type = 'info') {
 async function writeToSheet(action, data) {
   if (!APPS_SCRIPT_URL) {
     console.log('[GAS] No Apps Script URL configured. Action:', action, 'Data:', data);
-    return;
+    showToast('⚠️ Apps Script not connected — changes only saved locally', 'warning');
+    return { ok: false, error: 'No Apps Script URL configured' };
   }
 
   try {
+    // Use text/plain to avoid CORS preflight, GAS will still parse JSON
     const resp = await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, ...data }),
-      mode: 'no-cors' // GAS requires no-cors for POST
+      redirect: 'follow'
     });
-    console.log('[GAS] Write sent:', action);
+
+    // Try to read the response for error details
+    let result = { ok: true };
+    try {
+      const text = await resp.text();
+      result = JSON.parse(text);
+    } catch (_) {
+      // If response isn't readable (opaque), assume success if no network error
+    }
+
+    if (result.ok) {
+      console.log('[GAS] Write success:', action);
+      return { ok: true };
+    } else {
+      const errMsg = result.error || 'Unknown error from Apps Script';
+      console.error('[GAS] Write error:', action, errMsg);
+      showToast(`❌ Failed to save "${action}" to Sheet: ${errMsg}`, 'error');
+      return { ok: false, error: errMsg };
+    }
+
   } catch (e) {
-    console.error('[GAS] Write failed:', e);
-    showToast('Failed to save to Google Sheet: ' + e.message, 'error');
+    console.error('[GAS] Write failed:', action, e);
+    showToast(`❌ Could not reach Apps Script — ${e.message}`, 'error');
+    return { ok: false, error: e.message };
   }
 }
 
@@ -4012,8 +4098,8 @@ function loadGregConfig() {
 //   const DISABLED_ACCOUNTS = config.disabledAccounts;</div>
 
         <div class="flex gap-3 items-center mt-4">
-          <input id="gas-url-input" type="text" placeholder="Paste Apps Script web app URL..." class="flex-1 bg-dark-800 border border-dark-600 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
-          <button onclick="const u=document.getElementById('gas-url-input').value.trim();if(u){APPS_SCRIPT_URL=u;showToast('Apps Script connected!','success');this.closest('.fixed').remove();renderAdminView();}else{showToast('Please paste a URL','error');}" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-all">Connect</button>
+          <input id="gas-url-input" type="text" placeholder="Paste Apps Script web app URL..." value="${APPS_SCRIPT_URL || ''}" class="flex-1 bg-dark-800 border border-dark-600 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+          <button onclick="const u=document.getElementById('gas-url-input').value.trim();if(u){APPS_SCRIPT_URL=u;localStorage.setItem('roofignite_gas_url',u);showToast('Apps Script connected!','success');this.closest('.fixed').remove();renderAdminView();}else{showToast('Please paste a URL','error');}" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-brand-500 text-white hover:bg-brand-600 transition-all">Connect</button>
         </div>
       </div>
     </div>
