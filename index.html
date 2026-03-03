@@ -472,6 +472,7 @@ function parseSheetData(data, podName) {
     adAccountId:   colIdx(colMap, 'ad account id', 'ad account', 'ad acct', 'ad acct id', 'meta id', 'fb id', 'facebook id', 'account id'),
   };
   console.log(`[${podName}] Resolved column indices:`, COL);
+  console.log(`[${podName}] Ad Account ID column resolved to index: ${COL.adAccountId}. Column map keys:`, Object.keys(colMap).join(', '));
 
   // Helper to safely read a cell value by column key
   function getStr(row, colKey) {
@@ -482,11 +483,22 @@ function parseSheetData(data, podName) {
 
   // Helper to extract ad account ID from a cell, preferring .f (formatted) to avoid precision loss
   function extractAdIdFromCell(cell) {
-    if (!cell || (cell.v === null && !cell.f)) return '';
-    const fVal = cell.f ? String(cell.f) : '';
-    const vVal = cell.v != null ? String(cell.v) : '';
-    // If .f is scientific notation (e.g. 1.30307E+15), use .v instead
-    return (fVal && !/[eE]/.test(fVal)) ? fVal : vVal || fVal;
+    if (!cell) return '';
+    if ((cell.v === null || cell.v === undefined) && !cell.f) return '';
+    const fVal = cell.f ? String(cell.f).trim() : '';
+    // For numeric values, use Number.isInteger check and toFixed to avoid scientific notation
+    let vVal = '';
+    if (cell.v != null) {
+      if (typeof cell.v === 'number') {
+        // Avoid precision loss: if it's a safe integer, use it directly
+        vVal = Number.isSafeInteger(cell.v) ? cell.v.toFixed(0) : String(cell.v);
+      } else {
+        vVal = String(cell.v).trim();
+      }
+    }
+    // Prefer .f unless it's in scientific notation or contains non-numeric chars that aren't commas/spaces
+    if (fVal && !/[eE]/.test(fVal)) return fVal;
+    return vVal || fVal;
   }
 
   for (let i = 1; i < rows.length; i++) {
@@ -510,22 +522,45 @@ function parseSheetData(data, podName) {
       }
     }
 
-    // Try named "ad account id" column first, then fallback to column C (index 2)
+    // Try ALL possible sources for ad account ID, in priority order
     let adIdRaw = '';
-    // Try the named column first
+    const adIdSources = [];
+
+    // Source 1: Named column (COL.adAccountId)
     if (COL.adAccountId >= 0 && row.c[COL.adAccountId]) {
-      adIdRaw = extractAdIdFromCell(row.c[COL.adAccountId]);
+      const s1 = extractAdIdFromCell(row.c[COL.adAccountId]);
+      adIdSources.push({src: 'named_col_' + COL.adAccountId, raw: s1});
+      if (!adIdRaw) { const t = s1.replace(/[\s,]/g,'').replace(/^act_/i, ''); if (t.length > 3 && /^\d+$/.test(t)) adIdRaw = s1; }
     }
-    // If named column was empty/missing, try column C as fallback
-    if (!adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '') || adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '').length <= 3) {
-      const cellCAdId = extractAdIdFromCell(row.c[2]);
-      if (cellCAdId) {
-        const testId = cellCAdId.replace(/[\s,]/g,'').replace(/^act_/i, '');
-        if (testId.length > 3 && /^\d+$/.test(testId)) adIdRaw = cellCAdId;
+    // Source 2: Column C (index 2) — traditional ad ID column
+    if (row.c[2]) {
+      const s2 = extractAdIdFromCell(row.c[2]);
+      adIdSources.push({src: 'col_C', raw: s2});
+      if (!adIdRaw) { const t = s2.replace(/[\s,]/g,'').replace(/^act_/i, ''); if (t.length > 3 && /^\d+$/.test(t)) adIdRaw = s2; }
+    }
+    // Source 3: Scan all cells in the row for anything that looks like a Meta ad account ID (12-17 digit number)
+    if (!adIdRaw) {
+      for (let ci = 0; ci < row.c.length; ci++) {
+        if (ci === 0 || ci === 1) continue; // skip name and cycle label
+        const cell = row.c[ci];
+        if (!cell) continue;
+        const cv = extractAdIdFromCell(cell);
+        const ct = cv.replace(/[\s,]/g,'').replace(/^act_/i, '');
+        if (ct.length >= 12 && ct.length <= 17 && /^\d+$/.test(ct)) {
+          adIdSources.push({src: 'scan_col_' + ci, raw: cv});
+          adIdRaw = cv;
+          break;
+        }
       }
     }
+
     const rawAdId = adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '');
     const hasAdAccountId = rawAdId.length > 3 && /^\d+$/.test(rawAdId);
+
+    // Debug: log when we have cellA (account name) but no ad ID found
+    if (cellA && !hasAdAccountId && adIdSources.length > 0) {
+      console.warn(`[AdID-Debug] Row ${i} "${cellA}" / "${cellB}": no valid ID found. Sources:`, JSON.stringify(adIdSources), 'col2 raw cell:', JSON.stringify(row.c[2]));
+    }
 
     const cellBStr = String(cellB).trim();
     const cellBLower = cellBStr.toLowerCase();
@@ -607,8 +642,14 @@ function parseSheetData(data, podName) {
       };
 
       cycles.push(cycleData);
-      const parentAcct = accounts.find(a => a.name === currentAccountName && a.adAccountId === currentAdAccountId);
-      if (parentAcct) parentAcct.cycles.push(cycleData);
+      let parentAcct = accounts.find(a => a.name === currentAccountName && a.adAccountId === currentAdAccountId);
+      // Fallback: find by name only if strict match fails
+      if (!parentAcct) parentAcct = accounts.find(a => a.name === currentAccountName);
+      if (parentAcct) {
+        parentAcct.cycles.push(cycleData);
+        // Ensure parent has ad ID if cycle has one
+        if (currentAdAccountId && !parentAcct.adAccountId) parentAcct.adAccountId = currentAdAccountId;
+      }
     }
   }
 
@@ -921,7 +962,8 @@ function bookingPaceLabel(status) {
 // Get the cycle before the current one for trend comparison
 function getPreviousCycle(accountName, adAccountId, currentCycle) {
   if (!currentCycle || !currentCycle.cycleStartDate) return null;
-  const acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
+  let acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
+  if (!acctCycles.length) acctCycles = allCycles.filter(c => c.account === accountName);
   const sorted = acctCycles.filter(c => c.cycleStartDate && c.cycleStartDate < currentCycle.cycleStartDate)
     .sort((a, b) => b.cycleStartDate.localeCompare(a.cycleStartDate));
   return sorted.length > 0 ? sorted[0] : null;
@@ -1038,7 +1080,9 @@ function healthScoreColor(score) {
 // ACTIVE CYCLE LOGIC — cycles containing today
 // ═══════════════════════════════════════════════
 function getActiveCycle(accountName, adAccountId) {
-  const acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
+  let acctCycles = allCycles.filter(c => c.account === accountName && c.adAccountId === adAccountId);
+  // Fallback: if strict ad ID match fails, try name-only match
+  if (!acctCycles.length) acctCycles = allCycles.filter(c => c.account === accountName);
   if (!acctCycles.length) return null;
   const today = getTodayStr();
   const active = acctCycles.find(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today);
