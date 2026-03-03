@@ -734,7 +734,7 @@ function isClientHandles(status) {
 function isCancelledStatus(status) {
   if (!status) return false;
   const s = status.toLowerCase().trim();
-  return s.includes('cancel') || s.includes('invalid');
+  return s.includes('cancel') || s.includes('invalid') || s.includes('not responding') || s === 'nr';
 }
 
 // "Open" = anything not booked, not client handles, and not cancelled
@@ -1590,7 +1590,7 @@ function renderAccountDetail(name, adAccountId) {
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-booked">Booked</span><span class="text-white font-semibold">${booked}</span></div><div class="funnel-bar" style="width:${Math.max(5,booked/total*100)}%;background:rgba(34,197,94,0.3);color:#86efac;">${bkRate}%</div></div>
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-client">Other</span><span class="text-white font-semibold">${client}</span></div><div class="funnel-bar" style="width:${Math.max(3,client/total*100)}%;background:rgba(251,191,36,0.2);color:#fde68a;">${(client/total*100).toFixed(1)}%</div></div>
           <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-open">Open</span><span class="text-white font-semibold">${open}</span></div><div class="funnel-bar" style="width:${Math.max(3,open/total*100)}%;background:rgba(226,232,240,0.1);color:#e2e8f0;">${(open/total*100).toFixed(1)}%</div></div>
-          <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-cancelled">Cancelled</span><span class="text-white font-semibold">${cancelled}</span></div><div class="funnel-bar" style="width:${Math.max(3,cancelled/total*100)}%;background:rgba(239,68,68,0.15);color:#fca5a5;">${(cancelled/total*100).toFixed(1)}%</div></div>
+          <div><div class="flex items-center justify-between text-xs mb-1"><span class="lead-cancelled">Lost</span><span class="text-white font-semibold">${cancelled}</span></div><div class="funnel-bar" style="width:${Math.max(3,cancelled/total*100)}%;background:rgba(239,68,68,0.15);color:#fca5a5;">${(cancelled/total*100).toFixed(1)}%</div></div>
         </div>
       </div>`;
     })()}
@@ -1780,7 +1780,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
         <div class="flex gap-2 flex-wrap">
           <span class="filter-badge fb-green ${fActive('booked')}" onclick="setLeadFilter('booked')">${booked} booked</span>
           <span class="filter-badge fb-yellow ${fActive('client')}" onclick="setLeadFilter('client')">${clientH} other</span>
-          <span class="filter-badge fb-red ${fActive('cancelled')}" onclick="setLeadFilter('cancelled')">${cancelled} cancelled</span>
+          <span class="filter-badge fb-red ${fActive('cancelled')}" onclick="setLeadFilter('cancelled')">${cancelled} lost</span>
           <span class="filter-badge fb-white ${fActive('open')}" onclick="setLeadFilter('open')">${open} open</span>
           <span class="filter-badge fb-blue ${fActive('all')}" onclick="setLeadFilter('all')">${leads.length} total</span>
         </div>
@@ -1797,7 +1797,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
           <div class="bg-dark-800/50 rounded-lg p-3">
             <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-1">${week}</div>
             <div class="text-white font-bold text-lg">${wLeads.length}</div>
-            <div class="text-xs"><span class="lead-booked">${wBooked} bkd</span> · <span class="lead-client">${wClient} oth</span> · <span class="lead-cancelled">${wCancelled} canc</span> · <span class="lead-open">${wOpen} open</span></div>
+            <div class="text-xs"><span class="lead-booked">${wBooked} bkd</span> · <span class="lead-client">${wClient} oth</span> · <span class="lead-cancelled">${wCancelled} lost</span> · <span class="lead-open">${wOpen} open</span></div>
           </div>`;
         }).join('')}
         ${weeks['Week 5+'].length > 0 ? `
