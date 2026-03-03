@@ -480,6 +480,15 @@ function parseSheetData(data, podName) {
     return String(row.c[idx].v || '').trim();
   }
 
+  // Helper to extract ad account ID from a cell, preferring .f (formatted) to avoid precision loss
+  function extractAdIdFromCell(cell) {
+    if (!cell || (cell.v === null && !cell.f)) return '';
+    const fVal = cell.f ? String(cell.f) : '';
+    const vVal = cell.v != null ? String(cell.v) : '';
+    // If .f is scientific notation (e.g. 1.30307E+15), use .v instead
+    return (fVal && !/[eE]/.test(fVal)) ? fVal : vVal || fVal;
+  }
+
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row.c) continue;
@@ -501,18 +510,19 @@ function parseSheetData(data, podName) {
       }
     }
 
-    // Try named "ad account id" column first, then fallback to column C
-    // Use .f (formatted string) over .v (numeric value) to avoid JS number precision loss on 17+ digit IDs
-    const adIdCell = COL.adAccountId >= 0 && row.c[COL.adAccountId] ? row.c[COL.adAccountId] : null;
-    // Prefer .f (formatted string) but fall back to .v if .f is in scientific notation
-    let adIdRaw;
-    if (adIdCell) {
-      const fVal = adIdCell.f ? String(adIdCell.f) : '';
-      const vVal = adIdCell.v != null ? String(adIdCell.v) : '';
-      // If .f is scientific notation (e.g. 1.30307E+15), use .v instead — it's the raw number
-      adIdRaw = (fVal && !/[eE]/.test(fVal)) ? fVal : vVal || fVal;
-    } else {
-      adIdRaw = String(cellC || '');
+    // Try named "ad account id" column first, then fallback to column C (index 2)
+    let adIdRaw = '';
+    // Try the named column first
+    if (COL.adAccountId >= 0 && row.c[COL.adAccountId]) {
+      adIdRaw = extractAdIdFromCell(row.c[COL.adAccountId]);
+    }
+    // If named column was empty/missing, try column C as fallback
+    if (!adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '') || adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '').length <= 3) {
+      const cellCAdId = extractAdIdFromCell(row.c[2]);
+      if (cellCAdId) {
+        const testId = cellCAdId.replace(/[\s,]/g,'').replace(/^act_/i, '');
+        if (testId.length > 3 && /^\d+$/.test(testId)) adIdRaw = cellCAdId;
+      }
     }
     const rawAdId = adIdRaw.replace(/[\s,]/g,'').replace(/^act_/i, '');
     const hasAdAccountId = rawAdId.length > 3 && /^\d+$/.test(rawAdId);
@@ -552,12 +562,15 @@ function parseSheetData(data, podName) {
     }
 
     if (isCycleLabel && currentAccountName) {
-      // If account header didn't have ad ID, try picking it up from cycle row
-      if (!currentAdAccountId && hasAdAccountId) {
-        currentAdAccountId = rawAdId;
+      // Always pick up ad ID from cycle row if available — cycle rows are the source of truth
+      if (hasAdAccountId) {
+        if (!currentAdAccountId || currentAdAccountId !== rawAdId) {
+          currentAdAccountId = rawAdId;
+          console.log(`[AdID] ${currentAccountName} (from cycle row) → ${currentAdAccountId}`);
+        }
+        // Always propagate to parent account if it's missing
         const parentAcctFix = accounts.find(a => a.name === currentAccountName && !a.adAccountId);
         if (parentAcctFix) parentAcctFix.adAccountId = currentAdAccountId;
-        console.log(`[AdID] ${currentAccountName} (from cycle row) → ${currentAdAccountId}`);
       }
       const rowMgr = getStr(row, 'manager');
       if (rowMgr) currentMgr = rowMgr;
@@ -1693,11 +1706,13 @@ function renderAccountDetail(name, adAccountId) {
   console.log('[RenderAcct] Found acct:', acct.name, 'stored adAccountId:', JSON.stringify(acct.adAccountId));
 
   const cycles = acct.cycles || [];
-  // Prefer ad ID from the first cycle row (most reliable), then account header, then navigation param
-  const firstCycleAdId = cycles.length > 0 ? cycles[0].adAccountId : '';
-  const adId = firstCycleAdId || acct.adAccountId || adAccountId || '';
+  // Try to find ad ID from any cycle row (most reliable source), then account header, then navigation param
+  const cycleAdId = cycles.reduce((found, c) => found || c.adAccountId, '') || '';
+  const adId = cycleAdId || acct.adAccountId || adAccountId || '';
   // Sync back so other functions use the right ID
   if (adId && !acct.adAccountId) acct.adAccountId = adId;
+  // Also sync to all cycles that are missing it
+  if (adId) cycles.forEach(c => { if (!c.adAccountId) c.adAccountId = adId; });
   const activeCyc = getActiveCycle(name, adId);
   const cpaGoal = acct.cpaGoal || (activeCyc && activeCyc.cpaGoal);
   const isActive = hasActiveCycle(acct);
@@ -1749,7 +1764,7 @@ function renderAccountDetail(name, adAccountId) {
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Amount Spent</div>
         <div class="text-xl font-bold text-white mt-1">${fmtDollar(activeCyc.amountSpent,2)}</div>
-        <div class="text-xs text-dark-400">Budget: ${fmtDollar(acct.monthlyBudget || activeCyc.monthlyBudget)}/mo</div>
+        <div class="text-xs text-dark-400">Active Budget: ${fmtDollar(activeCyc.monthlyBudget || acct.monthlyBudget)}</div>
       </div>
       <div class="glass rounded-xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider">Frequency</div>
