@@ -2410,6 +2410,7 @@ function aggregateDays(dayArray) {
     outboundClicks: totalOB,
     bookings: totalBookings,
     cpc: totalClicks > 0 ? totalSpend / totalClicks : 0,
+    linkCPC: totalOB > 0 ? totalSpend / totalOB : 0,
     ctr: totalImpr > 0 ? (totalClicks / totalImpr) * 100 : 0,
     linkCTR: totalImpr > 0 ? (totalOB / totalImpr) * 100 : 0,
     frequency: dayArray.reduce((s,d)=>s+d.frequency,0) / dayArray.length,
@@ -2610,30 +2611,35 @@ function renderMetaAggTable(aggData, cycle) {
           <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
             <th class="py-2 px-2 text-left font-medium">Period</th>
             <th class="py-2 px-2 text-right font-medium">Spend</th>
+            <th class="py-2 px-2 text-right font-medium">Freq</th>
+            <th class="py-2 px-2 text-right font-medium">Impr</th>
+            <th class="py-2 px-2 text-right font-medium">Clicks</th>
+            <th class="py-2 px-2 text-right font-medium">Link Clicks</th>
+            <th class="py-2 px-2 text-right font-medium">CPC (Link)</th>
+            <th class="py-2 px-2 text-right font-medium">CTR (Link)</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
-            <th class="py-2 px-2 text-right font-medium">Link CTR</th>
-            <th class="py-2 px-2 text-right font-medium">CPC</th>
-            <th class="py-2 px-2 text-right font-medium">Freq</th>
             <th class="py-2 px-2 text-right font-medium">Bookings</th>
             <th class="py-2 px-2 text-right font-medium">CPA</th>
-            <th class="py-2 px-2 text-right font-medium">Days</th>
           </tr>
         </thead>
         <tbody>
           ${aggData.map(w => {
             const dateRange = w.startDate !== w.endDate ? `<div class="text-dark-400 text-[9px]">${w.startDate.slice(5)} → ${w.endDate.slice(5)}</div>` : '';
+            const linkCPC = w.linkCPC || (w.outboundClicks > 0 ? w.spend / w.outboundClicks : 0);
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
             <td class="py-1.5 px-2 text-dark-200 font-medium">${w.label}${dateRange}</td>
-            <td class="py-1.5 px-2 text-right">${fmtDollar(w.spend,0)}</td>
+            <td class="py-1.5 px-2 text-right">${fmtDollar(w.spend,2)}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
+            <td class="py-1.5 px-2 text-right text-dark-200">${fmt(w.impressions)}</td>
+            <td class="py-1.5 px-2 text-right text-dark-200">${fmt(w.clicks)}</td>
+            <td class="py-1.5 px-2 text-right text-dark-200">${fmt(w.outboundClicks)}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', linkCPC, cycle)}">${linkCPC > 0 ? fmtDollar(linkCPC,2) : '—'}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('leads', w.leads, cycle)}">${w.leads}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', w.cpl, cycle)}">${w.leads > 0 ? fmtDollar(w.cpl,2) : '—'}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', w.cpc, cycle)}">${fmtDollar(w.cpc,2)}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
             <td class="py-1.5 px-2 text-right ${w.bookings > 0 ? 'metric-cell-green' : ''}">${w.bookings || 0}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', w.cpa, cycle)}">${w.cpa > 0 ? fmtDollar(w.cpa,0) : '—'}</td>
-            <td class="py-1.5 px-2 text-right text-dark-400">${w.days}d</td>
           </tr>`;}).join('')}
         </tbody>
       </table>
