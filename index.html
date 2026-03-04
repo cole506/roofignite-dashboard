@@ -4051,7 +4051,7 @@ async function createNewClient() {
   const cycle1 = {
     account: name, adAccountId: adId || '', pod, manager: mgr,
     cycle: 'Cycle 1', cycleStartDate: startDate, cycleEndDate: endDate,
-    bookedGoal, gregGoal: null, cpaGoal: null, dailyBudget, monthlyBudget: null,
+    bookedGoal, gregGoal: bookedGoal, cpaGoal: null, dailyBudget, monthlyBudget: dailyBudget ? dailyBudget * 28 : null,
     totalLeads: null, osaPct: null, bookedAppts: null, estBookedAppts: null,
     cpa: null, amountSpent: null, linkCTR: null, linkCPC: null,
     cpm: null, frequency: null, surveyPct: null,
@@ -4061,7 +4061,7 @@ async function createNewClient() {
   const newAcct = {
     name, manager: mgr, pod, adAccountId: adId || '', section: '',
     isPaused: false, status: 'Q1 Onboarded',
-    bookedGoal, gregGoal: null, cpaGoal: null, dailyBudget, monthlyBudget: null, cycles: [cycle1]
+    bookedGoal, gregGoal: bookedGoal, cpaGoal: null, dailyBudget, monthlyBudget: dailyBudget ? dailyBudget * 28 : null, cycles: [cycle1]
   };
 
   allAccounts.push(newAcct);
