@@ -346,21 +346,7 @@ tailwind.config = {
       </button>
 
       <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Managers</div>
-      <button onclick="navigate('manager', 'Cole')" id="nav-mgr-cole" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500/20 to-blue-600/20 flex items-center justify-center text-[10px] font-bold text-blue-400 border border-blue-500/20">C</div>
-        <span class="font-medium">Cole</span>
-        <span id="alert-badge-cole" class="ml-auto badge badge-red hidden text-[10px]">0</span>
-      </button>
-      <button onclick="navigate('manager', 'Jonathan')" id="nav-mgr-jonathan" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 flex items-center justify-center text-[10px] font-bold text-emerald-400 border border-emerald-500/20">J</div>
-        <span class="font-medium">Jonathan</span>
-        <span id="alert-badge-jonathan" class="ml-auto badge badge-red hidden text-[10px]">0</span>
-      </button>
-      <button onclick="navigate('manager', 'Tyler')" id="nav-mgr-tyler" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500/20 to-purple-600/20 flex items-center justify-center text-[10px] font-bold text-purple-400 border border-purple-500/20">T</div>
-        <span class="font-medium">Tyler</span>
-        <span id="alert-badge-tyler" class="ml-auto badge badge-red hidden text-[10px]">0</span>
-      </button>
+      <div id="sidebar-managers"></div>
 
       <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Pods</div>
       <button onclick="navigate('pod', 'Pod 2 - RoofIgnite')" id="nav-pod2" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
@@ -1203,10 +1189,14 @@ async function loadAllData() {
   document.getElementById('data-status').className = 'w-2 h-2 rounded-full bg-green-500';
   document.getElementById('data-status-text').textContent = `${allAccounts.length} accounts · ${allLeads.length} leads`;
 
-  // Update manager alert badges
-  ['Cole', 'Jonathan', 'Tyler'].forEach(mgr => {
+  // Render dynamic sidebar managers
+  renderSidebarManagers();
+
+  // Update manager alert badges (dynamic)
+  getManagers().forEach(mgr => {
     const alerts = getAlertAccountsForManager(mgr);
-    const badge = document.getElementById('alert-badge-' + mgr.toLowerCase());
+    const key = mgr.toLowerCase().replace(/\s+/g, '-');
+    const badge = document.getElementById('alert-badge-' + key);
     if (badge && alerts.length > 0) {
       badge.textContent = alerts.length;
       badge.classList.remove('hidden');
@@ -1702,7 +1692,7 @@ function navigate(view, param) {
       break;
     case 'manager':
       currentManager = param;
-      const navId = 'nav-mgr-' + param.toLowerCase();
+      const navId = 'nav-mgr-' + param.toLowerCase().replace(/\s+/g, '-');
       const navEl = document.getElementById(navId);
       if (navEl) navEl.classList.add('active');
       renderManagerView(param);
@@ -1757,7 +1747,7 @@ function renderDashboard() {
   const avgCPA = cpaValues.length ? cpaValues.reduce((a,b)=>a+b,0)/cpaValues.length : 0;
   const avgOSA = osaValues.length ? osaValues.reduce((a,b)=>a+b,0)/osaValues.length : 0;
 
-  const managers = ['Cole', 'Jonathan', 'Tyler'];
+  const managers = getManagers();
   function mgrStats(name) {
     const accts = getAccountsByManager(name).filter(a => hasActiveCycle(a));
     let leads=0, spent=0, booked=0, cpas=[], alertCount=0;
@@ -2407,6 +2397,47 @@ function renderAccountDetail(name, adAccountId) {
             })()}
           ` : '<div class="text-dark-400 text-sm mt-2">Need CPA goal + L2B data</div>'}
         </div>
+      </div>
+
+      <!-- Quick Edit: All key fields for current cycle -->
+      <div class="glass rounded-xl p-4">
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-3">Quick Edit — Current Cycle</div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-[10px] text-dark-500">Greg Goal ($CPL)</label>
+            <input id="qe-greg-goal" type="number" step="0.01" value="${activeCyc.gregGoal||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-[10px] text-dark-500">CPA Goal</label>
+            <input id="qe-cpa-goal" type="number" step="0.01" value="${activeCyc.cpaGoal||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-[10px] text-dark-500">Booked Goal</label>
+            <input id="qe-booked-goal" type="number" value="${activeCyc.bookedGoal||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-[10px] text-dark-500">Cycle Length (days)</label>
+            <input id="qe-cycle-length" type="number" value="${activeCyc.cycleStartDate && activeCyc.cycleEndDate ? Math.round((new Date(activeCyc.cycleEndDate) - new Date(activeCyc.cycleStartDate)) / 86400000) : 28}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-[10px] text-dark-500">Daily Budget</label>
+            <input id="qe-daily" type="number" step="0.01" value="${activeCyc.dailyBudget||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-[10px] text-dark-500">Monthly Budget</label>
+            <input id="qe-monthly" type="number" step="0.01" value="${activeCyc.monthlyBudget||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-[10px] text-dark-500">Cycle Start</label>
+            <input id="qe-cycle-start" type="date" value="${activeCyc.cycleStartDate||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+          <div>
+            <label class="text-[10px] text-dark-500">Cycle End</label>
+            <input id="qe-cycle-end" type="date" value="${activeCyc.cycleEndDate||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+          </div>
+        </div>
+        <div class="text-[9px] text-dark-500 mt-1.5 mb-1">Changing cycle length auto-adjusts end date from start date</div>
+        <button onclick="quickEditCycle('${esc(name)}','${esc(activeCyc.cycle)}')" class="mt-1 w-full py-1.5 rounded-lg text-xs font-semibold text-white bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 transition-all">Save Changes</button>
       </div>`;
     })()}
 
@@ -3138,88 +3169,186 @@ function renderMetaDailyChart(metric) {
 // ═══════════════════════════════════════════════
 // RENDER: BILLING TRACKER
 // ═══════════════════════════════════════════════
+// ═══ Billing Actions ═══
+
+async function toggleBillingField(accountName, cycleName, field) {
+  // field is 'goodToBill' or 'billed'
+  const acct = allAccounts.find(a => a.name === accountName);
+  if (!acct) return;
+  const c = acct.cycles.find(cy => cy.cycle === cycleName);
+  if (!c) return;
+
+  const current = (c[field] || '').trim().toLowerCase();
+  c[field] = current === 'yes' ? '' : 'Yes';
+
+  // Re-render billing view
+  renderBilling();
+
+  if (APPS_SCRIPT_URL) {
+    const result = await writeToSheet('updateBilling', {
+      name: accountName, cycle: cycleName,
+      goodToBill: c.goodToBill || '', billed: c.billed || '', billingNotes: c.billingNotes || ''
+    });
+    if (result.ok) {
+      showToast(`${accountName} ${cycleName}: ${field} → ${c[field] || 'No'} ✓`, 'success');
+    } else {
+      showToast(`⚠️ Updated locally but failed to save`, 'error');
+    }
+  } else {
+    showToast(`${field} toggled (local only)`, 'success');
+  }
+}
+
+let _billingNotesTimeout = null;
+async function updateBillingNotes(accountName, cycleName, notes) {
+  const acct = allAccounts.find(a => a.name === accountName);
+  if (!acct) return;
+  const c = acct.cycles.find(cy => cy.cycle === cycleName);
+  if (!c) return;
+
+  c.billingNotes = notes;
+
+  // Debounce save — wait 800ms after last keystroke
+  if (_billingNotesTimeout) clearTimeout(_billingNotesTimeout);
+  _billingNotesTimeout = setTimeout(async () => {
+    if (APPS_SCRIPT_URL) {
+      const result = await writeToSheet('updateBilling', {
+        name: accountName, cycle: cycleName,
+        goodToBill: c.goodToBill || '', billed: c.billed || '', billingNotes: c.billingNotes || ''
+      });
+      if (result.ok) {
+        showToast(`Billing notes saved ✓`, 'success');
+      } else {
+        showToast(`⚠️ Notes saved locally but failed to save to Sheet`, 'error');
+      }
+    }
+  }, 800);
+}
+
 function renderBilling() {
   const el = document.getElementById('view-billing');
   el.classList.remove('hidden');
 
   const today = getTodayStr();
   const todayMs = new Date(today).getTime();
-  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const weekMs = 7 * dayMs;
 
-  // Gather billing data from ALL cycles (not just active ones)
+  // Gather billing data from ALL cycles
   const billingData = [];
   allAccounts.forEach(a => {
-    const cycles = (a.cycles || []).length ? a.cycles : [];
-    // If no cycles, check the account itself
-    if (!cycles.length) return;
-    cycles.forEach(c => {
+    if (a.isPaused) return; // skip paused accounts
+    (a.cycles || []).forEach((c, ci) => {
       const endMs = c.cycleEndDate ? new Date(c.cycleEndDate).getTime() : null;
       const startMs = c.cycleStartDate ? new Date(c.cycleStartDate).getTime() : null;
-      const cycleEnded = endMs ? endMs < todayMs : false;
-      const dueSoon = endMs ? (!cycleEnded && (endMs - todayMs) <= weekMs && (endMs - todayMs) >= 0) : false;
-      const isActive = startMs && endMs ? (startMs <= todayMs && endMs >= todayMs) : false;
+      if (!endMs) return; // skip cycles with no end date
+
+      const daysUntilEnd = endMs ? Math.ceil((endMs - todayMs) / dayMs) : null;
+      const daysSinceEnd = endMs ? Math.ceil((todayMs - endMs) / dayMs) : null;
+      const cycleEnded = daysUntilEnd !== null && daysUntilEnd < 0;
       const gtb = (c.goodToBill || '').trim().toLowerCase();
       const bld = (c.billed || '').trim().toLowerCase();
+      const isBilled = bld === 'yes';
+      const isGoodToBill = gtb === 'yes';
+
+      // Categorize with clear priority logic:
+      let category = null;
+      if (isBilled) {
+        category = 'billed';
+      } else if (isGoodToBill && cycleEnded) {
+        category = 'readyToBill';
+      } else if (cycleEnded && daysSinceEnd > 7) {
+        category = 'overdue';       // >7 days past cycle end, unpaid
+      } else if (cycleEnded && daysSinceEnd <= 7) {
+        category = 'late';          // ended within last 7 days, not billed
+      } else if (!cycleEnded && daysUntilEnd <= 7 && daysUntilEnd >= 0) {
+        category = 'upcoming';      // cycle ending within 7 days
+      }
+
+      if (!category) return; // active cycle with >7d left — not billing-relevant
 
       billingData.push({
-        account: a,
-        cycle: c.cycle,
-        cycleEndDate: c.cycleEndDate,
+        account: a, cycleObj: c, cycleIndex: ci,
+        cycle: c.cycle, cycleEndDate: c.cycleEndDate,
         spent: c.amountSpent,
         goodToBill: c.goodToBill || '',
         billed: c.billed || '',
         billingNotes: c.billingNotes || '',
-        monthlyBudget: a.monthlyBudget || c.monthlyBudget,
-        cycleEnded,
-        dueSoon,
-        isActive,
-        // Billing states
-        isBilled: gtb === 'yes' && bld === 'yes',
-        isReadyToBill: gtb === 'yes' && bld !== 'yes' && cycleEnded,
-        isOverdue: cycleEnded && bld !== 'yes' && (gtb === 'no' || gtb === 'try again' || gtb === ''),
-        isDueSoon: dueSoon && bld !== 'yes',
+        monthlyBudget: c.monthlyBudget || a.monthlyBudget,
+        manager: c.manager || a.manager,
+        daysUntilEnd, daysSinceEnd, cycleEnded,
+        isGoodToBill, isBilled, category,
         isRetry: gtb === 'try again',
       });
     });
   });
 
-  // Categorize — priority order (a cycle only appears in one bucket)
-  const overdue = billingData.filter(b => b.isOverdue && b.cycleEnded);
-  const readyToBill = billingData.filter(b => b.isReadyToBill && !b.isBilled);
-  const dueSoon = billingData.filter(b => b.isDueSoon && !b.isBilled && !b.isReadyToBill && !b.isOverdue);
-  const billed = billingData.filter(b => b.isBilled);
+  // Split into categories
+  const upcoming    = billingData.filter(b => b.category === 'upcoming').sort((a,b) => a.daysUntilEnd - b.daysUntilEnd);
+  const late        = billingData.filter(b => b.category === 'late').sort((a,b) => b.daysSinceEnd - a.daysSinceEnd);
+  const overdue     = billingData.filter(b => b.category === 'overdue').sort((a,b) => b.daysSinceEnd - a.daysSinceEnd);
+  const readyToBill = billingData.filter(b => b.category === 'readyToBill');
+  const billed      = billingData.filter(b => b.category === 'billed');
 
-  const totalOverdue = overdue.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
-  const totalReady = readyToBill.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
-  const totalDueSoon = dueSoon.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
-  const totalBilled = billed.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  const totalUpcoming = upcoming.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  const totalLate     = late.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  const totalOverdue  = overdue.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  const totalReady    = readyToBill.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
+  const totalBilled   = billed.reduce((s,b) => s + (b.monthlyBudget || 0), 0);
 
-  function daysUntil(dateStr) {
-    if (!dateStr) return '';
-    const diff = Math.ceil((new Date(dateStr).getTime() - todayMs) / (24*60*60*1000));
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Tomorrow';
-    if (diff < 0) return Math.abs(diff) + 'd overdue';
-    return diff + 'd away';
+  function timingLabel(b) {
+    if (b.daysUntilEnd === 0) return 'Ends today';
+    if (b.daysUntilEnd === 1) return 'Ends tomorrow';
+    if (b.daysUntilEnd > 0) return b.daysUntilEnd + 'd left';
+    if (b.daysSinceEnd === 0) return 'Ended today';
+    return b.daysSinceEnd + 'd overdue';
   }
 
-  function billingRow(b, statusHtml) {
-    return `<tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(b.account.name)}',adAccountId:'${b.account.adAccountId}'})">
-      <td class="py-3 px-4 text-white font-medium">${b.account.name}</td>
+  // Unique billing row ID from account name + cycle
+  function bid(b) { return (b.account.name + '__' + b.cycle).replace(/[^a-zA-Z0-9]/g, '_'); }
+
+  function billingRow(b, statusHtml, showActions) {
+    const id = bid(b);
+    return `<tr class="border-b border-dark-700/50 hover:bg-dark-700/20 transition-colors">
+      <td class="py-3 px-4 text-white font-medium cursor-pointer" onclick="navigate('account',{name:'${esc(b.account.name)}',adAccountId:'${b.account.adAccountId || ''}'})">
+        ${b.account.name}
+        <div class="text-[10px] text-dark-500">${b.manager || ''}</div>
+      </td>
       <td class="py-3 px-4 text-dark-300">${b.cycle}</td>
-      <td class="py-3 px-4 text-dark-300">${b.cycleEndDate || '—'}</td>
+      <td class="py-3 px-4 text-dark-300">
+        ${b.cycleEndDate || '—'}
+        <div class="text-[10px] ${b.daysSinceEnd > 7 ? 'text-red-400' : b.daysSinceEnd > 0 ? 'text-orange-400' : 'text-dark-500'}">${timingLabel(b)}</div>
+      </td>
       <td class="py-3 px-4 text-right text-white">${fmtDollar(b.monthlyBudget)}</td>
+      <td class="py-3 px-4 text-right text-dark-200">${fmtDollar(b.spent)}</td>
       <td class="py-3 px-4">${statusHtml}</td>
-      <td class="py-3 px-4 text-dark-400 text-xs max-w-[200px] truncate">${b.billingNotes}</td>
+      <td class="py-3 px-4">
+        ${showActions ? `<div class="flex items-center gap-1">
+          <button onclick="event.stopPropagation();toggleBillingField('${esc(b.account.name)}','${esc(b.cycle)}','goodToBill')" title="Toggle Good to Bill"
+            class="px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${b.isGoodToBill ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-dark-700 text-dark-400 border border-dark-600 hover:border-emerald-500/40'}">
+            GTB ${b.isGoodToBill ? '✓' : ''}
+          </button>
+          <button onclick="event.stopPropagation();toggleBillingField('${esc(b.account.name)}','${esc(b.cycle)}','billed')" title="Toggle Billed"
+            class="px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${b.isBilled ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-dark-700 text-dark-400 border border-dark-600 hover:border-blue-500/40'}">
+            Billed ${b.isBilled ? '✓' : ''}
+          </button>
+        </div>` : '<span class="badge badge-green">Billed ✓</span>'}
+      </td>
+      <td class="py-3 px-4">
+        <input type="text" value="${(b.billingNotes||'').replace(/"/g,'&quot;')}" placeholder="Notes..."
+          class="w-full bg-dark-700/50 border border-dark-600/30 rounded px-2 py-1 text-xs text-dark-200 focus:outline-none focus:border-brand-500/50"
+          onchange="updateBillingNotes('${esc(b.account.name)}','${esc(b.cycle)}',this.value)" onclick="event.stopPropagation()" />
+      </td>
     </tr>`;
   }
 
   function sectionTable(items, rowMapper) {
     return `<table class="w-full text-sm">
-      <thead><tr class="border-b border-dark-600 text-dark-400 text-xs uppercase">
+      <thead><tr class="border-b border-dark-600 text-dark-400 text-[10px] uppercase tracking-wider">
         <th class="py-2 px-4 text-left">Account</th><th class="py-2 px-4 text-left">Cycle</th>
         <th class="py-2 px-4 text-left">Cycle End</th><th class="py-2 px-4 text-right">Budget</th>
-        <th class="py-2 px-4 text-left">Status</th><th class="py-2 px-4 text-left">Notes</th>
+        <th class="py-2 px-4 text-right">Spent</th><th class="py-2 px-4 text-left">Status</th>
+        <th class="py-2 px-4 text-left">Actions</th><th class="py-2 px-4 text-left">Notes</th>
       </tr></thead><tbody>${items.map(rowMapper).join('')}</tbody></table>`;
   }
 
@@ -3231,20 +3360,38 @@ function renderBilling() {
         </div>
         <div>
           <h1 class="text-2xl font-extrabold text-white">Billing Tracker</h1>
-          <p class="text-dark-300 text-sm mt-1">Cycle-based billing status across all accounts</p>
+          <p class="text-dark-300 text-sm mt-1">Cycle-based billing status — Upcoming → Late → Overdue → Ready → Billed</p>
         </div>
       </div>
     </div>
+
+    <!-- KPI Cards -->
     <div class="grid grid-cols-5 gap-4 mb-8">
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-1" style="opacity:0;${overdue.length > 0 ? 'border-color:rgba(239,68,68,0.2);' : ''}">
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-1" style="opacity:0;${upcoming.length > 0 ? 'border-color:rgba(59,130,246,0.2);' : ''}">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Upcoming</div>
+          <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+        </div>
+        <div class="text-2xl font-extrabold text-blue-400">${upcoming.length}</div>
+        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalUpcoming)} ending in ≤7d</div>
+      </div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-2" style="opacity:0;${late.length > 0 ? 'border-color:rgba(251,146,60,0.2);' : ''}">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Late</div>
+          <div class="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div>
+        </div>
+        <div class="text-2xl font-extrabold text-orange-400">${late.length}</div>
+        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalLate)} ended ≤7d ago</div>
+      </div>
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-3" style="opacity:0;${overdue.length > 0 ? 'border-color:rgba(239,68,68,0.2);' : ''}">
         <div class="flex items-center justify-between mb-2">
           <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Overdue</div>
           <div class="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
         </div>
         <div class="text-2xl font-extrabold text-red-400">${overdue.length}</div>
-        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalOverdue)}</div>
+        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalOverdue)} ended >7d ago</div>
       </div>
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-2" style="opacity:0">
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-4" style="opacity:0">
         <div class="flex items-center justify-between mb-2">
           <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Ready to Bill</div>
           <div class="w-7 h-7 rounded-lg bg-yellow-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
@@ -3252,15 +3399,7 @@ function renderBilling() {
         <div class="text-2xl font-extrabold text-yellow-400">${readyToBill.length}</div>
         <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalReady)}</div>
       </div>
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-3" style="opacity:0">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Due Soon</div>
-          <div class="w-7 h-7 rounded-lg bg-brand-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-        </div>
-        <div class="text-2xl font-extrabold text-brand-400">${dueSoon.length}</div>
-        <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalDueSoon)}</div>
-      </div>
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-4" style="opacity:0">
+      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-5" style="opacity:0">
         <div class="flex items-center justify-between mb-2">
           <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Billed</div>
           <div class="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
@@ -3268,39 +3407,49 @@ function renderBilling() {
         <div class="text-2xl font-extrabold text-emerald-400">${billed.length}</div>
         <div class="text-xs text-dark-400 mt-0.5">${fmtDollar(totalBilled)}</div>
       </div>
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-5" style="opacity:0">
-        <div class="flex items-center justify-between mb-2">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Total Cycles</div>
-          <div class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></div>
-        </div>
-        <div class="text-2xl font-extrabold text-white">${billingData.length}</div>
-      </div>
     </div>
 
+    <!-- Upcoming Billing — cycles ending within 7 days -->
+    ${upcoming.length ? `
+    <div class="glass rounded-2xl overflow-hidden mb-4 border border-blue-500/15" style="background:linear-gradient(135deg,rgba(59,130,246,0.03),rgba(15,23,42,0.8));">
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+        <h3 class="text-blue-400 font-bold">Upcoming Billing — Ending Within 7 Days (${upcoming.length})</h3>
+      </div>
+      ${sectionTable(upcoming, b => billingRow(b,
+        '<span class="text-blue-400 text-xs font-medium">' + timingLabel(b) + '</span>', true
+      ))}
+    </div>` : ''}
+
+    <!-- Late — ended ≤7 days ago, not billed -->
+    ${late.length ? `
+    <div class="glass rounded-2xl overflow-hidden mb-4 border border-orange-500/20" style="background:linear-gradient(135deg,rgba(251,146,60,0.03),rgba(15,23,42,0.8));">
+      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
+        <h3 class="text-orange-400 font-bold">Late — Ended ≤7 Days, Not Billed (${late.length})</h3>
+      </div>
+      ${sectionTable(late, b => billingRow(b,
+        b.isRetry
+          ? '<span class="badge" style="background:rgba(251,146,60,0.15);color:#fb923c;">Try Again</span>'
+          : '<span class="text-orange-400 text-xs font-medium">' + timingLabel(b) + '</span>', true
+      ))}
+    </div>` : ''}
+
+    <!-- Overdue — ended >7 days ago, not billed -->
     ${overdue.length ? `
     <div class="glass rounded-2xl overflow-hidden mb-4 border border-red-500/20" style="background:linear-gradient(135deg,rgba(239,68,68,0.03),rgba(15,23,42,0.8));">
       <div class="p-4 border-b border-dark-600 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-        <h3 class="text-red-400 font-bold">Overdue — Cycle Ended, Not Billed (${overdue.length})</h3>
+        <h3 class="text-red-400 font-bold">Overdue — Ended >7 Days, Not Billed (${overdue.length})</h3>
       </div>
       ${sectionTable(overdue, b => billingRow(b,
         b.isRetry
           ? '<span class="badge" style="background:rgba(251,146,60,0.15);color:#fb923c;">Try Again</span>'
-          : '<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;">Not Ready</span>'
+          : '<span class="badge" style="background:rgba(239,68,68,0.15);color:#f87171;">' + timingLabel(b) + '</span>', true
       ))}
     </div>` : ''}
 
-    ${dueSoon.length ? `
-    <div class="glass rounded-2xl overflow-hidden mb-4 border border-orange-500/15">
-      <div class="p-4 border-b border-dark-600 flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-orange-500"></span>
-        <h3 class="text-orange-400 font-bold">Billing Due Soon — Within 7 Days (${dueSoon.length})</h3>
-      </div>
-      ${sectionTable(dueSoon, b => billingRow(b,
-        '<span class="text-orange-400 text-xs font-medium">' + daysUntil(b.cycleEndDate) + '</span>'
-      ))}
-    </div>` : ''}
-
+    <!-- Ready to Bill — goodToBill=yes but not yet billed -->
     ${readyToBill.length ? `
     <div class="glass rounded-2xl overflow-hidden mb-4">
       <div class="p-4 border-b border-dark-600 flex items-center gap-2">
@@ -3308,22 +3457,21 @@ function renderBilling() {
         <h3 class="text-yellow-400 font-bold">Ready to Bill (${readyToBill.length})</h3>
       </div>
       ${sectionTable(readyToBill, b => billingRow(b,
-        '<span class="badge" style="background:rgba(250,204,21,0.15);color:#facc15;">Ready</span>'
+        '<span class="badge" style="background:rgba(250,204,21,0.15);color:#facc15;">Ready</span>', true
       ))}
     </div>` : ''}
 
+    <!-- Billed — done -->
     ${billed.length ? `
     <div class="glass rounded-2xl overflow-hidden mb-4">
       <div class="p-4 border-b border-dark-600 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-green-500"></span>
-        <h3 class="text-white font-bold">Billed (${billed.length})</h3>
+        <h3 class="text-white font-bold">Billed & Completed (${billed.length})</h3>
       </div>
-      ${sectionTable(billed, b => billingRow(b,
-        '<span class="badge badge-green">Billed</span>'
-      ))}
+      ${sectionTable(billed, b => billingRow(b, '', false))}
     </div>` : ''}
 
-    ${!overdue.length && !readyToBill.length && !dueSoon.length && !billed.length ? `
+    ${!billingData.length ? `
     <div class="glass rounded-xl p-8 text-center">
       <p class="text-dark-400">No billing data available for current cycles.</p>
     </div>` : ''}
@@ -3420,8 +3568,43 @@ async function setAccountGregMode(accountName, mode) {
 
 function getManagers() {
   const mgrs = new Set();
-  allAccounts.forEach(a => mgrs.add(a.manager));
+  allAccounts.forEach(a => { if (a.manager) mgrs.add(a.manager); });
+  // Also include managers from gregConfig that may have zero accounts yet
+  if (gregConfig && gregConfig.managerModes) {
+    Object.keys(gregConfig.managerModes).forEach(m => mgrs.add(m));
+  }
   return [...mgrs].sort();
+}
+
+// Color palette for sidebar manager avatars (cycles through)
+const MGR_COLORS = [
+  { from: 'blue-500', to: 'blue-600', text: 'blue-400', border: 'blue-500' },
+  { from: 'emerald-500', to: 'emerald-600', text: 'emerald-400', border: 'emerald-500' },
+  { from: 'purple-500', to: 'purple-600', text: 'purple-400', border: 'purple-500' },
+  { from: 'amber-500', to: 'amber-600', text: 'amber-400', border: 'amber-500' },
+  { from: 'rose-500', to: 'rose-600', text: 'rose-400', border: 'rose-500' },
+  { from: 'cyan-500', to: 'cyan-600', text: 'cyan-400', border: 'cyan-500' },
+  { from: 'indigo-500', to: 'indigo-600', text: 'indigo-400', border: 'indigo-500' },
+  { from: 'teal-500', to: 'teal-600', text: 'teal-400', border: 'teal-500' },
+];
+
+function renderSidebarManagers() {
+  const container = document.getElementById('sidebar-managers');
+  if (!container) return;
+  const managers = getManagers();
+  container.innerHTML = managers.map((m, idx) => {
+    const c = MGR_COLORS[idx % MGR_COLORS.length];
+    const initial = m.charAt(0).toUpperCase();
+    const key = m.toLowerCase().replace(/\s+/g, '-');
+    const acctCount = allAccounts.filter(a => a.manager === m).length;
+    return `
+      <button onclick="navigate('manager', '${esc(m)}')" id="nav-mgr-${key}" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-${c.from}/20 to-${c.to}/20 flex items-center justify-center text-[10px] font-bold text-${c.text} border border-${c.border}/20">${initial}</div>
+        <span class="font-medium">${m}</span>
+        <span class="ml-auto text-[10px] text-dark-500">${acctCount}</span>
+        <span id="alert-badge-${key}" class="badge badge-red hidden text-[10px]">0</span>
+      </button>`;
+  }).join('');
 }
 
 function getFilteredAdminAccounts() {
@@ -3671,6 +3854,7 @@ async function createNewManager() {
   // Update local state
   gregConfig.managerModes[name] = 'SOFT';
   adminShowNewManager = false;
+  renderSidebarManagers();  // update sidebar with new manager
   renderAdminView();
 
   if (APPS_SCRIPT_URL) {
@@ -3783,14 +3967,17 @@ function renderCycleEditor() {
                   <th class="text-left px-3 py-2 font-semibold">Cycle</th>
                   <th class="text-left px-3 py-2 font-semibold">Start</th>
                   <th class="text-left px-3 py-2 font-semibold">End</th>
-                  <th class="text-right px-3 py-2 font-semibold">Booked Goal</th>
-                  <th class="text-right px-3 py-2 font-semibold">Greg Appt Goal</th>
-                  <th class="text-right px-3 py-2 font-semibold">CPA Goal</th>
+                  <th class="text-center px-3 py-2 font-semibold">Days</th>
+                  <th class="text-right px-3 py-2 font-semibold">Bk Goal</th>
+                  <th class="text-right px-3 py-2 font-semibold">Greg $</th>
+                  <th class="text-right px-3 py-2 font-semibold">CPA $</th>
                   <th class="text-right px-3 py-2 font-semibold">Daily $</th>
                   <th class="text-right px-3 py-2 font-semibold">Monthly $</th>
                   <th class="text-right px-3 py-2 font-semibold">Leads</th>
                   <th class="text-right px-3 py-2 font-semibold">Booked</th>
                   <th class="text-right px-3 py-2 font-semibold">Spent</th>
+                  <th class="text-center px-3 py-2 font-semibold">GTB</th>
+                  <th class="text-center px-3 py-2 font-semibold">Billed</th>
                   <th class="text-center px-3 py-2 font-semibold">Edit</th>
                 </tr>
               </thead>
@@ -3802,6 +3989,7 @@ function renderCycleEditor() {
                   <td class="px-3 py-2 font-semibold text-white">${c.cycle}${ci === cycles.length - 1 ? ' <span class="text-brand-400 text-[9px]">CURRENT</span>' : ''}</td>
                   <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-start" type="date" value="'+(c.cycleStartDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleStartDate || '—')}</td>
                   <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-end" type="date" value="'+(c.cycleEndDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleEndDate || '—')}</td>
+                  <td class="px-3 py-2 text-center text-dark-300">${c.cycleStartDate && c.cycleEndDate ? Math.round((new Date(c.cycleEndDate) - new Date(c.cycleStartDate)) / 86400000) : '—'}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-bgoal" type="number" value="'+(c.bookedGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.bookedGoal ?? '—')}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-ggoal" type="number" value="'+(c.gregGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.gregGoal ?? '—')}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-cpa" type="number" value="'+(c.cpaGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.cpaGoal ? '$'+c.cpaGoal : '—')}</td>
@@ -3810,6 +3998,8 @@ function renderCycleEditor() {
                   <td class="px-3 py-2 text-right ${c.totalLeads > 0 ? 'text-white font-medium' : 'text-dark-400'}">${c.totalLeads ?? '—'}</td>
                   <td class="px-3 py-2 text-right ${c.bookedAppts > 0 ? 'text-white font-medium' : 'text-dark-400'}">${c.bookedAppts ?? '—'}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${c.amountSpent ? '$'+Number(c.amountSpent).toLocaleString() : '—'}</td>
+                  <td class="px-3 py-2 text-center"><span class="text-[10px] ${(c.goodToBill||'').toLowerCase()==='yes' ? 'text-emerald-400 font-semibold' : 'text-dark-500'}">${(c.goodToBill||'').toLowerCase()==='yes' ? '✓' : '—'}</span></td>
+                  <td class="px-3 py-2 text-center"><span class="text-[10px] ${(c.billed||'').toLowerCase()==='yes' ? 'text-blue-400 font-semibold' : 'text-dark-500'}">${(c.billed||'').toLowerCase()==='yes' ? '✓' : '—'}</span></td>
                   <td class="px-3 py-2 text-center">
                     ${isEditingThis ? `
                       <button onclick="saveCycleEdit('${esc(acct.name)}',${ci})" class="text-green-400 hover:text-green-300 text-[10px] font-semibold mr-1">Save</button>
@@ -3854,10 +4044,25 @@ async function createNewClient() {
     if (!mgr) return;
   }
 
+  // Auto-create Cycle 1 with 28-day default
+  const today = new Date();
+  const startDate = today.toISOString().split('T')[0];
+  const endDate = new Date(today.getTime() + 28 * 86400000).toISOString().split('T')[0];
+
+  const cycle1 = {
+    account: name, adAccountId: adId || '', pod, manager: mgr,
+    cycle: 'Cycle 1', cycleStartDate: startDate, cycleEndDate: endDate,
+    bookedGoal, gregGoal, cpaGoal, dailyBudget, monthlyBudget,
+    totalLeads: null, osaPct: null, bookedAppts: null, estBookedAppts: null,
+    cpa: null, amountSpent: null, linkCTR: null, linkCPC: null,
+    cpm: null, frequency: null, surveyPct: null,
+    accountManager: mgr, notes: '', goodToBill: '', billed: '', billingNotes: ''
+  };
+
   const newAcct = {
     name, manager: mgr, pod, adAccountId: adId || '', section: '',
     isPaused: false, status: 'Q1 Onboarded',
-    bookedGoal, gregGoal, cpaGoal, dailyBudget, monthlyBudget, cycles: []
+    bookedGoal, gregGoal, cpaGoal, dailyBudget, monthlyBudget, cycles: [cycle1]
   };
 
   allAccounts.push(newAcct);
@@ -3971,6 +4176,63 @@ async function saveCycleEdit(accountName, cycleIndex) {
   }
 }
 
+async function quickEditCycle(accountName, cycleName) {
+  const acct = allAccounts.find(a => a.name === accountName);
+  if (!acct) return;
+  const c = acct.cycles.find(cy => cy.cycle === cycleName);
+  if (!c) return;
+
+  const gregGoal = document.getElementById('qe-greg-goal')?.value;
+  const cpaGoal = document.getElementById('qe-cpa-goal')?.value;
+  const bookedGoal = document.getElementById('qe-booked-goal')?.value;
+  const cycleLength = document.getElementById('qe-cycle-length')?.value;
+  const daily = document.getElementById('qe-daily')?.value;
+  const monthly = document.getElementById('qe-monthly')?.value;
+  const cycleStart = document.getElementById('qe-cycle-start')?.value;
+  const cycleEnd = document.getElementById('qe-cycle-end')?.value;
+
+  // Update local data
+  if (gregGoal !== '') c.gregGoal = parseFloat(gregGoal) || null;
+  if (cpaGoal !== '') c.cpaGoal = parseFloat(cpaGoal) || null;
+  if (bookedGoal !== '') c.bookedGoal = parseFloat(bookedGoal) || null;
+  if (daily !== '') c.dailyBudget = parseFloat(daily) || null;
+  if (monthly !== '') c.monthlyBudget = parseFloat(monthly) || null;
+
+  // Handle cycle length → auto-adjust end date from start
+  if (cycleStart) c.cycleStartDate = cycleStart;
+  if (cycleEnd) c.cycleEndDate = cycleEnd;
+  if (cycleLength && c.cycleStartDate) {
+    const startMs = new Date(c.cycleStartDate).getTime();
+    c.cycleEndDate = new Date(startMs + parseInt(cycleLength) * 86400000).toISOString().split('T')[0];
+  }
+
+  // Also update top-level account fields for convenience
+  if (c.gregGoal !== undefined) acct.gregGoal = c.gregGoal;
+  if (c.cpaGoal !== undefined) acct.cpaGoal = c.cpaGoal;
+  if (c.bookedGoal !== undefined) acct.bookedGoal = c.bookedGoal;
+  if (c.dailyBudget !== undefined) acct.dailyBudget = c.dailyBudget;
+  if (c.monthlyBudget !== undefined) acct.monthlyBudget = c.monthlyBudget;
+
+  // Re-render to show changes
+  navigate('account', { name: accountName, adAccountId: acct.adAccountId });
+
+  if (APPS_SCRIPT_URL) {
+    const result = await writeToSheet('updateCycle', {
+      name: accountName, cycle: c.cycle,
+      cycleStartDate: c.cycleStartDate, cycleEndDate: c.cycleEndDate,
+      bookedGoal: c.bookedGoal, gregGoal: c.gregGoal, cpaGoal: c.cpaGoal,
+      dailyBudget: c.dailyBudget, monthlyBudget: c.monthlyBudget
+    });
+    if (result.ok) {
+      showToast(`Updated ${c.cycle} for ${accountName} ✓ Saved`, 'success');
+    } else {
+      showToast(`⚠️ Updated locally, but failed to save to Sheet`, 'error');
+    }
+  } else {
+    showToast(`Updated ${c.cycle} for ${accountName} (local only)`, 'success');
+  }
+}
+
 async function addNewCycle(accountName) {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct) return;
@@ -3980,7 +4242,7 @@ async function addNewCycle(accountName) {
 
   const today = new Date();
   const startDate = today.toISOString().split('T')[0];
-  const endDate = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const endDate = new Date(today.getTime() + 28 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   // Inherit goals from previous cycle if exists
   const prev = acct.cycles.length ? acct.cycles[acct.cycles.length - 1] : null;
