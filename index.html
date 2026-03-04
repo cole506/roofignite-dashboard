@@ -2400,9 +2400,10 @@ function renderAccountDetail(name, adAccountId) {
             })()}
           ` : '<div class="text-dark-400 text-sm mt-2">Need CPA goal + L2B data</div>'}
           <div id="greg-goal-edit" class="hidden mt-3 pt-3 border-t border-dark-600/40">
-            <label class="text-[10px] text-dark-500">Greg Goal ($CPL) — Override</label>
-            <div class="flex gap-2 mt-1">
-              <input id="qe-greg-goal" type="number" step="0.01" value="${activeCyc ? activeCyc.gregGoal||'' : ''}" class="flex-1 bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" placeholder="e.g. 45.00" />
+            <label class="text-[10px] text-dark-500">Greg Booking Goal ($/Booked Appt) — Override</label>
+            <div class="text-[9px] text-dark-400 mt-0.5 mb-1.5">This is the <strong class="text-dark-300">cost per booked appointment</strong> target. Greg converts this to a lead CPL using the L2B rate. Not a CPL — don't enter a CPL here.</div>
+            <div class="flex gap-2">
+              <input id="qe-greg-goal" type="number" step="0.01" value="${activeCyc ? activeCyc.gregGoal||'' : ''}" class="flex-1 bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" placeholder="e.g. 350.00" />
               <button onclick="saveGregGoal('${esc(name)}','${activeCyc ? esc(activeCyc.cycle) : ''}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold text-white bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 transition-all">Save</button>
             </div>
             <div class="text-[9px] text-dark-500 mt-1">⚠ Changing this directly affects when Greg pauses ads</div>
