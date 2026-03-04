@@ -6,6 +6,7 @@
 <title>RoofIgnite Command Center</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="config.js"></script>
 <script>
 tailwind.config = {
   theme: {
@@ -410,21 +411,15 @@ tailwind.config = {
 // ═══════════════════════════════════════════════
 // DATA LAYER — Google Sheets Integration
 // ═══════════════════════════════════════════════
-const SHEET_ID = '1W560POSt6T4QsNObZGxz2BKyCNvRIW7dubAxhIVkAy4';
-const SHEETS = {
-  'Pod 2 - RoofIgnite': 0,
-  'Pod 1 - RoofIgnite': 295240236
-};
-const LEAD_SHEETS = {
-  'ALL_ROOF': 1440123496,
-  'ALL_CiGN': 951162408
-};
+const SHEET_ID = CONFIG.SHEET_ID;
+const SHEETS = CONFIG.SHEETS;
+const LEAD_SHEETS = CONFIG.LEAD_SHEETS;
 
 // ═══════════════════════════════════════════════
 // META API — Paste your long-lived access token here
 // ═══════════════════════════════════════════════
-const META_ACCESS_TOKEN = 'EAASdzH5TwEUBQRgZAhUKhIO1fHvuZCW9NA5ZBxJ2kxZAiRGDcKhY3FRQBwF53rzAtU4UADlTZCjZCvAKtAzdvPlDjeHZC5mrrmVe4RpSxcn1zJwDopKk7TaIz7ydeLYDFhXGgl8tB8Yd2HwZBaeVhU6DgOJt87xz0oHRA88lU6Ym9ZAhJVK4PK0P8VN4p2NsYLzS6kAZDZD';
-const META_API_VERSION = 'v20.0';
+const META_ACCESS_TOKEN = CONFIG.META_ACCESS_TOKEN;
+const META_API_VERSION = CONFIG.META_API_VERSION;
 const META_BASE = `https://graph.facebook.com/${META_API_VERSION}`;
 
 // Cache for Meta daily insights per ad account
@@ -3538,7 +3533,7 @@ function esc(str) { return str.replace(/'/g, "\\'").replace(/"/g, '\\"'); }
 
 // Google Apps Script Web App URL for write operations
 // Persisted in localStorage so it survives page reloads
-let APPS_SCRIPT_URL = localStorage.getItem('roofignite_gas_url') || '';
+let APPS_SCRIPT_URL = localStorage.getItem('roofignite_gas_url') || CONFIG.APPS_SCRIPT_URL || '';
 
 // Admin state
 let adminFilter = 'all'; // all, active, paused, manager-X
