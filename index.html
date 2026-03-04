@@ -3864,6 +3864,7 @@ function confirmDeleteManager(mgrName, acctCount) {
     return;
   }
 
+  const otherManagers = managers.filter(m => m !== mgrName);
   const activeAccts = allAccounts.filter(a => a.manager === mgrName && hasActiveCycle(a));
   const activeCount = activeAccts.length;
   const inactiveCount = acctCount - activeCount;
@@ -3879,29 +3880,25 @@ function confirmDeleteManager(mgrName, acctCount) {
         <h3 class="text-white font-bold text-lg">Remove Manager</h3>
       </div>
 
-      ${activeCount > 0 ? `
-        <div class="bg-red-500/10 border border-red-500/20 rounded-xl p-3 mb-4">
-          <p class="text-red-300 text-xs font-semibold mb-1">⚠️ ${mgrName} has ${activeCount} ACTIVE account${activeCount > 1 ? 's' : ''}</p>
-          <p class="text-dark-300 text-[11px]">These accounts will become unmanaged. Greg controls and overrides for their accounts will be removed.</p>
+      ${acctCount > 0 ? `
+        <div class="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 mb-4">
+          <p class="text-blue-300 text-xs font-semibold mb-1">📋 Reassign ${acctCount} account${acctCount > 1 ? 's' : ''} to:</p>
+          <select id="delete-mgr-reassign" class="w-full mt-2 bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:border-blue-500">
+            ${otherManagers.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')}
+          </select>
+          ${activeCount > 0 ? `<p class="text-red-300 text-[11px] mt-2">⚠️ ${activeCount} of these are ACTIVE</p>` : ''}
+          ${inactiveCount > 0 ? `<p class="text-yellow-300 text-[11px] mt-1">${inactiveCount} inactive/paused</p>` : ''}
         </div>
-      ` : ''}
+      ` : `
+        <p class="text-dark-300 text-sm mb-4">${mgrName} has no accounts assigned.</p>
+      `}
 
-      ${inactiveCount > 0 ? `
-        <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 mb-4">
-          <p class="text-yellow-300 text-xs">${inactiveCount} inactive/paused account${inactiveCount > 1 ? 's' : ''} will become unmanaged.</p>
-        </div>
-      ` : ''}
-
-      ${acctCount === 0 ? `
-        <p class="text-dark-300 text-sm mb-2">${mgrName} has no accounts assigned.</p>
-      ` : ''}
-
-      <p class="text-dark-200 text-sm mb-3">Type <span class="text-red-400 font-bold">${mgrName}</span> to confirm removal:</p>
+      <p class="text-dark-200 text-sm mb-3">Type <span class="text-red-400 font-bold">${mgrName}</span> to confirm:</p>
       <input id="delete-mgr-confirm-input" type="text" placeholder="Type manager name..." class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-red-500 mb-4" autocomplete="off" spellcheck="false" />
 
       <div class="flex justify-end gap-3">
         <button onclick="this.closest('.fixed').remove()" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-300 hover:text-white bg-dark-700/50 hover:bg-dark-600/50 border border-dark-600/30 transition-all">Cancel</button>
-        <button id="delete-mgr-confirm-btn" onclick="executeDeleteManager('${esc(mgrName)}')" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/20 transition-all opacity-40 cursor-not-allowed" disabled>Remove</button>
+        <button id="delete-mgr-confirm-btn" onclick="executeDeleteManager('${esc(mgrName)}')" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/20 transition-all opacity-40 cursor-not-allowed" disabled>Remove & Reassign</button>
       </div>
     </div>
   `;
@@ -3932,15 +3929,19 @@ function executeDeleteManager(mgrName) {
     return;
   }
 
+  // Get reassign target
+  const reassignSelect = document.getElementById('delete-mgr-reassign');
+  const reassignTo = reassignSelect ? reassignSelect.value : null;
+
   // Close modal
   const modal = document.getElementById('delete-mgr-confirm-btn')?.closest('.fixed');
   if (modal) modal.remove();
 
-  // Execute the delete
-  deleteManager(mgrName);
+  // Execute the delete with reassignment
+  deleteManager(mgrName, reassignTo);
 }
 
-async function deleteManager(mgrName) {
+async function deleteManager(mgrName, reassignTo) {
   // SAFETY: Last-check — don't delete the last manager
   const managers = getManagers();
   if (managers.length <= 1) {
@@ -3948,11 +3949,18 @@ async function deleteManager(mgrName) {
     return;
   }
 
+  // Reassign accounts locally
+  if (reassignTo) {
+    allAccounts.filter(a => a.manager === mgrName).forEach(a => {
+      a.manager = reassignTo;
+    });
+  }
+
   // Remove from gregConfig
   delete gregConfig.managerModes[mgrName];
-  // Remove any account-level overrides for this manager's accounts
-  allAccounts.filter(a => a.manager === mgrName).forEach(a => {
-    delete gregConfig.accountModes[a.name];
+  allAccounts.filter(a => a.manager === reassignTo).forEach(a => {
+    // Clean up any account-level greg overrides that belonged to deleted manager's accounts
+    // (they're now under the new manager so keep them unless you want a reset)
   });
 
   // Update sidebar and admin view
@@ -3960,17 +3968,17 @@ async function deleteManager(mgrName) {
   renderAdminView();
 
   if (APPS_SCRIPT_URL) {
-    const result = await writeToSheet('deleteManager', { name: mgrName }, { silent: true });
+    const result = await writeToSheet('deleteManager', { name: mgrName, reassignTo: reassignTo || '' }, { silent: true });
     if (result.ok) {
-      showToast(`Manager "${mgrName}" removed ✓`, 'success');
+      const msg = reassignTo ? `"${mgrName}" removed — ${allAccounts.filter(a => a.manager === reassignTo).length > 0 ? 'accounts reassigned to ' + reassignTo : 'done'} ✓` : `Manager "${mgrName}" removed ✓`;
+      showToast(msg, 'success');
     } else {
       const errMsg = result.error || '';
       console.error('[DeleteManager] GAS error:', errMsg);
-      // Detect "Unknown action" = user hasn't redeployed the Apps Script
       if (errMsg.includes('Unknown action')) {
-        showToast(`"${mgrName}" removed locally. To sync with Sheet: redeploy your Apps Script (Manage Deployments → Edit → New Version → Deploy)`, 'warning');
+        showToast(`"${mgrName}" removed locally. To sync: redeploy Apps Script (Manage Deployments → Edit → New Version → Deploy)`, 'warning');
       } else {
-        showToast(`"${mgrName}" removed locally, but Sheet sync failed: ${errMsg || 'check console for details'}`, 'error');
+        showToast(`"${mgrName}" removed locally, but Sheet sync failed: ${errMsg || 'check console'}`, 'error');
       }
     }
   } else {
