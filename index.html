@@ -3621,6 +3621,9 @@ function renderAdminView() {
   const accts = getFilteredAdminAccounts();
   const hasGAS = !!APPS_SCRIPT_URL;
 
+  // Force scroll to top when admin view renders
+  setTimeout(() => { document.querySelector('.main-content')?.scrollTo(0, 0); }, 0);
+
   el.innerHTML = `
     <div class="flex items-center justify-between mb-8">
       <div class="flex items-center gap-4">
@@ -4386,7 +4389,12 @@ function addNewCycle(accountName) {
   if (!acct) return;
 
   const prev = acct.cycles.length ? acct.cycles[acct.cycles.length - 1] : null;
-  const nextNum = acct.cycles.length + 1;
+  // Parse the highest cycle number from existing cycle names (handles gaps/duplicates)
+  const maxCycleNum = acct.cycles.reduce((max, c) => {
+    const m = String(c.cycle || '').match(/cycle\s*(\d+)/i);
+    return m ? Math.max(max, parseInt(m[1])) : max;
+  }, 0);
+  const nextNum = maxCycleNum + 1;
   // Default start = previous cycle end, or today
   const defaultStart = prev?.cycleEndDate || new Date().toISOString().split('T')[0];
 
@@ -4442,7 +4450,12 @@ async function executeAddCycle(accountName) {
   const monthlyBudget = dailyBudget ? Math.round(dailyBudget * 28 * 100) / 100 : null;
 
   const prev = acct.cycles.length ? acct.cycles[acct.cycles.length - 1] : null;
-  const nextNum = acct.cycles.length + 1;
+  // Parse highest existing cycle number from names (not array length — handles gaps)
+  const maxCycleNum = acct.cycles.reduce((max, c) => {
+    const m = String(c.cycle || '').match(/cycle\s*(\d+)/i);
+    return m ? Math.max(max, parseInt(m[1])) : max;
+  }, 0);
+  const nextNum = maxCycleNum + 1;
   const cycleName = 'Cycle ' + nextNum;
 
   const newCycle = {
@@ -4483,7 +4496,12 @@ async function executeAddCycle(accountName) {
     if (result.ok) {
       showToast(`${cycleName} added to ${accountName} ✓`, 'success');
     } else {
-      showToast(`⚠️ ${cycleName} added locally, but failed to save to Sheet`, 'error');
+      const errMsg = result.error || 'Unknown error';
+      if (errMsg.includes('Unknown action')) {
+        showToast(`${cycleName} added locally. To sync: redeploy Apps Script (New Version)`, 'warning');
+      } else {
+        showToast(`⚠️ ${cycleName} added locally, but Sheet sync failed: ${errMsg}`, 'error');
+      }
     }
   } else {
     showToast(`${cycleName} added to ${accountName} (local only)`, 'warning');
