@@ -3866,7 +3866,7 @@ function confirmDeleteManager(mgrName, acctCount) {
 
   const activeAccts = allAccounts.filter(a => a.manager === mgrName && hasActiveCycle(a));
   const activeCount = activeAccts.length;
-  const needsTypedConfirm = activeCount > 0; // Must type name if they have active accounts
+  const inactiveCount = acctCount - activeCount;
 
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
@@ -3884,53 +3884,52 @@ function confirmDeleteManager(mgrName, acctCount) {
           <p class="text-red-300 text-xs font-semibold mb-1">⚠️ ${mgrName} has ${activeCount} ACTIVE account${activeCount > 1 ? 's' : ''}</p>
           <p class="text-dark-300 text-[11px]">These accounts will become unmanaged. Greg controls and overrides for their accounts will be removed.</p>
         </div>
-        <p class="text-dark-200 text-sm mb-3">Type <span class="text-red-400 font-bold">${mgrName}</span> to confirm removal:</p>
-        <input id="delete-mgr-confirm-input" type="text" placeholder="Type manager name..." class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-red-500 mb-4" autocomplete="off" />
-      ` : `
-        <p class="text-dark-200 text-sm mb-4">Remove manager <span class="text-white font-semibold">"${mgrName}"</span>? They have no accounts.</p>
-      `}
+      ` : ''}
 
-      ${acctCount > 0 && activeCount === 0 ? `
+      ${inactiveCount > 0 ? `
         <div class="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 mb-4">
-          <p class="text-yellow-300 text-xs">${mgrName} has ${acctCount} inactive/paused account${acctCount > 1 ? 's' : ''} that will become unmanaged.</p>
+          <p class="text-yellow-300 text-xs">${inactiveCount} inactive/paused account${inactiveCount > 1 ? 's' : ''} will become unmanaged.</p>
         </div>
       ` : ''}
 
+      ${acctCount === 0 ? `
+        <p class="text-dark-300 text-sm mb-2">${mgrName} has no accounts assigned.</p>
+      ` : ''}
+
+      <p class="text-dark-200 text-sm mb-3">Type <span class="text-red-400 font-bold">${mgrName}</span> to confirm removal:</p>
+      <input id="delete-mgr-confirm-input" type="text" placeholder="Type manager name..." class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-red-500 mb-4" autocomplete="off" spellcheck="false" />
+
       <div class="flex justify-end gap-3">
         <button onclick="this.closest('.fixed').remove()" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-300 hover:text-white bg-dark-700/50 hover:bg-dark-600/50 border border-dark-600/30 transition-all">Cancel</button>
-        <button id="delete-mgr-confirm-btn" onclick="executeDeleteManager('${esc(mgrName)}', ${needsTypedConfirm})" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/20 transition-all ${needsTypedConfirm ? 'opacity-40 cursor-not-allowed' : ''}" ${needsTypedConfirm ? 'disabled' : ''}>Remove</button>
+        <button id="delete-mgr-confirm-btn" onclick="executeDeleteManager('${esc(mgrName)}')" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/20 transition-all opacity-40 cursor-not-allowed" disabled>Remove</button>
       </div>
     </div>
   `;
   overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
 
-  // If typed confirmation required, enable button only when name matches
-  if (needsTypedConfirm) {
-    setTimeout(() => {
-      const input = document.getElementById('delete-mgr-confirm-input');
-      const btn = document.getElementById('delete-mgr-confirm-btn');
-      if (input && btn) {
-        input.focus();
-        input.addEventListener('input', () => {
-          const matches = input.value.trim().toLowerCase() === mgrName.toLowerCase();
-          btn.disabled = !matches;
-          btn.classList.toggle('opacity-40', !matches);
-          btn.classList.toggle('cursor-not-allowed', !matches);
-        });
-      }
-    }, 50);
-  }
+  // Enable button ONLY when typed name matches exactly
+  setTimeout(() => {
+    const input = document.getElementById('delete-mgr-confirm-input');
+    const btn = document.getElementById('delete-mgr-confirm-btn');
+    if (input && btn) {
+      input.focus();
+      input.addEventListener('input', () => {
+        const matches = input.value.trim().toLowerCase() === mgrName.toLowerCase();
+        btn.disabled = !matches;
+        btn.classList.toggle('opacity-40', !matches);
+        btn.classList.toggle('cursor-not-allowed', !matches);
+      });
+    }
+  }, 50);
 }
 
-function executeDeleteManager(mgrName, needsTypedConfirm) {
+function executeDeleteManager(mgrName) {
   // Double-check typed confirmation
-  if (needsTypedConfirm) {
-    const input = document.getElementById('delete-mgr-confirm-input');
-    if (!input || input.value.trim().toLowerCase() !== mgrName.toLowerCase()) {
-      showToast('Type the manager name to confirm', 'error');
-      return;
-    }
+  const input = document.getElementById('delete-mgr-confirm-input');
+  if (!input || input.value.trim().toLowerCase() !== mgrName.toLowerCase()) {
+    showToast('Type the manager name exactly to confirm', 'error');
+    return;
   }
 
   // Close modal
@@ -4444,7 +4443,11 @@ async function writeToSheet(action, data) {
     let result = { ok: true };
     try {
       const text = await resp.text();
-      result = JSON.parse(text);
+      // GAS sometimes returns HTML on redirect — only parse if it looks like JSON
+      if (text && text.trim().startsWith('{')) {
+        result = JSON.parse(text);
+      }
+      // If we got a non-JSON response but HTTP was ok, treat as success
     } catch (_) {
       // If response isn't readable (opaque), assume success if no network error
     }
