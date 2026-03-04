@@ -3960,11 +3960,18 @@ async function deleteManager(mgrName) {
   renderAdminView();
 
   if (APPS_SCRIPT_URL) {
-    const result = await writeToSheet('deleteManager', { name: mgrName });
+    const result = await writeToSheet('deleteManager', { name: mgrName }, { silent: true });
     if (result.ok) {
       showToast(`Manager "${mgrName}" removed ✓`, 'success');
     } else {
-      showToast(`"${mgrName}" removed locally, but failed to remove from Sheet`, 'error');
+      const errMsg = result.error || '';
+      console.error('[DeleteManager] GAS error:', errMsg);
+      // Detect "Unknown action" = user hasn't redeployed the Apps Script
+      if (errMsg.includes('Unknown action')) {
+        showToast(`"${mgrName}" removed locally. To sync with Sheet: redeploy your Apps Script (Manage Deployments → Edit → New Version → Deploy)`, 'warning');
+      } else {
+        showToast(`"${mgrName}" removed locally, but Sheet sync failed: ${errMsg || 'check console for details'}`, 'error');
+      }
     }
   } else {
     showToast(`Manager "${mgrName}" removed locally (connect Apps Script to sync)`, 'warning');
@@ -4424,10 +4431,11 @@ function showToast(message, type = 'info') {
 
 // ═══ Google Apps Script Write-Back ═══
 
-async function writeToSheet(action, data) {
+async function writeToSheet(action, data, opts = {}) {
+  const silent = opts.silent || false; // if true, don't show toasts (caller will handle)
   if (!APPS_SCRIPT_URL) {
     console.log('[GAS] No Apps Script URL configured. Action:', action, 'Data:', data);
-    showToast('⚠️ Apps Script not connected — changes only saved locally', 'warning');
+    if (!silent) showToast('⚠️ Apps Script not connected — changes only saved locally', 'warning');
     return { ok: false, error: 'No Apps Script URL configured' };
   }
 
@@ -4443,6 +4451,7 @@ async function writeToSheet(action, data) {
     let result = { ok: true };
     try {
       const text = await resp.text();
+      console.log('[GAS] Raw response for', action, ':', text ? text.substring(0, 200) : '(empty)');
       // GAS sometimes returns HTML on redirect — only parse if it looks like JSON
       if (text && text.trim().startsWith('{')) {
         result = JSON.parse(text);
@@ -4458,13 +4467,13 @@ async function writeToSheet(action, data) {
     } else {
       const errMsg = result.error || 'Unknown error from Apps Script';
       console.error('[GAS] Write error:', action, errMsg);
-      showToast(`❌ Failed to save "${action}" to Sheet: ${errMsg}`, 'error');
+      if (!silent) showToast(`❌ Failed to save "${action}" to Sheet: ${errMsg}`, 'error');
       return { ok: false, error: errMsg };
     }
 
   } catch (e) {
     console.error('[GAS] Write failed:', action, e);
-    showToast(`❌ Could not reach Apps Script — ${e.message}`, 'error');
+    if (!silent) showToast(`❌ Could not reach Apps Script — ${e.message}`, 'error');
     return { ok: false, error: e.message };
   }
 }
