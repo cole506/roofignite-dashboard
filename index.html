@@ -1396,103 +1396,68 @@ function getPreviousCycle(accountName, adAccountId, currentCycle) {
   return sorted.length > 0 ? sorted[0] : null;
 }
 
-// Performance Health Score (0–100) composite — v2
-// Weights: On-Track to Goal (40) · CPA vs Goal (25) · Trend Direction (15) · Lead Flow Health (15) · Pacing (5)
+// Performance Health Score (0–100) composite — v3
+// Weights: Pace (90%) · Supporting Metrics (10%: CPA, OSA, CTR, Frequency)
 function getHealthScore(acct, cycle) {
   if (!cycle) return null;
-  let score = 0;
-  let maxPossible = 0;
 
-  // ── On-Track to Goal (40 pts) — MAJORITY WEIGHT ──
-  if (cycle.estBookedAppts !== null && cycle.bookedGoal) {
-    maxPossible += 40;
-    const ratio = cycle.estBookedAppts / cycle.bookedGoal;
-    if (ratio >= 1.0) score += 40;
-    else if (ratio >= 0.9) score += 35;
-    else if (ratio >= 0.8) score += 25;
-    else if (ratio >= 0.6) score += 10;
-    else score += 0;
-  }
-
-  // ── CPA vs Goal (25 pts) ──
-  const cpaGoal = acct.cpaGoal || cycle.cpaGoal;
-  if (cpaGoal && cycle.cpa && cycle.cpa > 0) {
-    maxPossible += 25;
-    const ratio = cycle.cpa / cpaGoal;
-    if (ratio <= 0.8) score += 25;
-    else if (ratio <= 1.0) score += 20;
-    else if (ratio <= 1.15) score += 12;
-    else if (ratio <= 1.5) score += 5;
-    else score += 0;
-  }
-
-  // ── Trend Direction (15 pts) — compare vs previous cycle ──
-  const prev = getPreviousCycle(acct.name, acct.adAccountId, cycle);
-  if (prev) {
-    maxPossible += 15;
-    let improvements = 0;
-    let comparisons = 0;
-    // CPA improving (lower is better)
-    if (prev.cpa && cycle.cpa && prev.cpa > 0) {
-      comparisons++;
-      if (cycle.cpa <= prev.cpa) improvements++;
-    }
-    // CTR improving (higher is better)
-    if (prev.linkCTR && cycle.linkCTR) {
-      comparisons++;
-      if (cycle.linkCTR >= prev.linkCTR) improvements++;
-    }
-    // Leads improving (higher is better)
-    if (prev.totalLeads !== null && cycle.totalLeads !== null && prev.totalLeads > 0) {
-      comparisons++;
-      if (cycle.totalLeads >= prev.totalLeads) improvements++;
-    }
-    if (comparisons > 0) {
-      score += Math.round((improvements / comparisons) * 15);
-    } else {
-      maxPossible -= 15; // no data to compare
-    }
-  }
-
-  // ── Lead Flow Health (15 pts) — composite of OSA, CTR, Frequency ──
-  {
-    let subScore = 0;
-    let subMax = 0;
-    // OSA < 15%→5, <20%→3, else 0
-    if (cycle.osaPct !== null) {
-      subMax += 5;
-      if (cycle.osaPct < 15) subScore += 5;
-      else if (cycle.osaPct < 20) subScore += 3;
-    }
-    // CTR >= 1.2%→5, >=0.9%→3, else 0
-    if (cycle.linkCTR !== null && cycle.linkCTR > 0) {
-      subMax += 5;
-      if (cycle.linkCTR >= 1.2) subScore += 5;
-      else if (cycle.linkCTR >= 0.9) subScore += 3;
-    }
-    // Frequency <= 2.0→5, <=2.5→3, else 0
-    if (cycle.frequency !== null) {
-      subMax += 5;
-      if (cycle.frequency <= 2.0) subScore += 5;
-      else if (cycle.frequency <= 2.5) subScore += 3;
-    }
-    if (subMax > 0) {
-      maxPossible += 15;
-      score += Math.round((subScore / subMax) * 15);
-    }
-  }
-
-  // ── Pacing (5 pts) — booking pace ──
+  // ── PACE COMPONENT (90 pts) ──
+  let paceScore = null;
   const bkPacing = getBookingPacing(cycle);
   if (bkPacing) {
-    maxPossible += 5;
-    if (bkPacing.status === 'on-track') score += 5;
-    else if (bkPacing.status === 'close') score += 3;
-    else score += 0;
+    // Use pctOfGoal for a smooth 0–90 scale
+    // 100%+ of goal → 90, scales linearly down to 0
+    const pct = Math.min(bkPacing.pctOfGoal, 1.2); // cap at 120%
+    paceScore = Math.round(Math.min(90, pct * 90));
   }
 
-  if (maxPossible === 0) return null;
-  return Math.round((score / maxPossible) * 100);
+  // If we have no pace data, fall back to est booked vs goal
+  if (paceScore === null && cycle.estBookedAppts !== null && cycle.bookedGoal) {
+    const ratio = Math.min(cycle.estBookedAppts / cycle.bookedGoal, 1.2);
+    paceScore = Math.round(Math.min(90, ratio * 90));
+  }
+
+  if (paceScore === null) return null;
+
+  // ── SUPPORTING METRICS (10 pts) ──
+  let suppScore = 0;
+  let suppMax = 0;
+
+  // CPA vs Goal (up to 4 pts)
+  const cpaGoal = acct.cpaGoal || cycle.cpaGoal;
+  if (cpaGoal && cycle.cpa && cycle.cpa > 0) {
+    suppMax += 4;
+    const ratio = cycle.cpa / cpaGoal;
+    if (ratio <= 0.85) suppScore += 4;
+    else if (ratio <= 1.0) suppScore += 3;
+    else if (ratio <= 1.2) suppScore += 2;
+    else if (ratio <= 1.5) suppScore += 1;
+  }
+
+  // OSA (up to 2 pts)
+  if (cycle.osaPct !== null) {
+    suppMax += 2;
+    if (cycle.osaPct < 12) suppScore += 2;
+    else if (cycle.osaPct < 20) suppScore += 1;
+  }
+
+  // CTR (up to 2 pts)
+  if (cycle.linkCTR !== null && cycle.linkCTR > 0) {
+    suppMax += 2;
+    if (cycle.linkCTR >= 1.2) suppScore += 2;
+    else if (cycle.linkCTR >= 0.8) suppScore += 1;
+  }
+
+  // Frequency (up to 2 pts)
+  if (cycle.frequency !== null) {
+    suppMax += 2;
+    if (cycle.frequency <= 2.0) suppScore += 2;
+    else if (cycle.frequency <= 2.5) suppScore += 1;
+  }
+
+  const suppFinal = suppMax > 0 ? Math.round((suppScore / suppMax) * 10) : 5; // default 5 if no data
+
+  return Math.min(100, paceScore + suppFinal);
 }
 
 function healthScoreColor(score) {
@@ -2157,6 +2122,18 @@ function renderPodView(podName) {
 }
 
 function renderAccountTable(active, inactive, mgrName) {
+  // Sort active accounts by HP: worst (lowest) first, nulls at the end
+  const sortedActive = [...active].sort((a, b) => {
+    const ca = getActiveCycle(a.name, a.adAccountId);
+    const cb = getActiveCycle(b.name, b.adAccountId);
+    const ha = getHealthScore(a, ca);
+    const hb = getHealthScore(b, cb);
+    if (ha === null && hb === null) return a.name.localeCompare(b.name);
+    if (ha === null) return 1;
+    if (hb === null) return -1;
+    return ha - hb;
+  });
+
   return `
     <div class="glass rounded-2xl overflow-hidden">
       <div class="overflow-x-auto">
@@ -2182,7 +2159,7 @@ function renderAccountTable(active, inactive, mgrName) {
             </tr>
           </thead>
           <tbody>
-            ${active.map(a => {
+            ${sortedActive.map(a => {
               const c = getActiveCycle(a.name, a.adAccountId);
               const cpaGoal = a.cpaGoal || (c && c.cpaGoal);
               const hs = getHealthScore(a, c);
