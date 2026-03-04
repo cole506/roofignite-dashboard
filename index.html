@@ -2275,10 +2275,16 @@ function renderAccountDetail(name, adAccountId) {
             <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} · Manager: ${acct.manager} · Ad Account: ${acct.adAccountId || 'N/A'}</p>
           </div>
         </div>
-        <button onclick="addNewCycle('${esc(name)}')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/20 transition-all">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-          Add Cycle
-        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="document.getElementById('quick-edit-panel').classList.toggle('hidden')" class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-dark-200 hover:text-white bg-dark-700/60 hover:bg-dark-700/90 border border-dark-600/40 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            Edit Cycle
+          </button>
+          <button onclick="addNewCycle('${esc(name)}')" class="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/20 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+            Add Cycle
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2426,14 +2432,6 @@ function renderAccountDetail(name, adAccountId) {
         </div>
       </div>`;
     })()}
-
-      <!-- Action Button: Edit Cycle -->
-      <div class="flex gap-2 mb-4">
-        <button onclick="document.getElementById('quick-edit-panel').classList.toggle('hidden')" class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-dark-200 hover:text-white bg-dark-700/50 hover:bg-dark-700/80 border border-dark-600/30 transition-all">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-          Edit Cycle
-        </button>
-      </div>
 
       <!-- Quick Edit: Hidden by default, toggled by Edit Cycle button -->
       <div id="quick-edit-panel" class="glass rounded-xl p-4 mb-4 hidden">
@@ -2586,7 +2584,7 @@ function renderAccountDetail(name, adAccountId) {
               const isActiveCyc = c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today;
               const cGoal = acct.cpaGoal || c.cpaGoal;
               return `
-              <tr class="table-row border-b border-dark-700/50 cycle-row-clickable ${isActiveCyc ? 'bg-brand-500/5' : ''}" onclick="showCycleLeads(${ci})" title="Click to view leads for ${c.cycle}">
+              <tr class="table-row border-b border-dark-700/50 ${isActiveCyc ? 'bg-brand-500/5' : ''}">
                 <td class="py-2.5 px-3 text-white font-medium whitespace-nowrap">${c.cycle} ${isActiveCyc ? '<span class="badge badge-blue ml-1">Active</span>' : ''}</td>
                 <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleStartDate)}</td>
                 <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleEndDate)}</td>
@@ -2735,7 +2733,15 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
   container.innerHTML = `
     <div class="glass rounded-xl p-5">
       <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <h3 class="text-white font-semibold text-base">Lead Breakdown — ${activeBreakdown.cycle.cycle}</h3>
+        <div class="flex items-center gap-3">
+          <h3 class="text-white font-semibold text-base">Lead Breakdown</h3>
+          <select id="lead-breakdown-cycle-select" onchange="showCycleLeads(parseInt(this.value))" class="bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500 cursor-pointer">
+            ${cycleBreakdowns.map(b => {
+              const sel = b.idx === activeBreakdown.idx ? 'selected' : '';
+              return '<option value="' + b.idx + '" ' + sel + '>' + b.cycle.cycle + (b.isActive ? ' (Active)' : '') + '</option>';
+            }).join('')}
+          </select>
+        </div>
         <div class="flex gap-2 flex-wrap">
           <span class="filter-badge fb-green ${fActive('booked')}" onclick="setLeadFilter('booked')">${booked} booked</span>
           <span class="filter-badge fb-yellow ${fActive('client')}" onclick="setLeadFilter('client')">${clientH} other</span>
