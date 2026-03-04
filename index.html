@@ -2382,8 +2382,20 @@ function renderAccountDetail(name, adAccountId) {
         </div>
       </div>
 
-      <!-- Quick Edit: All key fields for current cycle -->
-      <div class="glass rounded-xl p-4">
+      <!-- Action Buttons: Edit Cycle + Add Cycle -->
+      <div class="flex gap-2 mb-4">
+        <button onclick="document.getElementById('quick-edit-panel').classList.toggle('hidden')" class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-dark-200 hover:text-white bg-dark-700/50 hover:bg-dark-700/80 border border-dark-600/30 transition-all">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          Edit Cycle
+        </button>
+        <button onclick="addNewCycle('${esc(name)}')" class="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-dark-200 hover:text-white bg-dark-700/50 hover:bg-dark-700/80 border border-dark-600/30 transition-all">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+          Add Cycle
+        </button>
+      </div>
+
+      <!-- Quick Edit: Hidden by default, toggled by Edit Cycle button -->
+      <div id="quick-edit-panel" class="glass rounded-xl p-4 mb-4 hidden">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-3">Quick Edit — Current Cycle</div>
         <div class="grid grid-cols-2 gap-2">
           <div>
