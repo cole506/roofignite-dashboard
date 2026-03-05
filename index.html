@@ -369,7 +369,7 @@ tailwind.config = {
       <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Admin</div>
       <button onclick="navigate('admin')" id="nav-admin" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
         <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        <span class="font-medium">Manage Clients</span>
+        <span class="font-medium">Manage</span>
       </button>
     </nav>
 
@@ -3201,6 +3201,7 @@ async function setBillingStatus(accountName, cycleName, field, value) {
       notifySlack: true,
       oldGoodToBill: oldGTB, oldBilled: oldBilled,
       manager: c.manager || acct.manager || '',
+      billingAdmin: localStorage.getItem('roofignite_billing_admin') || '',
     });
     if (result.ok) {
       showToast(`${accountName} — ${field}: ${value || 'cleared'} ✓`, 'success');
@@ -3542,6 +3543,8 @@ let adminEditingAccount = null; // name of account being edited
 let adminEditingCycle = null;   // {account, cycleIndex}
 let adminShowNewClient = false;
 let adminShowNewManager = false;
+let adminTab = 'clients'; // 'clients' or 'settings'
+let slackConfigCache = null; // cached webhook config from backend
 
 // ═══ Greg Configuration State ═══
 // Mirrors Greg Apps Script's OWNER_RUN_FLAGS and DISABLED_ACCOUNTS
@@ -3682,7 +3685,7 @@ function renderAdminView() {
       <div class="flex items-center gap-4">
         <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-10 w-auto" />
         <div>
-          <h1 class="text-3xl font-extrabold text-white tracking-tight">Manage Clients</h1>
+          <h1 class="text-3xl font-extrabold text-white tracking-tight">Manage</h1>
           <p class="text-dark-300 text-sm mt-1">${allAccounts.length} total clients across ${managers.length} managers</p>
         </div>
       </div>
@@ -3705,6 +3708,25 @@ function renderAdminView() {
       </div>
     </div>
 
+    <!-- Tab Switcher -->
+    <div class="flex gap-2 mb-6 bg-dark-800/60 rounded-xl p-1 border border-dark-600/30 w-fit">
+      <button onclick="adminTab='clients';renderAdminView()" class="px-5 py-2 rounded-xl text-xs font-semibold transition-all ${adminTab === 'clients' ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30' : 'bg-transparent text-dark-400 border border-transparent hover:text-white'}">
+        <span class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          Clients
+        </span>
+      </button>
+      <button onclick="adminTab='settings';loadSlackConfig().then(()=>renderAdminView())" class="px-5 py-2 rounded-xl text-xs font-semibold transition-all ${adminTab === 'settings' ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30' : 'bg-transparent text-dark-400 border border-transparent hover:text-white'}">
+        <span class="flex items-center gap-2">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+          Settings
+        </span>
+      </button>
+    </div>
+
+    ${adminTab === 'settings' ? renderSettingsTab(managers) : ''}
+
+    ${adminTab === 'clients' ? `
     ${!hasGAS ? `
     <div class="glass rounded-2xl p-5 mb-6 border-l-4 border-yellow-500/60">
       <div class="flex items-start gap-3">
@@ -3712,7 +3734,7 @@ function renderAdminView() {
         <div>
           <p class="text-yellow-300 font-semibold text-sm">Write Access Not Configured</p>
           <p class="text-dark-300 text-xs mt-1">Changes are saved locally until you connect a Google Apps Script. To enable write-back to your Google Sheet, deploy the Apps Script web app and paste the URL in the dashboard code.</p>
-          <button onclick="showAppsScriptSetup()" class="mt-2 text-yellow-400 hover:text-yellow-300 text-xs font-medium underline">Show Setup Instructions</button>
+          <button onclick="adminTab='settings';renderAdminView()" class="mt-2 text-yellow-400 hover:text-yellow-300 text-xs font-medium underline">Go to Settings</button>
         </div>
       </div>
     </div>` : ''}
@@ -3853,11 +3875,180 @@ function renderAdminView() {
 
     <!-- Cycle Editor Modal -->
     ${adminEditingCycle ? renderCycleEditor() : ''}
+    ` : ''}
   `;
 
   // Restore focus to search input
   const searchEl = document.getElementById('admin-search');
   if (searchEl && adminSearch) { searchEl.focus(); searchEl.setSelectionRange(searchEl.value.length, searchEl.value.length); }
+}
+
+// ═══════════════════════════════════════════════
+// SETTINGS TAB
+// ═══════════════════════════════════════════════
+function renderSettingsTab(managers) {
+  const hasGAS = !!APPS_SCRIPT_URL;
+  const cfg = slackConfigCache || { webhooks: {}, billingAdmin: '' };
+  const savedBillingAdmin = localStorage.getItem('roofignite_billing_admin') || cfg.billingAdmin || '';
+
+  return `
+    <!-- Slack Integrations -->
+    <div class="glass rounded-2xl p-6 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-500/20 flex items-center justify-center text-sm">💬</span>
+        <div>
+          <h3 class="text-base font-bold text-white">Slack Integrations</h3>
+          <p class="text-dark-400 text-xs mt-0.5">Billing notifications are sent to specific team members via Slack webhooks</p>
+        </div>
+      </div>
+
+      <!-- Billing Admin Dropdown -->
+      <div class="bg-dark-800/60 rounded-xl p-4 border border-dark-600/30 mt-4 mb-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-semibold text-white">Billing Admin</p>
+            <p class="text-[11px] text-dark-400 mt-0.5">Receives <span class="text-yellow-400 font-medium">Good to Bill</span> and <span class="text-orange-400 font-medium">Try Again</span> notifications</p>
+          </div>
+          <select id="billing-admin-select" onchange="saveBillingAdmin(this.value)" class="bg-dark-900/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2 focus:outline-none focus:border-brand-500 min-w-[160px]">
+            <option value="" ${!savedBillingAdmin ? 'selected' : ''}>— Select —</option>
+            ${managers.map(m => `<option value="${m}" ${savedBillingAdmin === m ? 'selected' : ''}>${m}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Webhook URLs -->
+      <div class="space-y-3 mb-4">
+        <p class="text-xs font-semibold text-dark-300 uppercase tracking-wider">Webhook URLs</p>
+        ${managers.map(m => {
+          const isConfigured = cfg.webhooks && cfg.webhooks[m];
+          return `
+          <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 flex items-center gap-3">
+            <div class="flex items-center gap-2 min-w-[100px]">
+              <span class="w-2 h-2 rounded-full ${isConfigured ? 'bg-green-400' : 'bg-dark-500'}"></span>
+              <span class="text-sm font-medium text-white">${m}</span>
+            </div>
+            <div class="flex-1 relative">
+              <input id="slack-webhook-${m.replace(/\s/g,'_')}" type="password" placeholder="https://hooks.slack.com/services/..." value="${isConfigured ? '••••••••••••••••••••' : ''}"
+                onfocus="if(this.value.startsWith('••'))this.value=''"
+                class="w-full bg-dark-900/80 border border-dark-600/50 rounded-lg text-xs text-white px-3 py-2 focus:outline-none focus:border-brand-500 font-mono pr-8" />
+              <button onclick="const inp=document.getElementById('slack-webhook-${m.replace(/\s/g,'_')}');inp.type=inp.type==='password'?'text':'password'" class="absolute right-2 top-1/2 -translate-y-1/2 text-dark-400 hover:text-white">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              </button>
+            </div>
+            <button onclick="saveSlackWebhook('${m}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30 hover:bg-brand-500/30 transition-all">Save</button>
+            <span class="text-[10px] font-medium ${isConfigured ? 'text-green-400' : 'text-dark-500'} min-w-[80px] text-right">${isConfigured ? '✅ Connected' : '⚪ Not set'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <!-- Test + Info -->
+      <div class="flex items-center justify-between">
+        <button onclick="testSlackWebhooks()" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-dark-700/60 text-dark-200 border border-dark-600/50 hover:bg-dark-600/60 transition-all">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Send Test to All
+        </button>
+        <p class="text-[10px] text-dark-500 max-w-xs text-right">Account managers receive <span class="text-green-400">Billed</span> &amp; <span class="text-red-400">Failed Payment</span> notifications on their own webhook.</p>
+      </div>
+    </div>
+
+    <!-- Apps Script Connection -->
+    <div class="glass rounded-2xl p-6 mb-6">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-600/20 border border-green-500/20 flex items-center justify-center text-sm">📡</span>
+        <div>
+          <h3 class="text-base font-bold text-white">Apps Script Connection</h3>
+          <p class="text-dark-400 text-xs mt-0.5">Connect to Google Apps Script for sheet write-back and Slack notifications</p>
+        </div>
+      </div>
+
+      <div class="flex gap-3 items-center mb-4">
+        <input id="gas-url-settings" type="text" placeholder="Paste Apps Script web app URL..." value="${APPS_SCRIPT_URL || ''}"
+          class="flex-1 bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500 font-mono text-xs" />
+        <button onclick="const u=document.getElementById('gas-url-settings').value.trim();if(u){APPS_SCRIPT_URL=u;localStorage.setItem('roofignite_gas_url',u);showToast('Apps Script connected!','success');loadSlackConfig();renderAdminView();}else{showToast('Please paste a URL','error');}" class="px-5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white hover:from-brand-600 hover:to-brand-700 transition-all shadow-lg shadow-brand-500/20">Connect</button>
+        <span class="text-xs font-medium ${hasGAS ? 'text-green-400' : 'text-dark-500'}">${hasGAS ? '✅ Connected' : '⚪ Not connected'}</span>
+      </div>
+
+      ${hasGAS ? `<div class="flex items-center gap-2 mb-4">
+        <button onclick="APPS_SCRIPT_URL='';localStorage.removeItem('roofignite_gas_url');showToast('Disconnected','success');renderAdminView()" class="text-[10px] text-red-400 hover:text-red-300 font-medium underline">Disconnect</button>
+      </div>` : ''}
+
+      <!-- Setup Instructions (collapsible) -->
+      <details class="group">
+        <summary class="cursor-pointer text-xs font-semibold text-dark-300 hover:text-white transition-colors flex items-center gap-2">
+          <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          Setup Instructions
+        </summary>
+        <div class="mt-3 text-sm text-dark-200 space-y-3">
+          <p><strong class="text-white">1. Create a "Greg Config" sheet tab</strong> in your Google Sheet with columns:</p>
+          <div class="bg-dark-900 rounded-lg p-3 text-[11px] font-mono text-blue-300 overflow-x-auto">Type | Name | Mode
+manager | Cole | HARD
+manager | Tyler | SOFT
+account | Some Account | OFF</div>
+          <p class="text-[11px] text-dark-400">The Greg script reads this tab instead of hardcoded OWNER_RUN_FLAGS.</p>
+
+          <p><strong class="text-white">2. Deploy the Apps Script</strong> (Extensions → Apps Script → Deploy → Web app)</p>
+          <p class="text-[11px] text-dark-400">Set "Execute as" to <strong>Me</strong> and "Who has access" to <strong>Anyone</strong>. Copy the Web app URL and paste it above.</p>
+
+          <p><strong class="text-white">3. Paste the full backend code</strong> from your appscripts.gs file into the Apps Script editor.</p>
+        </div>
+      </details>
+    </div>
+  `;
+}
+
+// ═══ Slack Settings Helpers ═══
+
+async function saveSlackWebhook(name) {
+  const inputId = 'slack-webhook-' + name.replace(/\s/g, '_');
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  const url = inp.value.trim();
+  if (url.startsWith('••')) { showToast('Click the field and paste a new URL first', 'error'); return; }
+  if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
+
+  const result = await writeToSheet('saveSlackWebhook', { person: name, webhookUrl: url });
+  if (result.ok) {
+    showToast(`Webhook ${url ? 'saved' : 'removed'} for ${name}`, 'success');
+    slackConfigCache = null;
+    await loadSlackConfig();
+    renderAdminView();
+  } else {
+    showToast('Failed to save webhook', 'error');
+  }
+}
+
+async function loadSlackConfig() {
+  if (!APPS_SCRIPT_URL) return;
+  try {
+    const result = await writeToSheet('getSlackConfig', {});
+    if (result.ok) {
+      slackConfigCache = result;
+      if (result.billingAdmin && !localStorage.getItem('roofignite_billing_admin')) {
+        localStorage.setItem('roofignite_billing_admin', result.billingAdmin);
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load Slack config:', e);
+  }
+}
+
+async function testSlackWebhooks() {
+  if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
+  showToast('Sending test messages...', 'success');
+  const result = await writeToSheet('testSlackWebhook', {});
+  if (result.ok) {
+    showToast(`Test sent to ${result.count || 'all configured'} webhook(s)`, 'success');
+  } else {
+    showToast('Test failed — check webhook URLs', 'error');
+  }
+}
+
+async function saveBillingAdmin(name) {
+  localStorage.setItem('roofignite_billing_admin', name);
+  if (APPS_SCRIPT_URL) {
+    await writeToSheet('saveBillingAdmin', { name: name });
+  }
+  showToast(`Billing admin set to ${name || 'none'}`, 'success');
 }
 
 function renderNewManagerForm() {
