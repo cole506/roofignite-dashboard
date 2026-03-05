@@ -4564,13 +4564,17 @@ function renderNewClientForm(managers) {
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Account Manager *</label>
           <select id="new-client-manager" onchange="updateNewClientPod()" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
             ${managers.map(m => `<option value="${m}">${m}</option>`).join('')}
-            <option value="_new">+ New Manager</option>
           </select>
         </div>
         <div>
-          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Pod (auto)</label>
-          <div id="new-client-pod-display" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-dark-300 px-4 py-2.5">${managerPodMap[managers[0]] || Object.keys(SHEETS)[0] || '—'}</div>
-          <div class="text-[9px] text-dark-500 mt-1">Auto-assigned from manager's pod</div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Pod *</label>
+          <select id="new-client-pod" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
+            ${Object.keys(SHEETS).map(p => {
+              const label = p.replace(/ - RoofIgnite/i, '');
+              const autoSelected = (managerPodMap[managers[0]] === p) ? 'selected' : '';
+              return `<option value="${p}" ${autoSelected}>${label}</option>`;
+            }).join('')}
+          </select>
         </div>
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Meta Ad Account ID</label>
@@ -4603,11 +4607,12 @@ function renderNewClientForm(managers) {
 
 function updateNewClientPod() {
   const mgr = document.getElementById('new-client-manager')?.value;
-  const display = document.getElementById('new-client-pod-display');
-  if (display && mgr && mgr !== '_new') {
-    display.textContent = managerPodMap[mgr] || Object.keys(SHEETS)[0] || '—';
-  } else if (display) {
-    display.textContent = Object.keys(SHEETS)[0] || '—';
+  const podSelect = document.getElementById('new-client-pod');
+  if (podSelect && mgr && mgr !== '_new') {
+    const autoPod = managerPodMap[mgr];
+    if (autoPod && podSelect.querySelector(`option[value="${autoPod}"]`)) {
+      podSelect.value = autoPod;
+    }
   }
 }
 
@@ -4710,13 +4715,9 @@ async function createNewClient() {
   if (!name) { showToast('Please enter a client name', 'error'); return; }
   if (allAccounts.find(a => a.name.toLowerCase() === name.toLowerCase())) { showToast('Client already exists', 'error'); return; }
 
-  let mgr = manager;
-  if (manager === '_new') {
-    mgr = prompt('Enter new manager name:');
-    if (!mgr) return;
-  }
+  const mgr = manager;
 
-  const pod = managerPodMap[mgr] || Object.keys(SHEETS)[0];
+  const pod = document.getElementById('new-client-pod')?.value || Object.keys(SHEETS)[0];
 
   // Cycle dates: use selected start date, end = start + 28 days
   const startDate = cycleStartInput || new Date().toISOString().split('T')[0];
