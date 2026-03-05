@@ -283,6 +283,46 @@ tailwind.config = {
   @media (max-width: 1400px) { .kpi-grid-7 { grid-template-columns: repeat(4, 1fr) !important; } }
   @media (max-width: 1100px) { .kpi-grid-7 { grid-template-columns: repeat(3, 1fr) !important; } }
   @media (max-width: 900px) { .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; } }
+  @media (max-width: 640px) { .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; } }
+
+  /* ══════ MOBILE ══════ */
+  @media (max-width: 767px) {
+    .sidebar {
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 200;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 199; }
+    .sidebar-overlay.active { display: block; }
+    .main-content { margin-left: 0 !important; padding: 16px !important; padding-top: 72px !important; }
+    .mobile-header { display: flex !important; }
+    .chart-container { height: 180px; }
+    .modal-inner { max-width: 100% !important; max-height: 92vh !important; margin: 8px; border-radius: 16px; }
+    .section-title { font-size: 15px; }
+    .section-title::before { width: 3px !important; height: 16px !important; }
+    .section-divider { margin: 18px 0; }
+    .health-ring { width: 38px; height: 38px; font-size: 11px; }
+    .filter-badge { padding: 8px 14px; font-size: 11px; min-height: 40px; display: inline-flex; align-items: center; }
+    .tab-btn { padding: 10px 16px; min-height: 40px; }
+    .badge { font-size: 10px; padding: 2px 8px; }
+    .back-btn { min-height: 40px; }
+    .nav-item { min-height: 44px; }
+    .table-scroll-hint { position: relative; }
+    .table-scroll-hint::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0;
+      width: 30px;
+      background: linear-gradient(90deg, transparent, rgba(6,11,24,0.8));
+      pointer-events: none;
+      z-index: 5;
+    }
+  }
+  @media (min-width: 768px) {
+    .mobile-header { display: none !important; }
+    .sidebar-overlay { display: none !important; }
+  }
 
   /* ══════ FANCY BORDERS ══════ */
   .gradient-border {
@@ -355,6 +395,19 @@ tailwind.config = {
 </div>
 
 <div id="app" class="flex min-h-screen hidden">
+  <!-- Mobile Header -->
+  <div class="mobile-header fixed top-0 left-0 right-0 z-[150] items-center justify-between px-4 py-3 border-b border-dark-600/30" style="background:rgba(6,11,24,0.95);backdrop-filter:blur(12px);display:none;">
+    <button onclick="toggleSidebar()" class="p-2 rounded-lg text-dark-200 hover:text-white hover:bg-dark-700/50 transition-all">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-8 w-auto" />
+    <button onclick="refreshData()" class="p-2 rounded-lg text-dark-200 hover:text-white hover:bg-dark-700/50 transition-all">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+    </button>
+  </div>
+  <!-- Sidebar Overlay -->
+  <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
   <!-- Sidebar -->
   <aside class="sidebar fixed left-0 top-0 h-screen flex flex-col z-50">
     <div class="p-5 border-b border-dark-600/50">
@@ -422,7 +475,7 @@ tailwind.config = {
   </aside>
 
   <!-- Main Content -->
-  <main class="flex-1 ml-[260px] p-8 main-content" style="height:100vh;overflow-y:auto">
+  <main class="flex-1 ml-0 md:ml-[260px] p-4 md:p-8 pt-[72px] md:pt-8 main-content" style="height:100vh;overflow-y:auto">
     <div id="loading-state" class="flex items-center justify-center h-96">
       <div class="text-center fade-in">
         <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-16 w-auto mx-auto mb-6" />
@@ -1665,9 +1718,24 @@ function getLeadsForAccount(accountName, startDate, endDate) {
 }
 
 // ═══════════════════════════════════════════════
+// MOBILE SIDEBAR
+// ═══════════════════════════════════════════════
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('active');
+  document.body.style.overflow = document.querySelector('.sidebar.open') ? 'hidden' : '';
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+// ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
 function navigate(view, param) {
+  closeSidebar();
   document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   currentView = view;
@@ -1802,10 +1870,10 @@ function renderDashboard() {
   podNames.forEach(name => { podStatsMap[name] = podStats(getAccountsByPod(name)); });
 
   el.innerHTML = `
-    <div class="mb-8 fade-in">
-      <div class="flex items-center gap-4">
+    <div class="mb-5 md:mb-8 fade-in">
+      <div class="flex flex-wrap items-center gap-4">
         <div>
-          <h1 class="text-3xl font-extrabold text-white tracking-tight">Command Center</h1>
+          <h1 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">Command Center</h1>
           <p class="text-dark-300 text-sm mt-1 font-medium">${active.length} active accounts · ${inactive.length} inactive · ${allLeads.length} leads tracked</p>
         </div>
         <div class="ml-auto text-right">
@@ -1818,24 +1886,24 @@ function renderDashboard() {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-5 md:mb-8">
       <!-- Active Accounts -->
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-1" style="opacity:0">
+      <div class="glass rounded-2xl p-3 md:p-5 kpi-card fade-in stagger-1" style="opacity:0">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Accounts</div>
-        <div class="text-3xl font-extrabold text-white">${active.length} <span class="text-lg text-dark-500 font-bold">active</span></div>
+        <div class="text-2xl md:text-3xl font-extrabold text-white">${active.length} <span class="text-base md:text-lg text-dark-500 font-bold">active</span></div>
         <div class="text-xs text-dark-400 mt-1 font-medium">${inactive.length} inactive · ${allAccounts.length} total</div>
       </div>
       <!-- Health Ratio -->
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-2" style="opacity:0">
+      <div class="glass rounded-2xl p-3 md:p-5 kpi-card fade-in stagger-2" style="opacity:0">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Account Health</div>
         <div class="flex items-center gap-4">
           <div class="flex items-baseline gap-1.5">
-            <span class="text-3xl font-extrabold text-emerald-400">${totalHealthy}</span>
+            <span class="text-2xl md:text-3xl font-extrabold text-emerald-400">${totalHealthy}</span>
             <span class="text-[10px] text-emerald-400/70 font-semibold uppercase tracking-wide">healthy</span>
           </div>
           <span class="text-dark-600 text-lg font-bold">/</span>
           <div class="flex items-baseline gap-1.5">
-            <span class="text-3xl font-extrabold text-red-400">${totalUnhealthy}</span>
+            <span class="text-2xl md:text-3xl font-extrabold text-red-400">${totalUnhealthy}</span>
             <span class="text-[10px] text-red-400/70 font-semibold uppercase tracking-wide">unhealthy</span>
           </div>
         </div>
@@ -1848,22 +1916,22 @@ function renderDashboard() {
         ${totalUnscored > 0 ? `<div class="text-[10px] text-dark-500 mt-1">${totalUnscored} unscored</div>` : ''}
       </div>
       <!-- Book Rate -->
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-3" style="opacity:0">
+      <div class="glass rounded-2xl p-3 md:p-5 kpi-card fade-in stagger-3" style="opacity:0">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Lead → Booked</div>
-        <div class="text-3xl font-extrabold text-white">${totalBookRate.toFixed(1)}<span class="text-lg text-dark-400">%</span></div>
+        <div class="text-2xl md:text-3xl font-extrabold text-white">${totalBookRate.toFixed(1)}<span class="text-base md:text-lg text-dark-400">%</span></div>
         <div class="text-xs text-dark-400 mt-1 font-medium">${fmt(totalBooked)} booked of ${fmt(totalLeads)} leads</div>
       </div>
       <!-- Combined Monthly Budget -->
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-4" style="opacity:0">
+      <div class="glass rounded-2xl p-3 md:p-5 kpi-card fade-in stagger-4" style="opacity:0">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Monthly Budget</div>
-        <div class="text-3xl font-extrabold text-white">${fmtDollar(totalMonthlyBudget, 0)}</div>
+        <div class="text-2xl md:text-3xl font-extrabold text-white">${fmtDollar(totalMonthlyBudget, 0)}</div>
         <div class="text-xs text-dark-400 mt-1 font-medium">across ${active.length} active accounts</div>
       </div>
     </div>
 
     <!-- Manager Cards -->
     <div class="section-title mb-4 fade-in stagger-2" style="opacity:0">Team Performance</div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 mb-5 md:mb-8">
       ${managers.map((m, mi) => {
         const s = mgrStats(m);
         const initColors = {Cole:'from-blue-400 to-blue-600',Jonathan:'from-emerald-400 to-emerald-600',Tyler:'from-purple-400 to-purple-600'};
@@ -1890,7 +1958,7 @@ function renderDashboard() {
               </div>
             </div>
           </div>
-          <div class="grid grid-cols-5 gap-2 pt-3 border-t border-white/5">
+          <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-3 border-t border-white/5">
             <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Book Rate</div><div class="text-white font-bold text-[15px] mt-0.5">${s.bookRate.toFixed(1)}<span class="text-[10px] text-dark-400">%</span></div><div class="text-[9px] text-dark-500">${fmt(s.booked)}/${fmt(s.leads)}</div></div>
             <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-[15px] mt-0.5">${fmt(s.leads)}</div></div>
             <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPL</div><div class="text-white font-bold text-[15px] mt-0.5">${fmtDollar(s.avgCPL,2)}</div></div>
@@ -1903,7 +1971,7 @@ function renderDashboard() {
 
     <!-- Pod Overview (dynamic) -->
     <div class="section-title mb-4">Pod Overview</div>
-    <div class="grid grid-cols-1 md:grid-cols-${Math.min(podNames.length, 3)} gap-4 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-${Math.min(podNames.length, 3)} gap-3 md:gap-4 mb-5 md:mb-8">
       ${podNames.map((key, idx) => {
         const p = podStatsMap[key];
         const accent = POD_COLORS[idx % POD_COLORS.length];
@@ -1931,7 +1999,7 @@ function renderDashboard() {
             <button onclick="navigate('pod','${esc(key)}')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-all">View →</button>
           </div>
         </div>
-        <div class="grid grid-cols-5 gap-2 pt-3 border-t border-white/5">
+        <div class="grid grid-cols-3 sm:grid-cols-5 gap-2 pt-3 border-t border-white/5">
           <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Book Rate</div><div class="text-white font-bold text-[15px] mt-0.5">${p.bookRate.toFixed(1)}<span class="text-[10px] text-dark-400">%</span></div><div class="text-[9px] text-dark-500">${fmt(p.booked)}/${fmt(p.leads)}</div></div>
           <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-[15px] mt-0.5">${fmt(p.leads)}</div></div>
           <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPL</div><div class="text-white font-bold text-[15px] mt-0.5">${fmtDollar(p.avgCPL,2)}</div></div>
@@ -1943,7 +2011,7 @@ function renderDashboard() {
     </div>
 
     <!-- Health Scorecard -->
-    <div class="glass rounded-2xl p-5 mb-8">
+    <div class="glass rounded-2xl p-5 mb-5 md:mb-8">
       <div class="flex items-center justify-between mb-4">
         <div class="section-title">Account Health Scores</div>
         <div class="text-dark-400 text-[10px] tracking-wide flex items-center gap-4">
@@ -1956,7 +2024,7 @@ function renderDashboard() {
     </div>
 
     <!-- Attention Required (detailed watchlist) -->
-    <div class="glass rounded-2xl p-5 mb-8" style="border: 1px solid rgba(239,68,68,0.18); background: linear-gradient(135deg, rgba(239,68,68,0.03), rgba(15,23,42,0.8));">
+    <div class="glass rounded-2xl p-5 mb-5 md:mb-8" style="border: 1px solid rgba(239,68,68,0.18); background: linear-gradient(135deg, rgba(239,68,68,0.03), rgba(15,23,42,0.8));">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center">
@@ -1972,7 +2040,7 @@ function renderDashboard() {
     </div>
 
     <!-- Top Performers + Needs Attention -->
-    <div class="grid grid-cols-2 gap-4 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4 mb-5 md:mb-8">
       <div class="glass rounded-2xl p-5" style="border: 1px solid rgba(34,197,94,0.12);">
         <div class="flex items-center gap-3 mb-4">
           <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></div>
@@ -1991,7 +2059,7 @@ function renderDashboard() {
 
     <!-- Distribution Charts -->
     <div class="section-title mb-4">Portfolio Analytics</div>
-    <div class="grid grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="glass rounded-2xl p-5">
         <h3 class="text-white font-bold text-sm mb-3 flex items-center gap-2">
           <div class="w-2 h-2 rounded-full bg-brand-400"></div>
@@ -2042,7 +2110,7 @@ function renderDashboard() {
     if (alerts.length === 0) {
       attnWrap.innerHTML = '<div class="text-dark-400 text-sm text-center py-4">✓ All accounts healthy — no alerts</div>';
     } else {
-      attnWrap.innerHTML = `<div style="overflow-x:auto;"><table class="w-full text-sm">
+      attnWrap.innerHTML = `<div style="overflow-x:auto;" class="table-scroll-hint"><table class="w-full text-sm">
         <thead><tr class="text-dark-400 text-[10px] uppercase tracking-wider border-b border-dark-600">
           <th class="text-left py-2 px-2">Account</th><th class="text-left py-2 px-2">Issues</th><th class="text-center py-2 px-2">Current</th><th class="text-center py-2 px-2">Threshold</th>
         </tr></thead><tbody>${alerts.map(a => a.issues.map((iss, idx) => `
@@ -2159,7 +2227,7 @@ function renderManagerView(mgrName) {
 
   const initColors = {Cole:'from-blue-400 to-blue-600',Jonathan:'from-emerald-400 to-emerald-600',Tyler:'from-purple-400 to-purple-600'};
   el.innerHTML = `
-    <div class="mb-8 fade-in">
+    <div class="mb-5 md:mb-8 fade-in">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-2xl bg-gradient-to-br ${initColors[mgrName]||'from-slate-400 to-slate-600'} flex items-center justify-center text-xl font-bold text-white shadow-lg">${mgrName.charAt(0)}</div>
@@ -2220,7 +2288,7 @@ function renderPodView(podName) {
   const podIdx = Object.keys(SHEETS).indexOf(podName);
   const podAccent = POD_COLORS[(podIdx >= 0 ? podIdx : 0) % POD_COLORS.length];
   el.innerHTML = `
-    <div class="mb-8 fade-in">
+    <div class="mb-5 md:mb-8 fade-in">
       <div class="flex items-center gap-4">
         <div class="w-12 h-12 rounded-2xl bg-${podAccent}-500/10 flex items-center justify-center text-xl font-bold text-${podAccent}-400 border border-${podAccent}-500/15">${podNum || '?'}</div>
         <div>
@@ -2248,8 +2316,8 @@ function renderAccountTable(active, inactive, mgrName) {
 
   return `
     <div class="glass rounded-2xl overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+      <div class="overflow-x-auto table-scroll-hint">
+        <table class="w-full text-sm min-w-[1200px]">
           <thead>
             <tr class="border-b border-dark-600 text-dark-400 text-[10px] uppercase tracking-wider" style="background:rgba(15,23,42,0.5);">
               <th class="text-center py-3 px-3 font-medium">HP</th>
@@ -2341,14 +2409,14 @@ function renderAccountDetail(name, adAccountId) {
   const isActive = hasActiveCycle(acct);
 
   el.innerHTML = `
-    <div class="mb-8 fade-in">
+    <div class="mb-5 md:mb-8 fade-in">
       <div class="flex items-center justify-between">
         <button onclick="navigate(currentManager ? 'manager' : currentPod ? 'pod' : 'dashboard', currentManager || currentPod)" class="back-btn mb-4">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
         </button>
         <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-8 w-auto opacity-40" />
       </div>
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-4">
           ${(() => {
             const hs = getHealthScore(acct, activeCyc);
@@ -2446,7 +2514,7 @@ function renderAccountDetail(name, adAccountId) {
     })()}
 
     <!-- ═══ KEY METRICS ROW ═══ -->
-    <div class="grid grid-cols-5 gap-3 mb-5">
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-5">
       <div class="glass rounded-2xl p-4 kpi-card">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Total Leads</div>
         <div class="text-xl font-extrabold text-white mt-1">${fmt(activeCyc.totalLeads)}</div>
@@ -2485,7 +2553,7 @@ function renderAccountDetail(name, adAccountId) {
       });
       const booked45 = acctLeads45d.filter(l => isBookedStatus(l.status)).length;
 
-      return `<div class="grid grid-cols-2 gap-3 mb-5">
+      return `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
         <div class="glass rounded-xl p-4">
           <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-2">Lead-to-Booked Rate (45d)</div>
           ${l2b !== null ? `
@@ -2525,7 +2593,7 @@ function renderAccountDetail(name, adAccountId) {
       <!-- Quick Edit: Hidden by default, toggled by Edit Cycle button -->
       <div id="quick-edit-panel" class="glass rounded-xl p-4 mb-4 hidden">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-3">Quick Edit — Current Cycle</div>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
             <label class="text-[10px] text-dark-500">CPA Goal</label>
             <input id="qe-cpa-goal" type="number" step="0.01" value="${activeCyc.cpaGoal||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
@@ -2586,7 +2654,7 @@ function renderAccountDetail(name, adAccountId) {
     ` : '<div class="glass rounded-xl p-6 mb-6 text-dark-400 text-center">No active cycle</div>'}
 
     <!-- Trend Charts -->
-    <div class="grid grid-cols-2 gap-4 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       <div class="glass rounded-2xl p-5">
         <h3 class="text-white font-bold text-sm mb-3 flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-brand-400"></div>CPA Trend</h3>
         <div class="chart-container"><canvas id="chart-acct-cpa"></canvas></div>
@@ -2626,7 +2694,7 @@ function renderAccountDetail(name, adAccountId) {
         ` : ''}
       </div>
       ${META_ACCESS_TOKEN && adId ? `
-        <div id="meta-daily-summary" class="mb-3 grid grid-cols-8 gap-2 text-center"></div>
+        <div id="meta-daily-summary" class="mb-3 grid grid-cols-4 sm:grid-cols-8 gap-2 text-center"></div>
         <div class="chart-container" style="height:200px;"><canvas id="chart-meta-daily"></canvas></div>
         <div id="meta-daily-table" class="mt-4"></div>
       ` : `
@@ -2824,7 +2892,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
       </div>
 
       <!-- Week Breakdown -->
-      <div class="grid grid-cols-5 gap-3 mb-4">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-4">
         ${Object.entries(weeks).filter(([k,v]) => v.length > 0 || k !== 'Week 5+').slice(0,4).map(([week, wLeads]) => {
           const wBooked = wLeads.filter(l => isBookedStatus(l.status)).length;
           const wClient = wLeads.filter(l => isClientHandles(l.status)).length;
@@ -3252,8 +3320,8 @@ function renderMetaDailyTable(data, cycle) {
   const rows = [...data].reverse();
 
   el.innerHTML = `
-    <div class="overflow-x-auto rounded-lg border border-dark-600/50">
-      <table class="w-full text-xs">
+    <div class="overflow-x-auto table-scroll-hint rounded-lg border border-dark-600/50">
+      <table class="w-full text-xs min-w-[900px]">
         <thead>
           <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
             <th class="py-2 px-2 text-left font-medium">Date</th>
@@ -3394,8 +3462,8 @@ function renderMetaAggTable(aggData, cycle) {
   const el = document.getElementById('meta-daily-table');
   if (!el || !aggData || !aggData.length) return;
   el.innerHTML = `
-    <div class="overflow-x-auto rounded-lg border border-dark-600/50">
-      <table class="w-full text-xs">
+    <div class="overflow-x-auto table-scroll-hint rounded-lg border border-dark-600/50">
+      <table class="w-full text-xs min-w-[900px]">
         <thead>
           <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
             <th class="py-2 px-2 text-left font-medium">Period</th>
@@ -3628,7 +3696,7 @@ function showInvoiceModal(accountName, cycleName, adSpend) {
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
   overlay.innerHTML = `
-    <div class="glass rounded-2xl p-6 max-w-md w-full border border-yellow-500/30" data-adspend="${adSpendVal}" onclick="event.stopPropagation()">
+    <div class="glass rounded-2xl p-6 max-w-md w-full border border-yellow-500/30 modal-inner" data-adspend="${adSpendVal}" onclick="event.stopPropagation()">
       <div class="flex items-center gap-3 mb-5">
         <div class="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center">
           <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3941,8 +4009,8 @@ function renderBilling() {
   const showAll = billingViewFilter === 'all';
 
   el.innerHTML = `
-    <div class="mb-8 fade-in">
-      <div class="flex items-center justify-between">
+    <div class="mb-5 md:mb-8 fade-in">
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-4">
           <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 flex items-center justify-center border border-emerald-500/15">
             <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -3964,7 +4032,7 @@ function renderBilling() {
     </div>
 
     <!-- KPI Cards -->
-    <div class="grid grid-cols-7 gap-3 mb-8">
+    <div class="grid grid-cols-7 gap-3 mb-5 md:mb-8 kpi-grid-7">
       <div class="glass rounded-2xl p-4 kpi-card fade-in stagger-1" style="opacity:0;${failed.length ? 'border-color:rgba(239,68,68,0.3);' : ''}">
         <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-1">Failed</div>
         <div class="text-2xl font-extrabold text-red-400">${failed.length}</div>
@@ -4234,11 +4302,11 @@ function renderAdminView() {
   setTimeout(() => { document.querySelector('.main-content')?.scrollTo(0, 0); }, 0);
 
   el.innerHTML = `
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex flex-wrap items-center justify-between gap-4 mb-5 md:mb-8">
       <div class="flex items-center gap-4">
         <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-10 w-auto" />
         <div>
-          <h1 class="text-3xl font-extrabold text-white tracking-tight">Manage</h1>
+          <h1 class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">Manage</h1>
           <p class="text-dark-300 text-sm mt-1">${allAccounts.length} total clients across ${managers.length} managers</p>
         </div>
       </div>
@@ -4262,7 +4330,7 @@ function renderAdminView() {
     </div>
 
     <!-- Tab Switcher -->
-    <div class="flex gap-2 mb-6 bg-dark-800/60 rounded-xl p-1 border border-dark-600/30 w-fit">
+    <div class="flex flex-wrap gap-2 mb-6 bg-dark-800/60 rounded-xl p-1 border border-dark-600/30 w-fit">
       <button onclick="adminTab='clients';renderAdminView()" class="px-5 py-2 rounded-xl text-xs font-semibold transition-all ${adminTab === 'clients' ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30' : 'bg-transparent text-dark-400 border border-transparent hover:text-white'}">
         <span class="flex items-center gap-2">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -4343,7 +4411,7 @@ function renderAdminView() {
         <input type="text" id="admin-search" placeholder="Search clients..." value="${adminSearch}" oninput="adminSearch=this.value;renderAdminView()"
           class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white pl-10 pr-4 py-2.5 focus:outline-none focus:border-brand-500 transition-all" />
       </div>
-      <div class="flex gap-1.5 bg-dark-800/60 rounded-xl p-1 border border-dark-600/30">
+      <div class="flex flex-wrap gap-1.5 bg-dark-800/60 rounded-xl p-1 border border-dark-600/30">
         ${[
           {id:'all', label:'All'},
           {id:'active', label:'Active'},
@@ -4617,7 +4685,7 @@ function renderNewManagerForm() {
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
-      <div class="grid grid-cols-2 gap-4 mb-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Manager Name *</label>
           <input id="new-manager-name" type="text" placeholder="e.g. Sarah" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-blue-500" />
@@ -4683,7 +4751,7 @@ function confirmDeleteManager(mgrName, acctCount) {
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
   overlay.innerHTML = `
-    <div class="glass rounded-2xl p-6 max-w-md w-full border border-red-500/30" onclick="event.stopPropagation()">
+    <div class="glass rounded-2xl p-6 max-w-md w-full border border-red-500/30 modal-inner" onclick="event.stopPropagation()">
       <div class="flex items-center gap-3 mb-4">
         <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
           <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
@@ -4809,7 +4877,7 @@ function renderNewClientForm(managers) {
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Client Name *</label>
           <input id="new-client-name" type="text" placeholder="e.g. Apex Roofing" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
@@ -4836,7 +4904,7 @@ function renderNewClientForm(managers) {
           <input id="new-client-adid" type="text" placeholder="e.g. 1234567890" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
         </div>
       </div>
-      <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Booked Goal</label>
           <input id="new-client-booked-goal" type="number" placeholder="6" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
@@ -4878,7 +4946,7 @@ function renderCycleEditor() {
 
   return `
     <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onclick="if(event.target===this){adminEditingCycle=null;renderAdminView()}">
-      <div class="glass rounded-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden" onclick="event.stopPropagation()">
+      <div class="glass rounded-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden modal-inner" onclick="event.stopPropagation()">
         <div class="p-5 border-b border-dark-600/50 flex items-center justify-between">
           <div>
             <h2 class="text-lg font-bold text-white">${acct.name}</h2>
@@ -4895,8 +4963,8 @@ function renderCycleEditor() {
           </div>
         </div>
         <div class="overflow-y-auto max-h-[calc(80vh-80px)] p-5">
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs">
+          <div class="overflow-x-auto table-scroll-hint">
+            <table class="w-full text-xs min-w-[1100px]">
               <thead>
                 <tr class="text-dark-300 border-b border-dark-600/40">
                   <th class="text-left px-3 py-2 font-semibold">Cycle</th>
@@ -5207,7 +5275,7 @@ function addNewCycle(accountName) {
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
   overlay.innerHTML = `
-    <div class="glass rounded-2xl p-6 max-w-sm w-full border border-brand-500/30" onclick="event.stopPropagation()">
+    <div class="glass rounded-2xl p-6 max-w-sm w-full border border-brand-500/30 modal-inner" onclick="event.stopPropagation()">
       <div class="flex items-center gap-3 mb-5">
         <div class="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center">
           <svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
@@ -5321,7 +5389,7 @@ function showToast(message, type = 'info') {
   const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
 
   const toast = document.createElement('div');
-  toast.className = 'fixed bottom-6 right-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium bg-gradient-to-r ' + (colors[type] || colors.info);
+  toast.className = 'fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium bg-gradient-to-r ' + (colors[type] || colors.info);
   toast.style.cssText = 'animation: slideIn 0.3s ease-out; opacity: 0; transform: translateY(20px);';
   toast.innerHTML = `<span class="text-lg">${icons[type] || icons.info}</span> ${message}`;
 
@@ -5384,7 +5452,7 @@ function showAppsScriptSetup() {
   modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
   modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   modal.innerHTML = `
-    <div class="glass rounded-2xl p-6 max-w-3xl w-full max-h-[85vh] overflow-y-auto" onclick="event.stopPropagation()">
+    <div class="glass rounded-2xl p-6 max-w-3xl w-full max-h-[85vh] overflow-y-auto modal-inner" onclick="event.stopPropagation()">
       <h2 class="text-lg font-bold text-white mb-4">🔧 Apps Script Setup — Dashboard Write-Back + Greg Config</h2>
       <div class="text-sm text-dark-200 space-y-3">
         <p class="text-yellow-300 text-xs font-semibold">Two things to set up:</p>
