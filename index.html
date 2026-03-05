@@ -4319,7 +4319,11 @@ function renderAdminView() {
           <p class="text-dark-300 text-sm mt-1">${allAccounts.length} total clients across ${managers.length} managers</p>
         </div>
       </div>
-      <div class="flex gap-3">
+      <div class="flex gap-3 flex-wrap">
+        <button onclick="openTransferModal()" class="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg shadow-indigo-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+          Transfer
+        </button>
         <button onclick="adminShowNewManager=true;renderAdminView()" class="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/20">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
           New Manager
@@ -5117,6 +5121,297 @@ async function saveAccountEdit(name, rowIdx) {
 
   adminEditingAccount = null;
   renderAdminView();
+}
+
+// ═══════════════════════════════════════════════
+// TRANSFER ACCOUNTS BETWEEN MANAGERS / PODS
+// ═══════════════════════════════════════════════
+let transferSelectedAccounts = new Set();
+
+function openTransferModal() {
+  transferSelectedAccounts = new Set();
+  const managers = getManagers();
+  const podNames = Object.keys(SHEETS);
+
+  const modal = document.createElement('div');
+  modal.id = 'transfer-modal';
+  modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  modal.innerHTML = `
+    <div class="glass rounded-2xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto modal-inner" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-600/20 flex items-center justify-center border border-indigo-500/20">
+            <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+          </div>
+          <div>
+            <h2 class="text-lg font-bold text-white">Transfer Accounts</h2>
+            <p class="text-dark-400 text-xs mt-0.5">Move accounts between managers and pods</p>
+          </div>
+        </div>
+        <button onclick="document.getElementById('transfer-modal').remove()" class="text-dark-400 hover:text-white transition-colors p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Source Manager -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-dark-200 mb-2">From Manager</label>
+        <select id="transfer-from-mgr" onchange="renderTransferAccountList()" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-indigo-500 transition-colors">
+          <option value="">Select source manager...</option>
+          ${managers.map(m => {
+            const count = allAccounts.filter(a => a.manager === m).length;
+            const pod = managerPodMap[m] ? managerPodMap[m].replace(' - RoofIgnite','') : '?';
+            return `<option value="${m}">${m} (${count} accounts · ${pod})</option>`;
+          }).join('')}
+        </select>
+      </div>
+
+      <!-- Account List (dynamic) -->
+      <div id="transfer-account-list" class="mb-4"></div>
+
+      <!-- Destination Manager -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-dark-200 mb-2">To Manager</label>
+        <select id="transfer-to-mgr" onchange="updateTransferPodDisplay()" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-indigo-500 transition-colors">
+          <option value="">Select destination manager...</option>
+          ${managers.map(m => {
+            const pod = managerPodMap[m] ? managerPodMap[m].replace(' - RoofIgnite','') : '?';
+            return `<option value="${m}">${m} (${pod})</option>`;
+          }).join('')}
+        </select>
+      </div>
+
+      <!-- Destination Pod (auto-filled from manager, but editable for cross-pod transfers) -->
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-dark-200 mb-2">Destination Pod</label>
+        <select id="transfer-to-pod" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-indigo-500 transition-colors">
+          ${podNames.map(p => `<option value="${p}">${p.replace(' - RoofIgnite','')}</option>`).join('')}
+        </select>
+        <p class="text-dark-500 text-[10px] mt-1">Auto-set from destination manager. Change if moving to a different pod.</p>
+      </div>
+
+      <!-- Transfer Summary & Button -->
+      <div id="transfer-summary" class="mb-4"></div>
+
+      <div class="flex justify-end gap-3">
+        <button onclick="document.getElementById('transfer-modal').remove()" class="px-4 py-2.5 rounded-xl text-sm text-dark-300 hover:text-white bg-dark-700/50 hover:bg-dark-600/50 border border-dark-600/50 transition-all">Cancel</button>
+        <button id="transfer-execute-btn" onclick="executeTransfer()" disabled class="px-6 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 text-white hover:from-indigo-600 hover:to-purple-700 transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none">
+          Transfer Accounts
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function renderTransferAccountList() {
+  const fromMgr = document.getElementById('transfer-from-mgr').value;
+  const container = document.getElementById('transfer-account-list');
+  transferSelectedAccounts = new Set();
+
+  if (!fromMgr) {
+    container.innerHTML = '';
+    updateTransferSummary();
+    return;
+  }
+
+  const accounts = allAccounts.filter(a => a.manager === fromMgr);
+  if (accounts.length === 0) {
+    container.innerHTML = '<p class="text-dark-500 text-sm py-3">No accounts under this manager.</p>';
+    updateTransferSummary();
+    return;
+  }
+
+  container.innerHTML = `
+    <label class="block text-sm font-medium text-dark-200 mb-2">Select Accounts to Transfer</label>
+    <div class="bg-dark-800/40 rounded-xl border border-dark-600/30 max-h-52 overflow-y-auto">
+      <div class="px-3 py-2 border-b border-dark-600/30 sticky top-0 bg-dark-800/90 backdrop-blur-sm">
+        <label class="flex items-center gap-2 cursor-pointer text-xs text-dark-300 hover:text-white transition-colors">
+          <input type="checkbox" id="transfer-select-all" onchange="toggleTransferSelectAll(this.checked)" class="rounded border-dark-500 bg-dark-700 text-indigo-500 focus:ring-indigo-500/30">
+          <span>Select All (${accounts.length})</span>
+        </label>
+      </div>
+      ${accounts.map(a => {
+        const isActive = hasActiveCycle(a);
+        return `
+        <label class="flex items-center gap-3 px-3 py-2 hover:bg-dark-700/40 cursor-pointer transition-colors border-b border-dark-700/20 last:border-0">
+          <input type="checkbox" value="${a.name}" onchange="toggleTransferAccount('${a.name.replace(/'/g,"\\'")}', this.checked)" class="transfer-acct-cb rounded border-dark-500 bg-dark-700 text-indigo-500 focus:ring-indigo-500/30">
+          <div class="flex items-center gap-2 flex-1 min-w-0">
+            <div class="w-6 h-6 rounded-md ${isActive ? 'bg-green-500/15 text-green-400 border-green-500/20' : 'bg-dark-600/30 text-dark-500 border-dark-600/20'} border flex items-center justify-center text-[9px] font-bold">${a.name.charAt(0)}</div>
+            <div class="min-w-0">
+              <div class="text-white text-xs font-medium truncate">${a.name}</div>
+              <div class="text-dark-500 text-[10px]">${a.pod ? a.pod.replace(' - RoofIgnite','') : '—'} ${isActive ? '' : '· Inactive'}</div>
+            </div>
+          </div>
+        </label>`;
+      }).join('')}
+    </div>
+  `;
+  updateTransferSummary();
+}
+
+function toggleTransferSelectAll(checked) {
+  const fromMgr = document.getElementById('transfer-from-mgr').value;
+  const accounts = allAccounts.filter(a => a.manager === fromMgr);
+  transferSelectedAccounts = checked ? new Set(accounts.map(a => a.name)) : new Set();
+  document.querySelectorAll('.transfer-acct-cb').forEach(cb => cb.checked = checked);
+  updateTransferSummary();
+}
+
+function toggleTransferAccount(name, checked) {
+  if (checked) transferSelectedAccounts.add(name);
+  else transferSelectedAccounts.delete(name);
+
+  // Update "Select All" checkbox state
+  const totalCbs = document.querySelectorAll('.transfer-acct-cb').length;
+  const selectAll = document.getElementById('transfer-select-all');
+  if (selectAll) {
+    selectAll.checked = transferSelectedAccounts.size === totalCbs;
+    selectAll.indeterminate = transferSelectedAccounts.size > 0 && transferSelectedAccounts.size < totalCbs;
+  }
+  updateTransferSummary();
+}
+
+function updateTransferPodDisplay() {
+  const toMgr = document.getElementById('transfer-to-mgr').value;
+  const podSelect = document.getElementById('transfer-to-pod');
+  if (toMgr && managerPodMap[toMgr]) {
+    podSelect.value = managerPodMap[toMgr];
+  }
+  updateTransferSummary();
+}
+
+function updateTransferSummary() {
+  const fromMgr = document.getElementById('transfer-from-mgr')?.value;
+  const toMgr = document.getElementById('transfer-to-mgr')?.value;
+  const toPod = document.getElementById('transfer-to-pod')?.value;
+  const count = transferSelectedAccounts.size;
+  const summary = document.getElementById('transfer-summary');
+  const btn = document.getElementById('transfer-execute-btn');
+
+  const valid = fromMgr && toMgr && fromMgr !== toMgr && count > 0;
+  if (btn) btn.disabled = !valid;
+
+  if (!summary) return;
+
+  if (!valid) {
+    if (fromMgr && toMgr && fromMgr === toMgr) {
+      summary.innerHTML = '<p class="text-yellow-400 text-xs">Source and destination manager must be different.</p>';
+    } else if (count === 0 && fromMgr) {
+      summary.innerHTML = '<p class="text-dark-500 text-xs">Select at least one account to transfer.</p>';
+    } else {
+      summary.innerHTML = '';
+    }
+    return;
+  }
+
+  const fromPod = managerPodMap[fromMgr] ? managerPodMap[fromMgr].replace(' - RoofIgnite','') : '?';
+  const toPodLabel = toPod ? toPod.replace(' - RoofIgnite','') : '?';
+  const crossPod = managerPodMap[fromMgr] !== toPod;
+
+  summary.innerHTML = `
+    <div class="bg-indigo-500/5 border border-indigo-500/15 rounded-xl p-3">
+      <div class="flex items-center gap-3 text-sm">
+        <div class="text-center">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wide">From</div>
+          <div class="text-white font-semibold">${fromMgr}</div>
+          <div class="text-dark-500 text-[10px]">${fromPod}</div>
+        </div>
+        <div class="flex-1 flex items-center justify-center">
+          <div class="flex items-center gap-2 px-3 py-1 rounded-full ${crossPod ? 'bg-purple-500/15 border border-purple-500/20' : 'bg-indigo-500/10 border border-indigo-500/15'}">
+            <span class="text-indigo-300 text-xs font-semibold">${count} account${count !== 1 ? 's' : ''}</span>
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </div>
+        </div>
+        <div class="text-center">
+          <div class="text-dark-400 text-[10px] uppercase tracking-wide">To</div>
+          <div class="text-white font-semibold">${toMgr}</div>
+          <div class="text-dark-500 text-[10px]">${toPodLabel}</div>
+        </div>
+      </div>
+      ${crossPod ? '<p class="text-purple-400 text-[10px] text-center mt-2 font-medium">Cross-pod transfer</p>' : ''}
+    </div>
+  `;
+}
+
+async function executeTransfer() {
+  const fromMgr = document.getElementById('transfer-from-mgr').value;
+  const toMgr = document.getElementById('transfer-to-mgr').value;
+  const toPod = document.getElementById('transfer-to-pod').value;
+  const count = transferSelectedAccounts.size;
+
+  if (!fromMgr || !toMgr || fromMgr === toMgr || count === 0) return;
+
+  // Disable button during transfer
+  const btn = document.getElementById('transfer-execute-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Transferring...'; }
+
+  const accountNames = [...transferSelectedAccounts];
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const name of accountNames) {
+    const acct = allAccounts.find(a => a.name === name && a.manager === fromMgr);
+    if (!acct) continue;
+
+    // Update local state
+    const oldMgr = acct.manager;
+    const oldPod = acct.pod;
+    acct.manager = toMgr;
+    acct.pod = toPod;
+    acct.cycles.forEach(c => { c.manager = toMgr; });
+
+    // Sync to Sheet
+    if (APPS_SCRIPT_URL) {
+      const result = await writeToSheet('transferAccount', {
+        name,
+        adAccountId: acct.adAccountId || '',
+        fromManager: oldMgr,
+        toManager: toMgr,
+        fromPod: oldPod,
+        toPod: toPod
+      }, { silent: true });
+
+      // Fallback to updateManager if transferAccount action doesn't exist yet
+      if (!result.ok && result.error && result.error.includes('Unknown action')) {
+        const fallback = await writeToSheet('updateManager', { name, manager: toMgr }, { silent: true });
+        if (fallback.ok) successCount++;
+        else failCount++;
+      } else if (result.ok) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    } else {
+      successCount++;
+    }
+  }
+
+  // Rebuild managerPodMap
+  managerPodMap = {};
+  allAccounts.forEach(a => {
+    if (a.manager && a.pod && !managerPodMap[a.manager]) {
+      managerPodMap[a.manager] = a.pod;
+    }
+  });
+
+  // Refresh UI
+  renderSidebarManagers();
+  renderAdminView();
+
+  // Close modal
+  const modal = document.getElementById('transfer-modal');
+  if (modal) modal.remove();
+
+  // Show result
+  if (failCount === 0) {
+    showToast(`Transferred ${successCount} account${successCount !== 1 ? 's' : ''} from ${fromMgr} to ${toMgr} ✓`, 'success');
+  } else {
+    showToast(`Transferred ${successCount}/${count} accounts. ${failCount} failed to sync to Sheet.`, 'warning');
+  }
 }
 
 async function toggleAccountStatus(name) {
