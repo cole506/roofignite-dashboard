@@ -842,7 +842,6 @@ function parseSheetData(data, podName) {
       // If it's not a known sub-section label, it's likely a manager name
       if (!knownSubSections.includes(cellATrimmed.toLowerCase())) {
         currentMgr = cellATrimmed;
-        managerPodMap[cellATrimmed] = podName;
         console.log(`[${podName}] Manager set from section header: "${cellATrimmed}"`);
       }
       continue;
@@ -1080,9 +1079,34 @@ function getDate(row, idx) {
 async function loadAllData() {
   document.getElementById('loading-state').classList.remove('hidden');
 
+  // Auto-detect pod tabs from Google Sheet (so manually-added pods appear)
+  if (APPS_SCRIPT_URL) {
+    try {
+      const sheetList = await writeToSheet('getSheetList', {}, { silent: true });
+      if (sheetList.ok && sheetList.pods) {
+        // Merge detected pods into SHEETS — keeps existing entries, adds new ones
+        sheetList.pods.forEach(p => {
+          if (!SHEETS[p.name]) {
+            SHEETS[p.name] = p.gid;
+            console.log(`[AutoDetect] Discovered new pod: "${p.name}" (GID: ${p.gid})`);
+          }
+        });
+        // Also update GIDs for existing pods if they were wrong
+        sheetList.pods.forEach(p => {
+          if (SHEETS[p.name] != null && SHEETS[p.name] !== p.gid) {
+            console.log(`[AutoDetect] Updated GID for "${p.name}": ${SHEETS[p.name]} → ${p.gid}`);
+            SHEETS[p.name] = p.gid;
+          }
+        });
+        renderSidebarPods();
+      }
+    } catch (e) {
+      console.warn('[AutoDetect] Could not fetch sheet list:', e.message);
+    }
+  }
+
   // Dynamic pod loading — fetches all pods from CONFIG.SHEETS
   const podNames = Object.keys(SHEETS);
-  managerPodMap = {}; // Reset before re-building (populated during fetchSheetData parsing)
   const [podResults, leadResults, adIdMaps] = await Promise.all([
     Promise.all(podNames.map(name => fetchSheetData(name, SHEETS[name]))),
     Promise.all([
@@ -1095,6 +1119,15 @@ async function loadAllData() {
   allAccounts = podResults.flatMap(r => r.accounts);
   allCycles = podResults.flatMap(r => r.cycles);
   allLeads = leadResults.flat();
+
+  // Build managerPodMap deterministically AFTER all data loads (not during parallel parsing)
+  managerPodMap = {};
+  allAccounts.forEach(a => {
+    if (a.manager && a.pod && !managerPodMap[a.manager]) {
+      managerPodMap[a.manager] = a.pod;
+    }
+  });
+  console.log('[ManagerPodMap] Built from accounts:', JSON.stringify(managerPodMap));
 
   // Merge CSV-derived ad account IDs into accounts and cycles
   const combinedAdIdMap = new Map(adIdMaps.flatMap(m => [...m]));
@@ -2101,7 +2134,8 @@ function renderPodView(podName) {
   const podLabel = podName.replace(' - RoofIgnite', '');
 
   const podNum = podLabel.replace(/[^0-9]/g,'');
-  const podAccent = podNum === '2' ? 'amber' : 'cyan';
+  const podIdx = Object.keys(SHEETS).indexOf(podName);
+  const podAccent = POD_COLORS[(podIdx >= 0 ? podIdx : 0) % POD_COLORS.length];
   el.innerHTML = `
     <div class="mb-8 fade-in">
       <div class="flex items-center gap-4">
@@ -3939,12 +3973,13 @@ async function createNewPod() {
     const result = await writeToSheet('createPod', { podName, referenceSheet: refSheet });
     console.log('[CreatePod] Result:', JSON.stringify(result));
     if (result.ok) {
-      // sheetId may be missing if GAS response was opaque — use 0 as fallback
-      SHEETS[podName] = result.sheetId || 0;
+      if (result.sheetId != null) {
+        SHEETS[podName] = result.sheetId;
+      }
       renderSidebarPods();
       renderAdminView();
       showToast(`${podName} created ✓`, 'success');
-      // Refresh data to pick up the new pod sheet
+      // Full refresh to pick up new pod sheet with correct GID from backend
       setTimeout(() => refreshData(), 1500);
     } else {
       const errMsg = result.error || '';
@@ -3957,6 +3992,53 @@ async function createNewPod() {
   } catch (e) {
     console.error('[CreatePod] Error:', e);
     showToast('Failed to create pod — check console', 'error');
+  }
+}
+
+function confirmMoveManager(managerName, fromPod, toPod) {
+  const accts = allAccounts.filter(a => a.manager === managerName);
+  const fromLabel = fromPod.replace(/ - RoofIgnite/i, '');
+  const toLabel = toPod.replace(/ - RoofIgnite/i, '');
+  const msg = `Move "${managerName}" and ${accts.length} account(s) from ${fromLabel} to ${toLabel}?\n\nThis will move the manager header row and all account/cycle rows to the target pod sheet.`;
+  if (confirm(msg)) {
+    moveManagerToPod(managerName, fromPod, toPod);
+  }
+}
+
+async function moveManagerToPod(managerName, fromPod, toPod) {
+  if (!APPS_SCRIPT_URL) {
+    showToast('Connect Apps Script first to move managers', 'error');
+    return;
+  }
+
+  const fromLabel = fromPod.replace(/ - RoofIgnite/i, '');
+  const toLabel = toPod.replace(/ - RoofIgnite/i, '');
+  showToast(`Moving ${managerName} from ${fromLabel} to ${toLabel}...`, 'success');
+
+  try {
+    const result = await writeToSheet('moveManager', {
+      managerName,
+      fromSheet: fromPod,
+      toSheet: toPod
+    });
+
+    if (result.ok) {
+      showToast(`${managerName} moved to ${toLabel} ✓ (${result.rowsMoved || 0} rows)`, 'success');
+      // Update local managerPodMap
+      managerPodMap[managerName] = toPod;
+      // Full refresh to reload data from new sheet locations
+      await refreshData();
+    } else {
+      const errMsg = result.error || 'Unknown error';
+      if (errMsg.includes('Unknown action')) {
+        showToast('Redeploy Apps Script to enable Move Manager (Manage Deployments → Edit → New Version → Deploy)', 'warning');
+      } else {
+        showToast(`Failed to move manager: ${errMsg}`, 'error');
+      }
+    }
+  } catch (e) {
+    console.error('[MoveManager] Error:', e);
+    showToast('Failed to move manager — check console', 'error');
   }
 }
 
@@ -4087,6 +4169,41 @@ function renderAdminView() {
                 : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">${md}</button>`).join('')}
             </div>
             ${overrideCount > 0 ? `<div class="text-[9px] text-brand-400 mt-1.5">${overrideCount} account override${overrideCount > 1 ? 's' : ''}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Move Manager Between Pods -->
+    <div class="glass rounded-2xl p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-600/20 border border-indigo-500/20 flex items-center justify-center text-[10px]">
+            <svg class="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+          </span>
+          Move Manager Between Pods
+        </h3>
+        <div class="text-[10px] text-dark-400">Moves manager header + all accounts to target pod</div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${Math.min(managers.length, 5)} gap-3">
+        ${managers.map(m => {
+          const currentPodName = managerPodMap[m] || '—';
+          const currentPodShort = currentPodName.replace(/ - RoofIgnite/i, '');
+          const acctCount = allAccounts.filter(a => a.manager === m).length;
+          const otherPods = Object.keys(SHEETS).filter(p => p !== currentPodName);
+          return `
+          <div class="bg-dark-800/60 rounded-xl p-3 border border-dark-600/30">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-semibold text-white">${m}</span>
+              <span class="text-[10px] text-dark-400">${acctCount} accts</span>
+            </div>
+            <div class="text-[10px] text-dark-300 mb-2">Current: <span class="text-brand-400 font-medium">${currentPodShort}</span></div>
+            ${otherPods.length > 0 ? `
+            <select onchange="if(this.value) confirmMoveManager('${esc(m)}','${esc(currentPodName)}',this.value); this.value='';"
+              class="w-full bg-dark-900/80 border border-dark-600/40 rounded-lg text-[11px] text-dark-200 px-2 py-1.5 focus:outline-none focus:border-indigo-500">
+              <option value="">Move to...</option>
+              ${otherPods.map(p => `<option value="${p}">${p.replace(/ - RoofIgnite/i, '')}</option>`).join('')}
+            </select>` : '<div class="text-[10px] text-dark-500">Only 1 pod exists</div>'}
           </div>`;
         }).join('')}
       </div>
@@ -5119,7 +5236,7 @@ async function writeToSheet(action, data, opts = {}) {
 
     if (result.ok) {
       console.log('[GAS] Write success:', action);
-      return { ok: true };
+      return result;
     } else {
       const errMsg = result.error || 'Unknown error from Apps Script';
       console.error('[GAS] Write error:', action, errMsg);
