@@ -2604,73 +2604,25 @@ function renderAccountDetail(name, adAccountId) {
 
     <!-- Cycle Comparison -->
     ${cycles.length >= 2 ? (() => {
-      const curr = cycles[cycles.length - 1];
-      const prev = cycles[cycles.length - 2];
-      const cGoal = acct.cpaGoal || curr.cpaGoal;
-      const pctChg = (p, c) => p && p !== 0 ? ((c - p) / Math.abs(p)) * 100 : null;
-      const chgBadge = (pct, lowerIsBetter) => {
-        if (pct === null || isNaN(pct)) return '<span class="text-dark-500 text-[10px]">—</span>';
-        const improved = lowerIsBetter ? pct < 0 : pct > 0;
-        const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '—';
-        const color = improved ? 'text-emerald-400' : 'text-red-400';
-        return `<span class="${color} text-[10px] font-semibold">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
-      };
-      const fmtV = (v, type) => {
-        if (v === null || v === undefined || isNaN(v)) return '—';
-        if (type === '$') return fmtDollar(v, 2);
-        if (type === '$0') return fmtDollar(v, 0);
-        if (type === '%') return v ? v.toFixed(2) + '%' : '—';
-        if (type === 'pct') return fmtPct(v);
-        if (type === 'dec') return v ? v.toFixed(2) : '—';
-        return fmt(v);
-      };
-      const metrics = [
-        { label: 'Spend', prev: prev.amountSpent, curr: curr.amountSpent, fmt: '$', lower: false, color: '' },
-        { label: 'Leads', prev: prev.totalLeads, curr: curr.totalLeads, fmt: 'n', lower: false, color: '' },
-        { label: 'CPL', prev: prev.totalLeads > 0 ? prev.amountSpent/prev.totalLeads : 0, curr: curr.totalLeads > 0 ? curr.amountSpent/curr.totalLeads : 0, fmt: '$', lower: true, color: '' },
-        { label: 'Bookings', prev: prev.bookedAppts, curr: curr.bookedAppts, fmt: 'n', lower: false, color: '' },
-        { label: 'CPA', prev: prev.cpa, curr: curr.cpa, fmt: '$', lower: true, color: cpaColor(curr.cpa, cGoal) },
-        { label: 'Link CTR', prev: prev.linkCTR, curr: curr.linkCTR, fmt: '%', lower: false, color: ctrColor(curr.linkCTR) },
-        { label: 'CPC (Link)', prev: prev.linkCPC, curr: curr.linkCPC, fmt: '$', lower: true, color: cpcColor(curr.linkCPC) },
-        { label: 'CPM', prev: prev.cpm, curr: curr.cpm, fmt: '$', lower: true, color: cpmColor(curr.cpm) },
-        { label: 'Frequency', prev: prev.frequency, curr: curr.frequency, fmt: 'dec', lower: true, color: freqColor(curr.frequency) },
-        { label: 'OSA %', prev: prev.osaPct, curr: curr.osaPct, fmt: 'pct', lower: false, color: osaColor(curr.osaPct) },
-      ];
+      // Default: last 2 completed cycles (skip in-progress if it has no spend)
+      let defB = cycles.length - 1;
+      let defA = cycles.length - 2;
+      const cycOpts = cycles.map((c, i) => `<option value="${i}">${c.cycle}${c.cycle.toLowerCase().includes('winter') ? ' (winter)' : ''}</option>`).join('');
       return `
-      <div class="glass rounded-2xl overflow-hidden">
-        <div class="p-5 border-b border-dark-600">
+      <div class="glass rounded-2xl overflow-hidden" id="cycle-comp-section">
+        <div class="p-5 border-b border-dark-600 flex flex-wrap items-center justify-between gap-3">
           <h3 class="text-white font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-indigo-400"></div>Cycle Comparison</h3>
-          <p class="text-dark-400 text-xs mt-1">${prev.cycle} vs ${curr.cycle}</p>
+          <div class="flex items-center gap-2 text-xs">
+            <select id="comp-cycle-a" onchange="renderCycleCompCards()" class="bg-dark-800/80 border border-dark-600/50 rounded-lg text-dark-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-brand-500">${cycOpts}</select>
+            <span class="text-dark-500">vs</span>
+            <select id="comp-cycle-b" onchange="renderCycleCompCards()" class="bg-dark-800/80 border border-dark-600/50 rounded-lg text-dark-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-brand-500">${cycOpts}</select>
+          </div>
         </div>
-        <div class="p-4">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-dark-400 text-[10px] uppercase tracking-wider border-b border-dark-600">
-                <th class="text-left py-2 px-3 font-medium">Metric</th>
-                <th class="text-right py-2 px-3 font-medium">${prev.cycle}</th>
-                <th class="text-right py-2 px-3 font-medium">${curr.cycle}</th>
-                <th class="text-right py-2 px-3 font-medium">Change</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${metrics.map(m => {
-                const pv = fmtV(m.prev, m.fmt);
-                const cv = fmtV(m.curr, m.fmt);
-                const pct = pctChg(m.prev, m.curr);
-                return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/20">
-                  <td class="py-2.5 px-3 text-dark-300 font-medium">${m.label}</td>
-                  <td class="py-2.5 px-3 text-right text-dark-400">${pv}</td>
-                  <td class="py-2.5 px-3 text-right"><span class="${m.color || 'text-white'}">${cv}</span></td>
-                  <td class="py-2.5 px-3 text-right">${chgBadge(pct, m.lower)}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
+        <div id="cycle-comp-cards" class="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
       </div>`;
     })() : cycles.length === 1 ? `
       <div class="glass rounded-2xl p-6 text-center">
-        <div class="text-dark-400 text-sm">📊 Cycle comparison available after completing at least 2 cycles</div>
+        <div class="text-dark-400 text-sm">Cycle comparison available after completing at least 2 cycles</div>
       </div>` : ''}
 
     ${activeCyc && activeCyc.notes ? `
@@ -2683,6 +2635,19 @@ function renderAccountDetail(name, adAccountId) {
   if (cycles.length > 1) {
     renderAccountCPAChart(cycles, acct.cpaGoal);
     renderAccountLeadsChart(cycles);
+  }
+
+  // Initialize cycle comparison selectors and render cards
+  if (cycles.length >= 2) {
+    _compCycles = cycles;
+    _compCpaGoal = acct.cpaGoal;
+    const selA = document.getElementById('comp-cycle-a');
+    const selB = document.getElementById('comp-cycle-b');
+    if (selA && selB) {
+      selA.value = cycles.length - 2;
+      selB.value = cycles.length - 1;
+      renderCycleCompCards();
+    }
   }
 
   // Store context for cycle switching
@@ -2886,6 +2851,107 @@ function showCycleLeads(cycleIdx) {
     renderLeadBreakdown(_currentBreakdownAcct, _currentBreakdownCycles, cycleIdx);
     document.getElementById('lead-breakdown')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+}
+
+// ═══ Cycle Comparison Cards with Mini Sparklines ═══
+let _compCycles = [];
+let _compCpaGoal = null;
+let _compCharts = {};
+
+function renderCycleCompCards() {
+  const container = document.getElementById('cycle-comp-cards');
+  if (!container || !_compCycles.length) return;
+  const idxA = parseInt(document.getElementById('comp-cycle-a')?.value ?? 0);
+  const idxB = parseInt(document.getElementById('comp-cycle-b')?.value ?? 1);
+  const a = _compCycles[idxA];
+  const b = _compCycles[idxB];
+  if (!a || !b) return;
+
+  const pctChg = (prev, curr) => prev && prev !== 0 ? ((curr - prev) / Math.abs(prev)) * 100 : null;
+
+  const metrics = [
+    { key: 'leads', label: 'Leads', valA: a.totalLeads, valB: b.totalLeads, fmt: 'n', lower: false,
+      color: '#3b82f6', allVals: _compCycles.map(c => c.totalLeads || 0) },
+    { key: 'bookings', label: 'Bookings', valA: a.bookedAppts, valB: b.bookedAppts, fmt: 'n', lower: false,
+      color: '#22c55e', allVals: _compCycles.map(c => c.bookedAppts || 0) },
+    { key: 'cpl', label: 'CPL', valA: a.totalLeads > 0 ? a.amountSpent / a.totalLeads : null, valB: b.totalLeads > 0 ? b.amountSpent / b.totalLeads : null, fmt: '$', lower: true,
+      color: '#a78bfa', allVals: _compCycles.map(c => c.totalLeads > 0 ? (c.amountSpent || 0) / c.totalLeads : 0) },
+    { key: 'cpa', label: 'CPA', valA: a.cpa, valB: b.cpa, fmt: '$', lower: true,
+      color: '#f97316', allVals: _compCycles.map(c => c.cpa || 0) },
+  ];
+
+  const fmtV = (v, type) => {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    if (type === '$') return fmtDollar(v, 2);
+    return fmt(v);
+  };
+
+  container.innerHTML = metrics.map(m => {
+    const pct = pctChg(m.valA, m.valB);
+    let arrow = '', chgColor = 'text-dark-500', chgText = '—';
+    if (pct !== null && !isNaN(pct)) {
+      const improved = m.lower ? pct < 0 : pct > 0;
+      arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '';
+      chgColor = improved ? 'text-emerald-400' : 'text-red-400';
+      chgText = `${arrow} ${Math.abs(pct).toFixed(1)}%`;
+    }
+    return `
+    <div class="bg-dark-800/60 rounded-xl p-4 border border-dark-600/30">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">${m.label}</span>
+        <span class="${chgColor} text-[11px] font-bold">${chgText}</span>
+      </div>
+      <div class="text-white text-xl font-extrabold mb-0.5">${fmtV(m.valB, m.fmt)}</div>
+      <div class="text-dark-500 text-[10px] mb-3">was ${fmtV(m.valA, m.fmt)}</div>
+      <div style="height:48px;"><canvas id="comp-spark-${m.key}"></canvas></div>
+    </div>`;
+  }).join('');
+
+  // Destroy old charts
+  Object.values(_compCharts).forEach(c => { try { c.destroy(); } catch {} });
+  _compCharts = {};
+
+  // Render sparkline for each metric
+  metrics.forEach(m => {
+    const ctx = document.getElementById(`comp-spark-${m.key}`);
+    if (!ctx) return;
+    const labels = _compCycles.map(c => c.cycle.replace('Cycle ', 'C'));
+    // Highlight the two selected cycles with bigger dots
+    const pointRadius = _compCycles.map((_, i) => (i === idxA || i === idxB) ? 4 : 2);
+    const pointBg = _compCycles.map((_, i) => (i === idxA || i === idxB) ? m.color : m.color + '60');
+
+    _compCharts[m.key] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          data: m.allVals,
+          borderColor: m.color,
+          backgroundColor: m.color + '15',
+          fill: true,
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius,
+          pointBackgroundColor: pointBg,
+          pointBorderColor: '#0f172a',
+          pointBorderWidth: 1.5,
+          pointHoverRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false },
+          tooltip: { backgroundColor: 'rgba(15,23,42,0.95)', titleColor: '#f1f5f9', bodyColor: '#cbd5e1',
+            borderColor: 'rgba(100,116,139,0.2)', borderWidth: 1, cornerRadius: 6, padding: 8,
+            titleFont: { family: 'Inter', size: 10 }, bodyFont: { family: 'Inter', size: 11 },
+            callbacks: { label: tip => m.fmt === '$' ? '$' + Number(tip.raw).toFixed(2) : String(tip.raw) } } },
+        scales: {
+          x: { display: false },
+          y: { display: false }
+        }
+      }
+    });
+  });
 }
 
 function renderAccountCPAChart(cycles, goalCPA) {
