@@ -1342,10 +1342,18 @@ function fmtPctDec(n, decimals = 2) {
   if (n === null || n === undefined || isNaN(n)) return '—';
   return n.toFixed(decimals) + '%';
 }
+// Parse YYYY-MM-DD as local time to avoid UTC timezone shift
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (parts) return new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+  const d = new Date(dateStr + 'T00:00:00');
+  return isNaN(d.getTime()) ? null : d;
+}
 function fmtDate(dateStr) {
   if (!dateStr || dateStr === '—') return '—';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
+  const d = parseLocalDate(dateStr);
+  if (!d) return dateStr;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
@@ -1461,8 +1469,8 @@ function getBookingPacing(cycle) {
   const cpa = cycle.cpa || 0;
   if (!budget || !bookedGoal) return null;
 
-  const startMs = new Date(cycle.cycleStartDate).getTime();
-  const endMs = new Date(cycle.cycleEndDate).getTime();
+  const startMs = parseLocalDate(cycle.cycleStartDate).getTime();
+  const endMs = parseLocalDate(cycle.cycleEndDate).getTime();
   const nowMs = Date.now();
   const totalDays = Math.max(1, (endMs - startMs) / 86400000);
   const elapsedDays = Math.max(0, Math.min(totalDays, (nowMs - startMs) / 86400000));
@@ -2604,7 +2612,7 @@ function renderAccountDetail(name, adAccountId) {
           </div>
           <div>
             <label class="text-[10px] text-dark-500">Cycle Length (days)</label>
-            <input id="qe-cycle-length" type="number" value="${activeCyc.cycleStartDate && activeCyc.cycleEndDate ? Math.round((new Date(activeCyc.cycleEndDate) - new Date(activeCyc.cycleStartDate)) / 86400000) : 28}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
+            <input id="qe-cycle-length" type="number" value="${activeCyc.cycleStartDate && activeCyc.cycleEndDate ? Math.round((parseLocalDate(activeCyc.cycleEndDate) - parseLocalDate(activeCyc.cycleStartDate)) / 86400000) : 28}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
           </div>
           <div>
             <label class="text-[10px] text-dark-500">Daily Budget</label>
@@ -2851,10 +2859,10 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
   // Group by week (from all leads, not filtered)
   const weeks = { 'Week 1': [], 'Week 2': [], 'Week 3': [], 'Week 4': [], 'Week 5+': [] };
   if (activeBreakdown.cycle.cycleStartDate) {
-    const startMs = new Date(activeBreakdown.cycle.cycleStartDate).getTime();
+    const startMs = parseLocalDate(activeBreakdown.cycle.cycleStartDate).getTime();
     leads.forEach(l => {
       if (!l.date) return;
-      const dayDiff = Math.floor((new Date(l.date).getTime() - startMs) / (86400000));
+      const dayDiff = Math.floor((parseLocalDate(l.date).getTime() - startMs) / (86400000));
       if (dayDiff < 7) weeks['Week 1'].push(l);
       else if (dayDiff < 14) weeks['Week 2'].push(l);
       else if (dayDiff < 21) weeks['Week 3'].push(l);
@@ -4992,7 +5000,7 @@ function renderCycleEditor() {
                   <td class="px-3 py-2 font-semibold text-white">${c.cycle}${ci === cycles.length - 1 ? ' <span class="text-brand-400 text-[9px]">CURRENT</span>' : ''}</td>
                   <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-start" type="date" value="'+(c.cycleStartDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleStartDate || '—')}</td>
                   <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-end" type="date" value="'+(c.cycleEndDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleEndDate || '—')}</td>
-                  <td class="px-3 py-2 text-center text-dark-300">${c.cycleStartDate && c.cycleEndDate ? Math.round((new Date(c.cycleEndDate) - new Date(c.cycleStartDate)) / 86400000) : '—'}</td>
+                  <td class="px-3 py-2 text-center text-dark-300">${c.cycleStartDate && c.cycleEndDate ? Math.round((parseLocalDate(c.cycleEndDate) - parseLocalDate(c.cycleStartDate)) / 86400000) : '—'}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-bgoal" type="number" value="'+(c.bookedGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.bookedGoal ?? '—')}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-ggoal" type="number" value="'+(c.gregGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.gregGoal ?? '—')}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-cpa" type="number" value="'+(c.cpaGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.cpaGoal ? '$'+c.cpaGoal : '—')}</td>
@@ -5197,8 +5205,8 @@ async function quickEditCycle(accountName, cycleName) {
   if (cycleStart) c.cycleStartDate = cycleStart;
   if (cycleEnd) c.cycleEndDate = cycleEnd;
   if (cycleLength && c.cycleStartDate) {
-    const startMs = new Date(c.cycleStartDate).getTime();
-    c.cycleEndDate = new Date(startMs + parseInt(cycleLength) * 86400000).toISOString().split('T')[0];
+    const startMs = parseLocalDate(c.cycleStartDate).getTime();
+    c.cycleEndDate = new Date(startMs + parseInt(cycleLength) * 86400000).toLocaleDateString('en-CA');
   }
 
   // Also update top-level account fields for convenience
