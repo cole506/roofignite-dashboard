@@ -1729,7 +1729,10 @@ function renderDashboard() {
   const inactive = allAccounts.filter(a => !hasActiveCycle(a));
   const alerts = getAllAlerts();
 
-  let totalLeads = 0, totalSpent = 0, totalBooked = 0, cpaValues = [], osaValues = [];
+  // ── Compute global stats ──
+  let totalLeads = 0, totalSpent = 0, totalBooked = 0, totalMonthlyBudget = 0;
+  let cpaValues = [], osaValues = [];
+  let totalHealthy = 0, totalUnhealthy = 0, totalUnscored = 0;
 
   active.forEach(a => {
     const c = getActiveCycle(a.name, a.adAccountId);
@@ -1739,15 +1742,23 @@ function renderDashboard() {
     if (c.bookedAppts) totalBooked += c.bookedAppts;
     if (c.cpa && c.cpa > 0) cpaValues.push(c.cpa);
     if (c.osaPct !== null) osaValues.push(c.osaPct);
+    if (c.monthlyBudget) totalMonthlyBudget += c.monthlyBudget;
+    const hs = getHealthScore(a, c);
+    if (hs === null) totalUnscored++;
+    else if (hs >= 60) totalHealthy++;
+    else totalUnhealthy++;
   });
 
   const avgCPA = cpaValues.length ? cpaValues.reduce((a,b)=>a+b,0)/cpaValues.length : 0;
   const avgOSA = osaValues.length ? osaValues.reduce((a,b)=>a+b,0)/osaValues.length : 0;
+  const totalBookRate = totalLeads > 0 ? (totalBooked / totalLeads * 100) : 0;
+  const avgCPL = totalLeads > 0 ? totalSpent / totalLeads : 0;
 
+  // ── Manager stats ──
   const managers = getManagers();
   function mgrStats(name) {
     const accts = getAccountsByManager(name).filter(a => hasActiveCycle(a));
-    let leads=0, spent=0, booked=0, cpas=[], alertCount=0;
+    let leads=0, spent=0, booked=0, cpas=[], cpls=[], monthlyBudget=0, healthy=0, unhealthy=0, unscored=0;
     accts.forEach(a => {
       const c = getActiveCycle(a.name, a.adAccountId);
       if (!c) return;
@@ -1755,13 +1766,20 @@ function renderDashboard() {
       if (c.amountSpent) spent += c.amountSpent;
       if (c.bookedAppts) booked += c.bookedAppts;
       if (c.cpa && c.cpa > 0) cpas.push(c.cpa);
+      if (c.monthlyBudget) monthlyBudget += c.monthlyBudget;
+      const hs = getHealthScore(a, c);
+      if (hs === null) unscored++;
+      else if (hs >= 60) healthy++;
+      else unhealthy++;
     });
-    alertCount = getAlertAccountsForManager(name).length;
-    return { leads, spent, booked, avgCPA: cpas.length ? cpas.reduce((a,b)=>a+b,0)/cpas.length : 0, count: accts.length, alertCount };
+    const avgCPL = leads > 0 ? spent / leads : 0;
+    const bookRate = leads > 0 ? (booked / leads * 100) : 0;
+    return { leads, spent, booked, avgCPA: cpas.length ? cpas.reduce((a,b)=>a+b,0)/cpas.length : 0, avgCPL, bookRate, monthlyBudget, count: accts.length, healthy, unhealthy, unscored };
   }
 
+  // ── Pod stats ──
   function podStats(accts) {
-    let leads=0, spent=0, booked=0, cpas=[];
+    let leads=0, spent=0, booked=0, cpas=[], monthlyBudget=0, healthy=0, unhealthy=0, unscored=0;
     accts.filter(a => hasActiveCycle(a)).forEach(a => {
       const c = getActiveCycle(a.name, a.adAccountId);
       if (!c) return;
@@ -1769,8 +1787,15 @@ function renderDashboard() {
       if (c.amountSpent) spent += c.amountSpent;
       if (c.bookedAppts) booked += c.bookedAppts;
       if (c.cpa && c.cpa > 0) cpas.push(c.cpa);
+      if (c.monthlyBudget) monthlyBudget += c.monthlyBudget;
+      const hs = getHealthScore(a, c);
+      if (hs === null) unscored++;
+      else if (hs >= 60) healthy++;
+      else unhealthy++;
     });
-    return { leads, spent, booked, avgCPA: cpas.length ? cpas.reduce((a,b)=>a+b,0)/cpas.length : 0, count: accts.filter(a => hasActiveCycle(a)).length };
+    const avgCPL = leads > 0 ? spent / leads : 0;
+    const bookRate = leads > 0 ? (booked / leads * 100) : 0;
+    return { leads, spent, booked, avgCPA: cpas.length ? cpas.reduce((a,b)=>a+b,0)/cpas.length : 0, avgCPL, bookRate, monthlyBudget, count: accts.filter(a => hasActiveCycle(a)).length, healthy, unhealthy, unscored };
   }
   const podNames = Object.keys(SHEETS);
   const podStatsMap = {};
@@ -1793,66 +1818,53 @@ function renderDashboard() {
       </div>
     </div>
 
-    <div class="grid grid-cols-6 gap-4 mb-8">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <!-- Active Accounts -->
       <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-1" style="opacity:0">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Active Accounts</div>
-          <div class="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg></div>
-        </div>
-        <div class="text-3xl font-extrabold text-white">${active.length}</div>
-        <div class="text-xs text-dark-400 mt-1 font-medium">${inactive.length} inactive</div>
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Accounts</div>
+        <div class="text-3xl font-extrabold text-white">${active.length} <span class="text-lg text-dark-500 font-bold">active</span></div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">${inactive.length} inactive · ${allAccounts.length} total</div>
       </div>
+      <!-- Health Ratio -->
       <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-2" style="opacity:0">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Cycle Leads</div>
-          <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Account Health</div>
+        <div class="flex items-baseline gap-2">
+          <span class="text-3xl font-extrabold text-emerald-400">${totalHealthy}</span>
+          <span class="text-dark-500 text-lg font-bold">/</span>
+          <span class="text-3xl font-extrabold text-red-400">${totalUnhealthy}</span>
         </div>
-        <div class="text-3xl font-extrabold text-white">${fmt(totalLeads)}</div>
+        <div class="flex items-center gap-3 mt-2">
+          <div class="flex-1 h-2 rounded-full bg-dark-700 overflow-hidden">
+            <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400" style="width:${(totalHealthy + totalUnhealthy) > 0 ? (totalHealthy / (totalHealthy + totalUnhealthy) * 100) : 0}%"></div>
+          </div>
+          <span class="text-[10px] text-dark-400 font-medium">${(totalHealthy + totalUnhealthy) > 0 ? Math.round(totalHealthy / (totalHealthy + totalUnhealthy) * 100) : 0}%</span>
+        </div>
+        ${totalUnscored > 0 ? `<div class="text-[10px] text-dark-500 mt-1">${totalUnscored} unscored</div>` : ''}
       </div>
+      <!-- Book Rate -->
       <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-3" style="opacity:0">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Total Bookings</div>
-          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-        </div>
-        <div class="text-3xl font-extrabold text-emerald-400">${fmt(totalBooked)}</div>
-        <div class="text-xs text-dark-400 mt-1 font-medium">${totalLeads > 0 ? (totalBooked/totalLeads*100).toFixed(1) : 0}% book rate</div>
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Lead → Booked</div>
+        <div class="text-3xl font-extrabold text-white">${totalBookRate.toFixed(1)}<span class="text-lg text-dark-400">%</span></div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">${fmt(totalBooked)} booked of ${fmt(totalLeads)} leads</div>
       </div>
+      <!-- Combined Monthly Budget -->
       <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-4" style="opacity:0">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Avg CPA</div>
-          <div class="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/></svg></div>
-        </div>
-        <div class="text-3xl font-extrabold text-white">${fmtDollar(avgCPA, 2)}</div>
-        <div class="text-xs text-dark-400 mt-1 font-medium">across active</div>
-      </div>
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-5" style="opacity:0">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Avg OSA</div>
-          <div class="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center"><svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-        </div>
-        <div class="text-3xl font-extrabold ${osaColor(avgOSA)}">${fmtPct(avgOSA)}</div>
-        <div class="text-xs text-dark-400 mt-1 font-medium">target: &lt; 20%</div>
-      </div>
-      <div class="glass rounded-2xl p-5 kpi-card fade-in stagger-6 ${alerts.length > 0 ? 'glow' : ''}" style="opacity:0;${alerts.length > 0 ? 'border-color:rgba(239,68,68,0.2)' : ''}">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">Alerts</div>
-          <div class="w-8 h-8 rounded-lg ${alerts.length > 0 ? 'bg-red-500/10' : 'bg-emerald-500/10'} flex items-center justify-center"><svg class="w-4 h-4 ${alerts.length > 0 ? 'text-red-400' : 'text-emerald-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
-        </div>
-        <div class="text-3xl font-extrabold ${alerts.length > 0 ? 'text-red-400' : 'text-emerald-400'}">${alerts.length}</div>
-        <div class="text-xs text-dark-400 mt-1 font-medium">${alerts.filter(a=>a.issues.some(i=>i.type==='danger')).length} critical</div>
+        <div class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold mb-3">Monthly Budget</div>
+        <div class="text-3xl font-extrabold text-white">${fmtDollar(totalMonthlyBudget, 0)}</div>
+        <div class="text-xs text-dark-400 mt-1 font-medium">across ${active.length} active accounts</div>
       </div>
     </div>
 
     <!-- Manager Cards -->
     <div class="section-title mb-4 fade-in stagger-2" style="opacity:0">Team Performance</div>
-    <div class="grid grid-cols-3 gap-4 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
       ${managers.map((m, mi) => {
         const s = mgrStats(m);
-        const colors = {Cole:'from-blue-500/15 to-blue-600/5',Jonathan:'from-emerald-500/15 to-emerald-600/5',Tyler:'from-purple-500/15 to-purple-600/5'};
         const initColors = {Cole:'from-blue-400 to-blue-600',Jonathan:'from-emerald-400 to-emerald-600',Tyler:'from-purple-400 to-purple-600'};
         const textColors = {Cole:'text-blue-400',Jonathan:'text-emerald-400',Tyler:'text-purple-400'};
+        const healthPct = (s.healthy + s.unhealthy) > 0 ? Math.round(s.healthy / (s.healthy + s.unhealthy) * 100) : 0;
         return `
-        <div class="glass rounded-2xl p-5 cursor-pointer hover:border-brand-500/20 transition-all fade-in stagger-${mi+3}" style="opacity:0;background:linear-gradient(135deg,${(colors[m]||'from-slate-500/15 to-slate-600/5').split(' ').map(c=>c.replace('from-','').replace('to-','')).join(', ')});" onclick="navigate('manager','${m}')">
+        <div class="glass rounded-2xl p-5 cursor-pointer hover:border-brand-500/20 transition-all fade-in stagger-${mi+3}" style="opacity:0" onclick="navigate('manager','${m}')">
           <div class="flex items-center justify-between mb-4">
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-xl bg-gradient-to-br ${initColors[m]||'from-slate-400 to-slate-600'} flex items-center justify-center text-sm font-bold text-white shadow-lg">${m.charAt(0)}</div>
@@ -1861,15 +1873,24 @@ function renderDashboard() {
                 <p class="text-dark-400 text-xs">${s.count} active accounts</p>
               </div>
             </div>
-            <div class="flex items-center gap-2">
-              ${s.alertCount > 0 ? `<span class="badge badge-red">${s.alertCount} alert${s.alertCount>1?'s':''}</span>` : '<span class="badge badge-green">Clear</span>'}
+            <div class="text-right">
+              <div class="flex items-center gap-1.5 justify-end">
+                <span class="text-emerald-400 font-bold text-sm">${s.healthy}</span>
+                <span class="text-dark-600 text-xs">/</span>
+                <span class="text-red-400 font-bold text-sm">${s.unhealthy}</span>
+              </div>
+              <div class="w-20 h-1.5 rounded-full bg-dark-700 overflow-hidden mt-1">
+                <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400" style="width:${healthPct}%"></div>
+              </div>
+              <div class="text-[9px] text-dark-500 mt-0.5">${healthPct}% healthy</div>
             </div>
           </div>
-          <div class="grid grid-cols-4 gap-3 pt-3 border-t border-white/5">
-            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-lg mt-0.5">${fmt(s.leads)}</div></div>
-            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Booked</div><div class="text-emerald-400 font-bold text-lg mt-0.5">${fmt(s.booked)}</div></div>
-            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Spent</div><div class="text-white font-bold text-lg mt-0.5">${fmtDollar(s.spent,0)}</div></div>
-            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPA</div><div class="${textColors[m]||'text-white'} font-bold text-lg mt-0.5">${fmtDollar(s.avgCPA,2)}</div></div>
+          <div class="grid grid-cols-5 gap-2 pt-3 border-t border-white/5">
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Book Rate</div><div class="text-white font-bold text-[15px] mt-0.5">${s.bookRate.toFixed(1)}<span class="text-[10px] text-dark-400">%</span></div><div class="text-[9px] text-dark-500">${fmt(s.booked)}/${fmt(s.leads)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-[15px] mt-0.5">${fmt(s.leads)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPL</div><div class="text-white font-bold text-[15px] mt-0.5">${fmtDollar(s.avgCPL,2)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPA</div><div class="${textColors[m]||'text-white'} font-bold text-[15px] mt-0.5">${fmtDollar(s.avgCPA,2)}</div></div>
+            <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Budget</div><div class="text-white font-bold text-[15px] mt-0.5">${fmtDollar(s.monthlyBudget,0)}</div></div>
           </div>
         </div>`;
       }).join('')}
@@ -1877,12 +1898,13 @@ function renderDashboard() {
 
     <!-- Pod Overview (dynamic) -->
     <div class="section-title mb-4">Pod Overview</div>
-    <div class="grid grid-cols-${Math.min(podNames.length, 3)} gap-4 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-${Math.min(podNames.length, 3)} gap-4 mb-8">
       ${podNames.map((key, idx) => {
         const p = podStatsMap[key];
         const accent = POD_COLORS[idx % POD_COLORS.length];
         const label = key.replace(/ - RoofIgnite/i, '');
         const shortNum = label.replace(/Pod\s*/i, '');
+        const podHealthPct = (p.healthy + p.unhealthy) > 0 ? Math.round(p.healthy / (p.healthy + p.unhealthy) * 100) : 0;
         return `
       <div class="glass rounded-2xl p-5 transition-all hover:border-${accent}-500/20">
         <div class="flex items-center justify-between mb-4">
@@ -1890,13 +1912,27 @@ function renderDashboard() {
             <div class="w-9 h-9 rounded-lg bg-${accent}-500/10 flex items-center justify-center text-sm font-bold text-${accent}-400 border border-${accent}-500/15">${shortNum}</div>
             <div><h3 class="text-white font-bold">${label}</h3><p class="text-dark-400 text-xs">${p.count} active accounts</p></div>
           </div>
-          <button onclick="navigate('pod','${esc(key)}')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-all">View All →</button>
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <div class="flex items-center gap-1.5 justify-end">
+                <span class="text-emerald-400 font-bold text-sm">${p.healthy}</span>
+                <span class="text-dark-600 text-xs">/</span>
+                <span class="text-red-400 font-bold text-sm">${p.unhealthy}</span>
+              </div>
+              <div class="w-16 h-1.5 rounded-full bg-dark-700 overflow-hidden mt-1">
+                <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400" style="width:${podHealthPct}%"></div>
+              </div>
+              <div class="text-[9px] text-dark-500 mt-0.5">${podHealthPct}% healthy</div>
+            </div>
+            <button onclick="navigate('pod','${esc(key)}')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-all">View →</button>
+          </div>
         </div>
-        <div class="grid grid-cols-4 gap-3 pt-3 border-t border-white/5">
-          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-lg mt-0.5">${fmt(p.leads)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Booked</div><div class="text-emerald-400 font-bold text-lg mt-0.5">${fmt(p.booked)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Spent</div><div class="text-white font-bold text-lg mt-0.5">${fmtDollar(p.spent,0)}</div></div>
-          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPA</div><div class="text-${accent}-400 font-bold text-lg mt-0.5">${fmtDollar(p.avgCPA,2)}</div></div>
+        <div class="grid grid-cols-5 gap-2 pt-3 border-t border-white/5">
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Book Rate</div><div class="text-white font-bold text-[15px] mt-0.5">${p.bookRate.toFixed(1)}<span class="text-[10px] text-dark-400">%</span></div><div class="text-[9px] text-dark-500">${fmt(p.booked)}/${fmt(p.leads)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-[15px] mt-0.5">${fmt(p.leads)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPL</div><div class="text-white font-bold text-[15px] mt-0.5">${fmtDollar(p.avgCPL,2)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPA</div><div class="text-${accent}-400 font-bold text-[15px] mt-0.5">${fmtDollar(p.avgCPA,2)}</div></div>
+          <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Budget</div><div class="text-white font-bold text-[15px] mt-0.5">${fmtDollar(p.monthlyBudget,0)}</div></div>
         </div>
       </div>`;
       }).join('')}
