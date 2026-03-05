@@ -5,6 +5,10 @@
 // The app will pick these up automatically on next page load.
 
 const CONFIG = {
+  // Google OAuth Client ID (for @roofignite.com login gate)
+  // Get this from: https://console.cloud.google.com/apis/credentials → Create OAuth 2.0 Client ID
+  GOOGLE_CLIENT_ID: '441152547871-18g0fpgbao19hi493csc1johtjvqe5ka.apps.googleusercontent.com',
+
   // Google Apps Script Web App URL (for write operations)
   APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyXDREtEeLeXggNxKVFcrQfMtLdK5YdXHfdfshOqlhUcOSWd66XDfMWAbaHIwAQAfT7/exec',
 
