@@ -344,14 +344,7 @@ tailwind.config = {
       <div id="sidebar-managers"></div>
 
       <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Pods</div>
-      <button onclick="navigate('pod', 'Pod 2 - RoofIgnite')" id="nav-pod2" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500/15 to-amber-600/15 flex items-center justify-center text-[10px] font-bold text-amber-400 border border-amber-500/15">2</div>
-        <span class="font-medium">Pod 2</span>
-      </button>
-      <button onclick="navigate('pod', 'Pod 1 - RoofIgnite')" id="nav-pod1" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-cyan-500/15 to-cyan-600/15 flex items-center justify-center text-[10px] font-bold text-cyan-400 border border-cyan-500/15">1</div>
-        <span class="font-medium">Pod 1</span>
-      </button>
+      <div id="sidebar-pods"></div>
 
       <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Quick Jump</div>
       <div class="px-3">
@@ -477,6 +470,7 @@ const KPI_TARGETS = {
 let allAccounts = [];
 let allCycles = [];
 let allLeads = [];
+let managerPodMap = {}; // { 'Cole': 'Pod 2 - RoofIgnite', ... } — built during data loading
 let currentView = 'dashboard';
 let currentPod = null;
 let currentAccount = null;
@@ -848,6 +842,7 @@ function parseSheetData(data, podName) {
       // If it's not a known sub-section label, it's likely a manager name
       if (!knownSubSections.includes(cellATrimmed.toLowerCase())) {
         currentMgr = cellATrimmed;
+        managerPodMap[cellATrimmed] = podName;
         console.log(`[${podName}] Manager set from section header: "${cellATrimmed}"`);
       }
       continue;
@@ -1085,27 +1080,24 @@ function getDate(row, idx) {
 async function loadAllData() {
   document.getElementById('loading-state').classList.remove('hidden');
 
+  // Dynamic pod loading — fetches all pods from CONFIG.SHEETS
+  const podNames = Object.keys(SHEETS);
   const [podResults, leadResults, adIdMaps] = await Promise.all([
-    Promise.all([
-      fetchSheetData('Pod 2 - RoofIgnite', SHEETS['Pod 2 - RoofIgnite']),
-      fetchSheetData('Pod 1 - RoofIgnite', SHEETS['Pod 1 - RoofIgnite'])
-    ]),
+    Promise.all(podNames.map(name => fetchSheetData(name, SHEETS[name]))),
     Promise.all([
       fetchLeadData('ALL_ROOF', LEAD_SHEETS['ALL_ROOF']),
       fetchLeadData('ALL_CiGN', LEAD_SHEETS['ALL_CiGN'])
     ]),
-    Promise.all([
-      fetchAdIdMapCSV(SHEETS['Pod 2 - RoofIgnite']),
-      fetchAdIdMapCSV(SHEETS['Pod 1 - RoofIgnite'])
-    ])
+    Promise.all(podNames.map(name => fetchAdIdMapCSV(SHEETS[name])))
   ]);
 
-  allAccounts = [...podResults[0].accounts, ...podResults[1].accounts];
-  allCycles = [...podResults[0].cycles, ...podResults[1].cycles];
-  allLeads = [...leadResults[0], ...leadResults[1]];
+  managerPodMap = {}; // Reset before re-building
+  allAccounts = podResults.flatMap(r => r.accounts);
+  allCycles = podResults.flatMap(r => r.cycles);
+  allLeads = leadResults.flat();
 
   // Merge CSV-derived ad account IDs into accounts and cycles
-  const combinedAdIdMap = new Map([...adIdMaps[0], ...adIdMaps[1]]);
+  const combinedAdIdMap = new Map(adIdMaps.flatMap(m => [...m]));
   console.log(`[CSV-AdID] Combined map has ${combinedAdIdMap.size} entries`);
   let csvFixCount = 0;
   allAccounts.forEach(acct => {
@@ -1177,8 +1169,9 @@ async function loadAllData() {
   document.getElementById('data-status').className = 'w-2 h-2 rounded-full bg-green-500';
   document.getElementById('data-status-text').textContent = `${allAccounts.length} accounts · ${allLeads.length} leads`;
 
-  // Render dynamic sidebar managers
+  // Render dynamic sidebar
   renderSidebarManagers();
+  renderSidebarPods();
 
   // Update manager alert badges (dynamic)
   getManagers().forEach(mgr => {
@@ -1613,8 +1606,9 @@ function navigate(view, param) {
       break;
     case 'pod':
       currentPod = param;
-      if (param === 'Pod 2 - RoofIgnite') document.getElementById('nav-pod2').classList.add('active');
-      else document.getElementById('nav-pod1').classList.add('active');
+      const podNavId = 'nav-pod-' + param.replace(/\s+/g, '-');
+      const podNavEl = document.getElementById(podNavId);
+      if (podNavEl) podNavEl.classList.add('active');
       renderPodView(param);
       break;
     case 'manager':
@@ -1702,8 +1696,9 @@ function renderDashboard() {
     });
     return { leads, spent, booked, avgCPA: cpas.length ? cpas.reduce((a,b)=>a+b,0)/cpas.length : 0, count: accts.filter(a => hasActiveCycle(a)).length };
   }
-  const p1 = podStats(getAccountsByPod('Pod 1 - RoofIgnite'));
-  const p2 = podStats(getAccountsByPod('Pod 2 - RoofIgnite'));
+  const podNames = Object.keys(SHEETS);
+  const podStatsMap = {};
+  podNames.forEach(name => { podStatsMap[name] = podStats(getAccountsByPod(name)); });
 
   el.innerHTML = `
     <div class="mb-8 fade-in">
@@ -1804,17 +1799,22 @@ function renderDashboard() {
       }).join('')}
     </div>
 
-    <!-- Pod Comparison -->
+    <!-- Pod Overview (dynamic) -->
     <div class="section-title mb-4">Pod Overview</div>
-    <div class="grid grid-cols-2 gap-4 mb-8">
-      ${[[p2,'Pod 2','Pod 2 - RoofIgnite','amber'],[p1,'Pod 1','Pod 1 - RoofIgnite','cyan']].map(([p, label, key, accent]) => `
-      <div class="glass rounded-2xl p-5 transition-all hover:border-${accent === 'amber' ? 'brand' : 'cyan'}-500/20">
+    <div class="grid grid-cols-${Math.min(podNames.length, 3)} gap-4 mb-8">
+      ${podNames.map((key, idx) => {
+        const p = podStatsMap[key];
+        const accent = POD_COLORS[idx % POD_COLORS.length];
+        const label = key.replace(/ - RoofIgnite/i, '');
+        const shortNum = label.replace(/Pod\s*/i, '');
+        return `
+      <div class="glass rounded-2xl p-5 transition-all hover:border-${accent}-500/20">
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-${accent}-500/10 flex items-center justify-center text-sm font-bold text-${accent}-400 border border-${accent}-500/15">${label.slice(-1)}</div>
+            <div class="w-9 h-9 rounded-lg bg-${accent}-500/10 flex items-center justify-center text-sm font-bold text-${accent}-400 border border-${accent}-500/15">${shortNum}</div>
             <div><h3 class="text-white font-bold">${label}</h3><p class="text-dark-400 text-xs">${p.count} active accounts</p></div>
           </div>
-          <button onclick="navigate('pod','${key}')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-all">View All →</button>
+          <button onclick="navigate('pod','${esc(key)}')" class="px-3 py-1.5 rounded-lg text-xs font-medium text-brand-400 hover:bg-brand-500/10 transition-all">View All →</button>
         </div>
         <div class="grid grid-cols-4 gap-3 pt-3 border-t border-white/5">
           <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Leads</div><div class="text-white font-bold text-lg mt-0.5">${fmt(p.leads)}</div></div>
@@ -1822,7 +1822,8 @@ function renderDashboard() {
           <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Spent</div><div class="text-white font-bold text-lg mt-0.5">${fmtDollar(p.spent,0)}</div></div>
           <div><div class="text-dark-400 text-[10px] uppercase tracking-wider">Avg CPA</div><div class="text-${accent}-400 font-bold text-lg mt-0.5">${fmtDollar(p.avgCPA,2)}</div></div>
         </div>
-      </div>`).join('')}
+      </div>`;
+      }).join('')}
     </div>
 
     <!-- Health Scorecard -->
@@ -2508,7 +2509,7 @@ function renderAccountDetail(name, adAccountId) {
         ` : ''}
       </div>
       ${META_ACCESS_TOKEN && adId ? `
-        <div id="meta-daily-summary" class="mb-3 grid grid-cols-7 gap-2 text-center"></div>
+        <div id="meta-daily-summary" class="mb-3 grid grid-cols-8 gap-2 text-center"></div>
         <div class="chart-container" style="height:200px;"><canvas id="chart-meta-daily"></canvas></div>
         <div id="meta-daily-table" class="mt-4"></div>
       ` : `
@@ -2524,60 +2525,76 @@ function renderAccountDetail(name, adAccountId) {
     <!-- Lead Breakdown for Active Cycle -->
     <div id="lead-breakdown" class="mb-6"></div>
 
-    <!-- Full Cycle History Table -->
-    <div class="glass rounded-2xl overflow-hidden">
-      <div class="p-5 border-b border-dark-600"><h3 class="text-white font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-indigo-400"></div>Cycle History</h3></div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-dark-600 text-dark-400 text-[10px] uppercase tracking-wider">
-              <th class="text-left py-2.5 px-3 font-medium">Cycle</th>
-              <th class="text-left py-2.5 px-3 font-medium">Start</th>
-              <th class="text-left py-2.5 px-3 font-medium">End</th>
-              <th class="text-right py-2.5 px-3 font-medium">Appt Goal</th>
-              <th class="text-right py-2.5 px-3 font-medium">Leads</th>
-              <th class="text-right py-2.5 px-3 font-medium">OSA %</th>
-              <th class="text-right py-2.5 px-3 font-medium">Booked</th>
-              <th class="text-right py-2.5 px-3 font-medium">Est. Bkd</th>
-              <th class="text-right py-2.5 px-3 font-medium">CPA Goal</th>
-              <th class="text-right py-2.5 px-3 font-medium">CPA</th>
-              <th class="text-right py-2.5 px-3 font-medium">Spent</th>
-              <th class="text-right py-2.5 px-3 font-medium">CTR</th>
-              <th class="text-right py-2.5 px-3 font-medium">CPC</th>
-              <th class="text-right py-2.5 px-3 font-medium">CPM</th>
-              <th class="text-right py-2.5 px-3 font-medium">Freq</th>
-              <th class="text-center py-2.5 px-3 font-medium">Track</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${cycles.map((c, ci) => {
-              const today = getTodayStr();
-              const isActiveCyc = c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= today && c.cycleEndDate >= today;
-              const cGoal = acct.cpaGoal || c.cpaGoal;
-              return `
-              <tr class="table-row border-b border-dark-700/50 ${isActiveCyc ? 'bg-brand-500/5' : ''}">
-                <td class="py-2.5 px-3 text-white font-medium whitespace-nowrap">${c.cycle} ${isActiveCyc ? '<span class="badge badge-blue ml-1">Active</span>' : ''}</td>
-                <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleStartDate)}</td>
-                <td class="py-2.5 px-3 text-dark-300 whitespace-nowrap">${fmtDate(c.cycleEndDate)}</td>
-                <td class="py-2.5 px-3 text-right text-dark-300">${fmt(c.bookedGoal)}</td>
-                <td class="py-2.5 px-3 text-right text-white font-medium">${fmt(c.totalLeads)}</td>
-                <td class="py-2.5 px-3 text-right"><span class="${osaColor(c.osaPct)}">${fmtPct(c.osaPct)}</span></td>
-                <td class="py-2.5 px-3 text-right text-white">${fmt(c.bookedAppts)}</td>
-                <td class="py-2.5 px-3 text-right text-white">${fmt(c.estBookedAppts)}</td>
-                <td class="py-2.5 px-3 text-right text-dark-400">${fmtDollar(c.cpaGoal,2)}</td>
-                <td class="py-2.5 px-3 text-right"><span class="${cpaColor(c.cpa, cGoal)}">${fmtDollar(c.cpa,2)}</span></td>
-                <td class="py-2.5 px-3 text-right text-white">${fmtDollar(c.amountSpent,2)}</td>
-                <td class="py-2.5 px-3 text-right"><span class="${ctrColor(c.linkCTR)}">${c.linkCTR ? fmtPctDec(c.linkCTR) : '—'}</span></td>
-                <td class="py-2.5 px-3 text-right"><span class="${cpcColor(c.linkCPC)}">${fmtDollar(c.linkCPC,2)}</span></td>
-                <td class="py-2.5 px-3 text-right"><span class="${cpmColor(c.cpm)}">${fmtDollar(c.cpm,2)}</span></td>
-                <td class="py-2.5 px-3 text-right"><span class="${freqColor(c.frequency)}">${c.frequency ? c.frequency.toFixed(2) : '—'}</span></td>
-                <td class="py-2.5 px-3 text-center">${onTrackBadge(c)}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <!-- Cycle Comparison -->
+    ${cycles.length >= 2 ? (() => {
+      const curr = cycles[cycles.length - 1];
+      const prev = cycles[cycles.length - 2];
+      const cGoal = acct.cpaGoal || curr.cpaGoal;
+      const pctChg = (p, c) => p && p !== 0 ? ((c - p) / Math.abs(p)) * 100 : null;
+      const chgBadge = (pct, lowerIsBetter) => {
+        if (pct === null || isNaN(pct)) return '<span class="text-dark-500 text-[10px]">—</span>';
+        const improved = lowerIsBetter ? pct < 0 : pct > 0;
+        const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '—';
+        const color = improved ? 'text-emerald-400' : 'text-red-400';
+        return `<span class="${color} text-[10px] font-semibold">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+      };
+      const fmtV = (v, type) => {
+        if (v === null || v === undefined || isNaN(v)) return '—';
+        if (type === '$') return fmtDollar(v, 2);
+        if (type === '$0') return fmtDollar(v, 0);
+        if (type === '%') return v ? v.toFixed(2) + '%' : '—';
+        if (type === 'pct') return fmtPct(v);
+        if (type === 'dec') return v ? v.toFixed(2) : '—';
+        return fmt(v);
+      };
+      const metrics = [
+        { label: 'Spend', prev: prev.amountSpent, curr: curr.amountSpent, fmt: '$', lower: false, color: '' },
+        { label: 'Leads', prev: prev.totalLeads, curr: curr.totalLeads, fmt: 'n', lower: false, color: '' },
+        { label: 'CPL', prev: prev.totalLeads > 0 ? prev.amountSpent/prev.totalLeads : 0, curr: curr.totalLeads > 0 ? curr.amountSpent/curr.totalLeads : 0, fmt: '$', lower: true, color: '' },
+        { label: 'Bookings', prev: prev.bookedAppts, curr: curr.bookedAppts, fmt: 'n', lower: false, color: '' },
+        { label: 'CPA', prev: prev.cpa, curr: curr.cpa, fmt: '$', lower: true, color: cpaColor(curr.cpa, cGoal) },
+        { label: 'Link CTR', prev: prev.linkCTR, curr: curr.linkCTR, fmt: '%', lower: false, color: ctrColor(curr.linkCTR) },
+        { label: 'CPC (Link)', prev: prev.linkCPC, curr: curr.linkCPC, fmt: '$', lower: true, color: cpcColor(curr.linkCPC) },
+        { label: 'CPM', prev: prev.cpm, curr: curr.cpm, fmt: '$', lower: true, color: cpmColor(curr.cpm) },
+        { label: 'Frequency', prev: prev.frequency, curr: curr.frequency, fmt: 'dec', lower: true, color: freqColor(curr.frequency) },
+        { label: 'OSA %', prev: prev.osaPct, curr: curr.osaPct, fmt: 'pct', lower: false, color: osaColor(curr.osaPct) },
+      ];
+      return `
+      <div class="glass rounded-2xl overflow-hidden">
+        <div class="p-5 border-b border-dark-600">
+          <h3 class="text-white font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-indigo-400"></div>Cycle Comparison</h3>
+          <p class="text-dark-400 text-xs mt-1">${prev.cycle} vs ${curr.cycle}</p>
+        </div>
+        <div class="p-4">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-dark-400 text-[10px] uppercase tracking-wider border-b border-dark-600">
+                <th class="text-left py-2 px-3 font-medium">Metric</th>
+                <th class="text-right py-2 px-3 font-medium">${prev.cycle}</th>
+                <th class="text-right py-2 px-3 font-medium">${curr.cycle}</th>
+                <th class="text-right py-2 px-3 font-medium">Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${metrics.map(m => {
+                const pv = fmtV(m.prev, m.fmt);
+                const cv = fmtV(m.curr, m.fmt);
+                const pct = pctChg(m.prev, m.curr);
+                return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/20">
+                  <td class="py-2.5 px-3 text-dark-300 font-medium">${m.label}</td>
+                  <td class="py-2.5 px-3 text-right text-dark-400">${pv}</td>
+                  <td class="py-2.5 px-3 text-right"><span class="${m.color || 'text-white'}">${cv}</span></td>
+                  <td class="py-2.5 px-3 text-right">${chgBadge(pct, m.lower)}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    })() : cycles.length === 1 ? `
+      <div class="glass rounded-2xl p-6 text-center">
+        <div class="text-dark-400 text-sm">📊 Cycle comparison available after completing at least 2 cycles</div>
+      </div>` : ''}
 
     ${activeCyc && activeCyc.notes ? `
     <div class="glass rounded-xl p-4 mt-4">
@@ -2892,6 +2909,7 @@ function aggregateDays(dayArray) {
     frequency: dayArray.reduce((s,d)=>s+d.frequency,0) / dayArray.length,
     cpl: totalLeads > 0 ? totalSpend / totalLeads : 0,
     cpa: totalBookings > 0 ? totalSpend / totalBookings : 0,
+    cpm: totalImpr > 0 ? (totalSpend / totalImpr) * 1000 : 0,
   };
 }
 
@@ -2933,6 +2951,7 @@ function metricCellClass(metric, value, cycle) {
     case 'cpc': return value <= 3 ? 'metric-cell-green' : value <= 5 ? 'metric-cell-yellow' : 'metric-cell-red';
     case 'frequency': return value <= 2.5 ? 'metric-cell-green' : value <= 3.5 ? 'metric-cell-yellow' : 'metric-cell-red';
     case 'cpa': return cpaGoal > 0 ? (value <= cpaGoal ? 'metric-cell-green' : value <= cpaGoal*1.2 ? 'metric-cell-yellow' : 'metric-cell-red') : '';
+    case 'cpm': return value <= 15 ? 'metric-cell-green' : value <= 25 ? 'metric-cell-yellow' : 'metric-cell-red';
     default: return '';
   }
 }
@@ -2960,6 +2979,7 @@ function renderMetaDailyTable(data, cycle) {
             <th class="py-2 px-2 text-right font-medium">CPL</th>
             <th class="py-2 px-2 text-right font-medium">Bookings</th>
             <th class="py-2 px-2 text-right font-medium">CPA</th>
+            <th class="py-2 px-2 text-right font-medium">CPM</th>
           </tr>
         </thead>
         <tbody>
@@ -2970,6 +2990,7 @@ function renderMetaDailyTable(data, cycle) {
             const dailyBookings = d.dailyBookings || 0;
             const cpa = dailyBookings > 0 ? d.spend / dailyBookings : 0;
             const linkCPC = d.outboundClicks > 0 ? d.spend / d.outboundClicks : 0;
+            const dayCpm = d.impressions > 0 ? (d.spend / d.impressions) * 1000 : 0;
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
               <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${dateStr}</td>
               <td class="py-1.5 px-2 text-right text-dark-200">${fmtDollar(d.spend,2)}</td>
@@ -2983,6 +3004,7 @@ function renderMetaDailyTable(data, cycle) {
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', cpl, cycle)}">${d.leads > 0 ? fmtDollar(cpl,2) : '—'}</td>
               <td class="py-1.5 px-2 text-right ${dailyBookings > 0 ? 'metric-cell-green' : ''}">${dailyBookings}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('cpm', dayCpm, cycle)}">${dayCpm > 0 ? fmtDollar(dayCpm,2) : '—'}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -3000,6 +3022,7 @@ function renderMetaSummary(data) {
   const avgCPL = totalLeads > 0 ? totalSpend / totalLeads : 0;
   const avgFreq = data.reduce((s,d)=>s+d.frequency,0) / data.length;
   const avgLinkCTR = totalImpr > 0 ? (totalOB / totalImpr) * 100 : 0;
+  const avgCPM = totalImpr > 0 ? (totalSpend / totalImpr) * 1000 : 0;
   const summaryEl = document.getElementById('meta-daily-summary');
   if (summaryEl) {
     summaryEl.innerHTML = `
@@ -3008,6 +3031,7 @@ function renderMetaSummary(data) {
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Avg CPL</div><div class="text-white font-bold text-sm">${fmtDollar(avgCPL,2)}</div></div>
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Link CTR</div><div class="text-white font-bold text-sm ${ctrColor(avgLinkCTR)}">${avgLinkCTR.toFixed(2)}%</div></div>
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Avg CPC</div><div class="text-white font-bold text-sm">${fmtDollar(totalClicks > 0 ? totalSpend/totalClicks : 0, 2)}</div></div>
+      <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">CPM</div><div class="text-white font-bold text-sm ${cpmColor(avgCPM)}">${fmtDollar(avgCPM,2)}</div></div>
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Avg Freq</div><div class="text-white font-bold text-sm ${freqColor(avgFreq)}">${avgFreq.toFixed(2)}</div></div>
       <div class="bg-dark-800/50 rounded-lg p-2"><div class="text-dark-400 text-[9px] uppercase">Impressions</div><div class="text-white font-bold text-sm">${totalImpr > 1000 ? (totalImpr/1000).toFixed(1)+'K' : fmt(totalImpr)}</div></div>
     `;
@@ -3097,6 +3121,7 @@ function renderMetaAggTable(aggData, cycle) {
             <th class="py-2 px-2 text-right font-medium">CPL</th>
             <th class="py-2 px-2 text-right font-medium">Bookings</th>
             <th class="py-2 px-2 text-right font-medium">CPA</th>
+            <th class="py-2 px-2 text-right font-medium">CPM</th>
           </tr>
         </thead>
         <tbody>
@@ -3116,6 +3141,7 @@ function renderMetaAggTable(aggData, cycle) {
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', w.cpl, cycle)}">${w.leads > 0 ? fmtDollar(w.cpl,2) : '—'}</td>
             <td class="py-1.5 px-2 text-right ${w.bookings > 0 ? 'metric-cell-green' : ''}">${w.bookings || 0}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', w.cpa, cycle)}">${w.cpa > 0 ? fmtDollar(w.cpa,0) : '—'}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('cpm', w.cpm, cycle)}">${w.cpm > 0 ? fmtDollar(w.cpm,2) : '—'}</td>
           </tr>`;}).join('')}
         </tbody>
       </table>
@@ -3874,6 +3900,62 @@ function renderSidebarManagers() {
   }).join('');
 }
 
+const POD_COLORS = ['amber', 'cyan', 'indigo', 'teal', 'rose', 'emerald', 'purple', 'blue'];
+
+function renderSidebarPods() {
+  const container = document.getElementById('sidebar-pods');
+  if (!container) return;
+  const podNames = Object.keys(SHEETS);
+  container.innerHTML = podNames.map((name, idx) => {
+    const accent = POD_COLORS[idx % POD_COLORS.length];
+    const shortLabel = name.replace(/ - RoofIgnite/i, '').replace(/Pod\s*/i, '');
+    const podId = 'nav-pod-' + name.replace(/\s+/g, '-');
+    return `
+      <button onclick="navigate('pod', '${esc(name)}')" id="${podId}" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
+        <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-${accent}-500/15 to-${accent}-600/15 flex items-center justify-center text-[10px] font-bold text-${accent}-400 border border-${accent}-500/15">${shortLabel}</div>
+        <span class="font-medium">${name.replace(/ - RoofIgnite/i, '')}</span>
+      </button>`;
+  }).join('');
+}
+
+async function createNewPod() {
+  const podNames = Object.keys(SHEETS);
+  const podNums = podNames.map(n => {
+    const match = n.match(/Pod\s*(\d+)/i);
+    return match ? parseInt(match[1]) : 0;
+  });
+  const nextNum = Math.max(0, ...podNums) + 1;
+  const podName = `Pod ${nextNum} - RoofIgnite`;
+
+  if (!APPS_SCRIPT_URL) {
+    showToast('Connect Apps Script first to create pods', 'error');
+    return;
+  }
+
+  showToast(`Creating ${podName}...`, 'success');
+
+  try {
+    const refSheet = podNames[0]; // reference first existing pod for headers/format
+    const result = await writeToSheet('createPod', { podName, referenceSheet: refSheet });
+    if (result.ok) {
+      SHEETS[podName] = result.sheetId;
+      renderSidebarPods();
+      renderAdminView();
+      showToast(`${podName} created ✓`, 'success');
+    } else {
+      const errMsg = result.error || '';
+      if (errMsg.includes('Unknown action')) {
+        showToast(`To create pods: redeploy Apps Script (Manage Deployments → Edit → New Version → Deploy)`, 'warning');
+      } else {
+        showToast(`Failed to create pod: ${errMsg || 'unknown error'}`, 'error');
+      }
+    }
+  } catch (e) {
+    console.error('[CreatePod] Error:', e);
+    showToast('Failed to create pod — check console', 'error');
+  }
+}
+
 function getFilteredAdminAccounts() {
   let accts = [...allAccounts];
   if (adminSearch) {
@@ -3917,6 +3999,10 @@ function renderAdminView() {
         <button onclick="adminShowNewClient=true;renderAdminView()" class="flex items-center gap-2 bg-gradient-to-r from-brand-500 to-brand-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:from-brand-600 hover:to-brand-700 transition-all shadow-lg shadow-brand-500/20">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
           New Client
+        </button>
+        <button onclick="createNewPod()" class="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+          New Pod
         </button>
         <button onclick="refreshData()" class="flex items-center gap-2 bg-dark-700/60 text-dark-200 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-dark-600/60 border border-dark-600/50 transition-all">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -4291,9 +4377,7 @@ function renderNewManagerForm() {
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Pod *</label>
           <select id="new-manager-pod" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-blue-500">
-            <option value="Pod 2 - RoofIgnite">Pod 2 - RoofIgnite</option>
-            <option value="Pod 1 - RoofIgnite">Pod 1 - RoofIgnite</option>
-            <option value="ContractorsIgnite">ContractorsIgnite</option>
+            ${Object.keys(SHEETS).map(p => `<option value="${p}">${p}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -4485,17 +4569,15 @@ function renderNewClientForm(managers) {
         </div>
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Account Manager *</label>
-          <select id="new-client-manager" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
+          <select id="new-client-manager" onchange="updateNewClientPod()" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
             ${managers.map(m => `<option value="${m}">${m}</option>`).join('')}
             <option value="_new">+ New Manager</option>
           </select>
         </div>
         <div>
-          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Pod</label>
-          <select id="new-client-pod" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
-            <option value="Pod 2 - RoofIgnite">Pod 2</option>
-            <option value="Pod 1 - RoofIgnite">Pod 1</option>
-          </select>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Pod (auto)</label>
+          <div id="new-client-pod-display" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-dark-300 px-4 py-2.5">${managerPodMap[managers[0]] || Object.keys(SHEETS)[0] || '—'}</div>
+          <div class="text-[9px] text-dark-500 mt-1">Auto-assigned from manager's pod</div>
         </div>
         <div>
           <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Meta Ad Account ID</label>
@@ -4524,6 +4606,16 @@ function renderNewClientForm(managers) {
       </div>
     </div>
   `;
+}
+
+function updateNewClientPod() {
+  const mgr = document.getElementById('new-client-manager')?.value;
+  const display = document.getElementById('new-client-pod-display');
+  if (display && mgr && mgr !== '_new') {
+    display.textContent = managerPodMap[mgr] || Object.keys(SHEETS)[0] || '—';
+  } else if (display) {
+    display.textContent = Object.keys(SHEETS)[0] || '—';
+  }
 }
 
 function renderCycleEditor() {
@@ -4617,7 +4709,6 @@ function renderCycleEditor() {
 async function createNewClient() {
   const name = document.getElementById('new-client-name')?.value?.trim();
   const manager = document.getElementById('new-client-manager')?.value;
-  const pod = document.getElementById('new-client-pod')?.value;
   const adId = document.getElementById('new-client-adid')?.value?.trim()?.replace(/^act_/i, '');
   const bookedGoal = parseFloat(document.getElementById('new-client-booked-goal')?.value) || null;
   const dailyBudget = parseFloat(document.getElementById('new-client-daily')?.value) || null;
@@ -4631,6 +4722,8 @@ async function createNewClient() {
     mgr = prompt('Enter new manager name:');
     if (!mgr) return;
   }
+
+  const pod = managerPodMap[mgr] || Object.keys(SHEETS)[0];
 
   // Cycle dates: use selected start date, end = start + 28 days
   const startDate = cycleStartInput || new Date().toISOString().split('T')[0];
