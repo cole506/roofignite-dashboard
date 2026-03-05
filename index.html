@@ -6,6 +6,7 @@
 <title>RoofIgnite Command Center</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="config.js"></script>
 <script>
 tailwind.config = {
@@ -324,7 +325,36 @@ tailwind.config = {
 </head>
 <body class="min-h-screen">
 
-<div id="app" class="flex min-h-screen">
+<!-- Login Gate -->
+<div id="login-gate" class="fixed inset-0 z-[999] flex items-center justify-center" style="background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #020617 100%);">
+  <div class="text-center max-w-md mx-auto px-6">
+    <!-- Logo -->
+    <div class="mb-8">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-500/20">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      </div>
+      <h1 class="text-2xl font-extrabold text-white tracking-tight">RoofIgnite</h1>
+      <p class="text-dark-400 text-sm mt-1">Command Center</p>
+    </div>
+
+    <!-- Sign-in prompt -->
+    <p class="text-dark-300 text-sm mb-6">Sign in with your <span class="text-brand-400 font-semibold">@roofignite.com</span> account to continue</p>
+
+    <!-- Google Sign-In button container -->
+    <div id="google-signin-btn" class="flex justify-center mb-4"></div>
+
+    <!-- Error message -->
+    <div id="login-error" class="hidden mt-4 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3"></div>
+
+    <!-- Loading state for returning users -->
+    <div id="login-loading" class="hidden mt-4 text-dark-400 text-sm flex items-center justify-center gap-2">
+      <div class="w-4 h-4 border-2 border-brand-500/30 border-t-brand-500 rounded-full animate-spin"></div>
+      Verifying session...
+    </div>
+  </div>
+</div>
+
+<div id="app" class="flex min-h-screen hidden">
   <!-- Sidebar -->
   <aside class="sidebar fixed left-0 top-0 h-screen flex flex-col z-50">
     <div class="p-5 border-b border-dark-600/50">
@@ -375,6 +405,19 @@ tailwind.config = {
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         Refresh Data
       </button>
+    </div>
+    <!-- Signed-in user + sign out -->
+    <div id="sidebar-user" class="p-4 border-t border-dark-600/30 hidden">
+      <div class="flex items-center gap-2.5">
+        <img id="sidebar-user-pic" class="w-7 h-7 rounded-full" src="" alt="" />
+        <div class="flex-1 min-w-0">
+          <div id="sidebar-user-name" class="text-xs text-dark-200 font-medium truncate"></div>
+          <div id="sidebar-user-email" class="text-[10px] text-dark-500 truncate"></div>
+        </div>
+        <button onclick="handleSignOut()" title="Sign out" class="text-dark-500 hover:text-red-400 transition-colors flex-shrink-0">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </div>
     </div>
   </aside>
 
@@ -5219,9 +5262,132 @@ function loadGregConfig() {
 }
 
 // ═══════════════════════════════════════════════
+// AUTH — Google Sign-In Gate (@roofignite.com only)
+// ═══════════════════════════════════════════════
+const AUTH_STORAGE_KEY = 'roofignite_user';
+const AUTH_TTL_DAYS = 30;
+const ALLOWED_DOMAIN = 'roofignite.com';
+
+function decodeJwt(token) {
+  try {
+    const base64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(base64));
+  } catch { return null; }
+}
+
+function checkExistingSession() {
+  const stored = localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!stored) { showLoginGate(); return; }
+
+  try {
+    const user = JSON.parse(stored);
+    const ageMs = Date.now() - (user.timestamp || 0);
+    if (ageMs > AUTH_TTL_DAYS * 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+      showLoginGate();
+      return;
+    }
+    // Session valid — show dashboard
+    onAuthSuccess(user, false);
+  } catch {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    showLoginGate();
+  }
+}
+
+function showLoginGate() {
+  document.getElementById('login-gate').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-loading').classList.add('hidden');
+
+  // Initialize Google Sign-In button (wait for GIS library to load)
+  const clientId = CONFIG.GOOGLE_CLIENT_ID;
+  if (!clientId) {
+    document.getElementById('login-error').textContent = 'Google Client ID not configured. Add it in config.js';
+    document.getElementById('login-error').classList.remove('hidden');
+    return;
+  }
+
+  function initGoogleBtn() {
+    if (typeof google === 'undefined' || !google.accounts) {
+      setTimeout(initGoogleBtn, 100);
+      return;
+    }
+    google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleSignIn,
+      auto_select: false,
+    });
+    google.accounts.id.renderButton(
+      document.getElementById('google-signin-btn'),
+      { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 280 }
+    );
+  }
+  initGoogleBtn();
+}
+
+function handleGoogleSignIn(response) {
+  const payload = decodeJwt(response.credential);
+  if (!payload || !payload.email) {
+    document.getElementById('login-error').textContent = 'Could not read account info. Try again.';
+    document.getElementById('login-error').classList.remove('hidden');
+    return;
+  }
+
+  const emailDomain = payload.email.split('@')[1]?.toLowerCase();
+  if (emailDomain !== ALLOWED_DOMAIN) {
+    document.getElementById('login-error').innerHTML = `<strong>${payload.email}</strong> is not a @roofignite.com account. Access denied.`;
+    document.getElementById('login-error').classList.remove('hidden');
+    return;
+  }
+
+  // Valid roofignite.com account — save session
+  const user = {
+    email: payload.email,
+    name: payload.name || payload.email.split('@')[0],
+    picture: payload.picture || '',
+    timestamp: Date.now()
+  };
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  onAuthSuccess(user, true);
+}
+
+function onAuthSuccess(user, freshLogin) {
+  // Hide login gate, show app
+  document.getElementById('login-gate').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+
+  // Update sidebar user info
+  const userSection = document.getElementById('sidebar-user');
+  if (userSection) {
+    userSection.classList.remove('hidden');
+    document.getElementById('sidebar-user-name').textContent = user.name;
+    document.getElementById('sidebar-user-email').textContent = user.email;
+    const pic = document.getElementById('sidebar-user-pic');
+    if (user.picture) { pic.src = user.picture; } else { pic.classList.add('hidden'); }
+  }
+
+  // Load dashboard data
+  loadAllData();
+}
+
+function handleSignOut() {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+  // Revoke Google session
+  if (typeof google !== 'undefined' && google.accounts) {
+    google.accounts.id.disableAutoSelect();
+  }
+  // Reset app state
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login-error').classList.add('hidden');
+  document.getElementById('google-signin-btn').innerHTML = '';
+  showLoginGate();
+}
+
+// ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-loadAllData();
+checkExistingSession();
 </script>
 </body>
 </html>
