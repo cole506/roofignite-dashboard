@@ -2604,21 +2604,21 @@ function renderAccountDetail(name, adAccountId) {
 
     <!-- Cycle Comparison -->
     ${cycles.length >= 2 ? (() => {
-      // Default: last 2 completed cycles (skip in-progress if it has no spend)
-      let defB = cycles.length - 1;
-      let defA = cycles.length - 2;
       const cycOpts = cycles.map((c, i) => `<option value="${i}">${c.cycle}${c.cycle.toLowerCase().includes('winter') ? ' (winter)' : ''}</option>`).join('');
       return `
       <div class="glass rounded-2xl overflow-hidden" id="cycle-comp-section">
-        <div class="p-5 border-b border-dark-600 flex flex-wrap items-center justify-between gap-3">
-          <h3 class="text-white font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-indigo-400"></div>Cycle Comparison</h3>
-          <div class="flex items-center gap-2 text-xs">
-            <select id="comp-cycle-a" onchange="renderCycleCompCards()" class="bg-dark-800/80 border border-dark-600/50 rounded-lg text-dark-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-brand-500">${cycOpts}</select>
-            <span class="text-dark-500">vs</span>
-            <select id="comp-cycle-b" onchange="renderCycleCompCards()" class="bg-dark-800/80 border border-dark-600/50 rounded-lg text-dark-200 px-2.5 py-1.5 text-xs focus:outline-none focus:border-brand-500">${cycOpts}</select>
+        <div class="p-5 border-b border-dark-600/50">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h3 class="text-white font-bold flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-indigo-400"></div>Cycle Comparison</h3>
+            <div class="flex items-center gap-2.5">
+              <select id="comp-cycle-a" onchange="renderCycleCompCards()" class="bg-dark-800 border border-dark-600/50 rounded-lg text-dark-200 px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-brand-500 cursor-pointer appearance-none min-w-[110px]">${cycOpts}</select>
+              <span class="text-dark-500 text-[11px] font-semibold tracking-wide">VS</span>
+              <select id="comp-cycle-b" onchange="renderCycleCompCards()" class="bg-dark-800 border border-dark-600/50 rounded-lg text-dark-200 px-3 py-1.5 text-xs font-medium focus:outline-none focus:border-brand-500 cursor-pointer appearance-none min-w-[110px]">${cycOpts}</select>
+            </div>
           </div>
+          <div id="comp-window-label" class="mt-2 text-[10px]"></div>
         </div>
-        <div id="cycle-comp-cards" class="p-4 grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+        <div id="cycle-comp-cards" class="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"></div>
       </div>`;
     })() : cycles.length === 1 ? `
       <div class="glass rounded-2xl p-6 text-center">
@@ -2641,6 +2641,8 @@ function renderAccountDetail(name, adAccountId) {
   if (cycles.length >= 2) {
     _compCycles = cycles;
     _compCpaGoal = acct.cpaGoal;
+    _compAdId = adId || '';
+    _compAcctName = acct.name || '';
     const selA = document.getElementById('comp-cycle-a');
     const selB = document.getElementById('comp-cycle-b');
     if (selA && selB) {
@@ -2853,31 +2855,130 @@ function showCycleLeads(cycleIdx) {
   }
 }
 
-// ═══ Cycle Comparison Cards with Mini Sparklines ═══
+// ═══ Cycle Comparison — Same-Window Comparison ═══
 let _compCycles = [];
 let _compCpaGoal = null;
 let _compCharts = {};
+let _compAdId = '';
+let _compAcctName = '';
 
-function renderCycleCompCards() {
+async function renderCycleCompCards() {
   const container = document.getElementById('cycle-comp-cards');
+  const windowLabel = document.getElementById('comp-window-label');
   if (!container || !_compCycles.length) return;
+
   const idxA = parseInt(document.getElementById('comp-cycle-a')?.value ?? 0);
   const idxB = parseInt(document.getElementById('comp-cycle-b')?.value ?? 1);
   const a = _compCycles[idxA];
   const b = _compCycles[idxB];
   if (!a || !b) return;
 
+  // Show loading state
+  container.innerHTML = '<div class="col-span-full flex items-center justify-center py-8 gap-2"><span class="inline-block w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin"></span><span class="text-dark-400 text-xs">Comparing cycles…</span></div>';
+  if (windowLabel) windowLabel.textContent = '';
+
+  // Destroy old sparkline charts
+  Object.values(_compCharts).forEach(c => { try { c.destroy(); } catch {} });
+  _compCharts = {};
+
+  // Calculate days elapsed for each cycle
+  const today = getTodayStr();
+  const daysElapsed = (cyc) => {
+    if (!cyc.cycleStartDate || !cyc.cycleEndDate) return 28;
+    const start = new Date(cyc.cycleStartDate + 'T00:00:00');
+    const end = new Date(cyc.cycleEndDate + 'T00:00:00');
+    const now = new Date(today + 'T00:00:00');
+    const total = Math.round((end - start) / 86400000) + 1;
+    if (now >= end) return total;
+    if (now < start) return 0;
+    return Math.round((now - start) / 86400000) + 1;
+  };
+  const cycleTotalDays = (cyc) => {
+    if (!cyc.cycleStartDate || !cyc.cycleEndDate) return 28;
+    return Math.round((new Date(cyc.cycleEndDate+'T00:00:00') - new Date(cyc.cycleStartDate+'T00:00:00')) / 86400000) + 1;
+  };
+
+  const daysA = daysElapsed(a);
+  const daysB = daysElapsed(b);
+  const compWindow = Math.min(daysA, daysB);
+  const totalA = cycleTotalDays(a);
+  const totalB = cycleTotalDays(b);
+  const isWindowed = compWindow < Math.max(totalA, totalB);
+  const isCurrentA = daysA < totalA;
+  const isCurrentB = daysB < totalB;
+
+  let aggA = null, aggB = null;
+  let usedDailyData = false;
+
+  // Try same-window comparison using daily Meta data
+  if (_compAdId && META_ACCESS_TOKEN && a.cycleStartDate && b.cycleStartDate && compWindow > 0) {
+    try {
+      // Fetch full date ranges (cache-friendly), then slice to window
+      const [dailyA, dailyB] = await Promise.all([
+        fetchMetaDailyInsights(_compAdId, a.cycleStartDate, a.cycleEndDate),
+        fetchMetaDailyInsights(_compAdId, b.cycleStartDate, b.cycleEndDate),
+      ]);
+
+      if (dailyA?.length && dailyB?.length) {
+        // Enrich both with booking data
+        if (_compAcctName) {
+          [dailyA, dailyB].forEach((data, i) => {
+            const cyc = i === 0 ? a : b;
+            const cycleLeads = getLeadsForAccount(_compAcctName, cyc.cycleStartDate, cyc.cycleEndDate);
+            const bookedByDate = {};
+            cycleLeads.forEach(l => {
+              if (isBookedStatus(l.status) && l.date) {
+                bookedByDate[l.date] = (bookedByDate[l.date] || 0) + 1;
+              }
+            });
+            data.forEach(d => { d.dailyBookings = bookedByDate[d.date] || 0; });
+          });
+        }
+
+        // Slice to same window
+        const sliceA = dailyA.slice(0, compWindow);
+        const sliceB = dailyB.slice(0, compWindow);
+
+        if (sliceA.length && sliceB.length) {
+          aggA = aggregateDays(sliceA);
+          aggB = aggregateDays(sliceB);
+          usedDailyData = true;
+        }
+      }
+    } catch (e) {
+      console.warn('Cycle comparison fetch error:', e);
+    }
+  }
+
+  // Fallback to sheet-level cycle totals
+  if (!aggA || !aggB) {
+    aggA = { spend: a.amountSpent || 0, leads: a.totalLeads || 0, bookings: a.bookedAppts || 0,
+             cpl: a.totalLeads > 0 ? (a.amountSpent || 0) / a.totalLeads : 0, cpa: a.cpa || 0 };
+    aggB = { spend: b.amountSpent || 0, leads: b.totalLeads || 0, bookings: b.bookedAppts || 0,
+             cpl: b.totalLeads > 0 ? (b.amountSpent || 0) / b.totalLeads : 0, cpa: b.cpa || 0 };
+  }
+
+  // Update window label
+  if (windowLabel) {
+    if (usedDailyData && isWindowed) {
+      const currentLabel = isCurrentA ? a.cycle : isCurrentB ? b.cycle : '';
+      windowLabel.innerHTML = `<span class="text-dark-400">📊 Comparing first <span class="text-brand-400 font-semibold">${compWindow} days</span> of each cycle${currentLabel ? ` · ${currentLabel} is day ${compWindow} of ${isCurrentA ? totalA : totalB}` : ''}</span>`;
+    } else if (usedDailyData) {
+      windowLabel.innerHTML = `<span class="text-dark-400">📊 Full cycle comparison · ${aggA.days || compWindow} vs ${aggB.days || compWindow} days</span>`;
+    } else {
+      windowLabel.innerHTML = `<span class="text-dark-500">⚠ Using cycle totals (daily data unavailable)</span>`;
+    }
+  }
+
+  // 5 Metrics: Leads, Bookings, Spend, CPL, CPA
   const pctChg = (prev, curr) => prev && prev !== 0 ? ((curr - prev) / Math.abs(prev)) * 100 : null;
 
   const metrics = [
-    { key: 'leads', label: 'Leads', valA: a.totalLeads, valB: b.totalLeads, fmt: 'n', lower: false,
-      color: '#3b82f6', allVals: _compCycles.map(c => c.totalLeads || 0) },
-    { key: 'bookings', label: 'Bookings', valA: a.bookedAppts, valB: b.bookedAppts, fmt: 'n', lower: false,
-      color: '#22c55e', allVals: _compCycles.map(c => c.bookedAppts || 0) },
-    { key: 'cpl', label: 'CPL', valA: a.totalLeads > 0 ? a.amountSpent / a.totalLeads : null, valB: b.totalLeads > 0 ? b.amountSpent / b.totalLeads : null, fmt: '$', lower: true,
-      color: '#a78bfa', allVals: _compCycles.map(c => c.totalLeads > 0 ? (c.amountSpent || 0) / c.totalLeads : 0) },
-    { key: 'cpa', label: 'CPA', valA: a.cpa, valB: b.cpa, fmt: '$', lower: true,
-      color: '#f97316', allVals: _compCycles.map(c => c.cpa || 0) },
+    { key: 'leads',    label: 'Leads',    valA: aggA.leads,    valB: aggB.leads,    fmt: 'n', lower: false, color: '#3b82f6' },
+    { key: 'bookings', label: 'Bookings', valA: aggA.bookings, valB: aggB.bookings, fmt: 'n', lower: false, color: '#22c55e' },
+    { key: 'spend',    label: 'Spend',    valA: aggA.spend,    valB: aggB.spend,    fmt: '$', lower: null,  color: '#fbbf24' },
+    { key: 'cpl',      label: 'CPL',      valA: aggA.cpl,      valB: aggB.cpl,      fmt: '$', lower: true,  color: '#a78bfa' },
+    { key: 'cpa',      label: 'CPA',      valA: aggA.cpa,      valB: aggB.cpa,      fmt: '$', lower: true,  color: '#f97316' },
   ];
 
   const fmtV = (v, type) => {
@@ -2890,52 +2991,60 @@ function renderCycleCompCards() {
     const pct = pctChg(m.valA, m.valB);
     let arrow = '', chgColor = 'text-dark-500', chgText = '—';
     if (pct !== null && !isNaN(pct)) {
-      const improved = m.lower ? pct < 0 : pct > 0;
       arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '';
-      chgColor = improved ? 'text-emerald-400' : 'text-red-400';
+      if (m.lower === null) {
+        // Neutral metric (Spend) — show direction without good/bad coloring
+        chgColor = 'text-dark-300';
+      } else {
+        const improved = m.lower ? pct < 0 : pct > 0;
+        chgColor = improved ? 'text-emerald-400' : 'text-red-400';
+      }
       chgText = `${arrow} ${Math.abs(pct).toFixed(1)}%`;
     }
     return `
-    <div class="bg-dark-800/60 rounded-xl p-4 border border-dark-600/30">
+    <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30">
       <div class="flex items-center justify-between mb-1">
         <span class="text-dark-400 text-[10px] uppercase tracking-wider font-semibold">${m.label}</span>
         <span class="${chgColor} text-[11px] font-bold">${chgText}</span>
       </div>
-      <div class="text-white text-xl font-extrabold mb-0.5">${fmtV(m.valB, m.fmt)}</div>
-      <div class="text-dark-500 text-[10px] mb-3">was ${fmtV(m.valA, m.fmt)}</div>
-      <div style="height:48px;"><canvas id="comp-spark-${m.key}"></canvas></div>
+      <div class="text-white text-lg font-extrabold mb-0.5">${fmtV(m.valB, m.fmt)}</div>
+      <div class="text-dark-500 text-[10px] mb-2">was ${fmtV(m.valA, m.fmt)}</div>
+      <div style="height:36px;"><canvas id="comp-spark-${m.key}"></canvas></div>
     </div>`;
   }).join('');
 
-  // Destroy old charts
-  Object.values(_compCharts).forEach(c => { try { c.destroy(); } catch {} });
-  _compCharts = {};
+  // Render sparklines using full-cycle sheet data for all-cycle trend overview
+  const sparkData = {
+    leads:    _compCycles.map(c => c.totalLeads || 0),
+    bookings: _compCycles.map(c => c.bookedAppts || 0),
+    spend:    _compCycles.map(c => c.amountSpent || 0),
+    cpl:      _compCycles.map(c => c.totalLeads > 0 ? (c.amountSpent || 0) / c.totalLeads : 0),
+    cpa:      _compCycles.map(c => c.cpa || 0),
+  };
+  const labels = _compCycles.map(c => c.cycle.replace('Cycle ', 'C'));
 
-  // Render sparkline for each metric
   metrics.forEach(m => {
     const ctx = document.getElementById(`comp-spark-${m.key}`);
     if (!ctx) return;
-    const labels = _compCycles.map(c => c.cycle.replace('Cycle ', 'C'));
-    // Highlight the two selected cycles with bigger dots
-    const pointRadius = _compCycles.map((_, i) => (i === idxA || i === idxB) ? 4 : 2);
-    const pointBg = _compCycles.map((_, i) => (i === idxA || i === idxB) ? m.color : m.color + '60');
+    const pointRadius = _compCycles.map((_, i) => (i === idxA || i === idxB) ? 3.5 : 1.5);
+    const pointBg = _compCycles.map((_, i) => (i === idxA || i === idxB) ? m.color : m.color + '40');
 
     _compCharts[m.key] = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
         datasets: [{
-          data: m.allVals,
+          data: sparkData[m.key],
           borderColor: m.color,
-          backgroundColor: m.color + '15',
+          backgroundColor: m.color + '10',
           fill: true,
           tension: 0.4,
-          borderWidth: 2,
+          borderWidth: 1.5,
           pointRadius,
           pointBackgroundColor: pointBg,
           pointBorderColor: '#0f172a',
-          pointBorderWidth: 1.5,
-          pointHoverRadius: 5,
+          pointBorderWidth: 1,
+          pointHoverRadius: 4,
         }]
       },
       options: {
@@ -2945,10 +3054,7 @@ function renderCycleCompCards() {
             borderColor: 'rgba(100,116,139,0.2)', borderWidth: 1, cornerRadius: 6, padding: 8,
             titleFont: { family: 'Inter', size: 10 }, bodyFont: { family: 'Inter', size: 11 },
             callbacks: { label: tip => m.fmt === '$' ? '$' + Number(tip.raw).toFixed(2) : String(tip.raw) } } },
-        scales: {
-          x: { display: false },
-          y: { display: false }
-        }
+        scales: { x: { display: false }, y: { display: false } }
       }
     });
   });
