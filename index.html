@@ -1082,6 +1082,7 @@ async function loadAllData() {
 
   // Dynamic pod loading — fetches all pods from CONFIG.SHEETS
   const podNames = Object.keys(SHEETS);
+  managerPodMap = {}; // Reset before re-building (populated during fetchSheetData parsing)
   const [podResults, leadResults, adIdMaps] = await Promise.all([
     Promise.all(podNames.map(name => fetchSheetData(name, SHEETS[name]))),
     Promise.all([
@@ -1091,7 +1092,6 @@ async function loadAllData() {
     Promise.all(podNames.map(name => fetchAdIdMapCSV(SHEETS[name])))
   ]);
 
-  managerPodMap = {}; // Reset before re-building
   allAccounts = podResults.flatMap(r => r.accounts);
   allCycles = podResults.flatMap(r => r.cycles);
   allLeads = leadResults.flat();
@@ -3937,11 +3937,15 @@ async function createNewPod() {
   try {
     const refSheet = podNames[0]; // reference first existing pod for headers/format
     const result = await writeToSheet('createPod', { podName, referenceSheet: refSheet });
+    console.log('[CreatePod] Result:', JSON.stringify(result));
     if (result.ok) {
-      SHEETS[podName] = result.sheetId;
+      // sheetId may be missing if GAS response was opaque — use 0 as fallback
+      SHEETS[podName] = result.sheetId || 0;
       renderSidebarPods();
       renderAdminView();
       showToast(`${podName} created ✓`, 'success');
+      // Refresh data to pick up the new pod sheet
+      setTimeout(() => refreshData(), 1500);
     } else {
       const errMsg = result.error || '';
       if (errMsg.includes('Unknown action')) {
