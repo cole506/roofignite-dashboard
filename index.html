@@ -3826,6 +3826,7 @@ async function submitInvoice(accountName, cycleName, adSpend) {
 
 let billingViewFilter = 'action'; // 'action' or 'all'
 
+let _billingSectionId = 0;
 function renderBilling() {
   const el = document.getElementById('view-billing');
   el.classList.remove('hidden');
@@ -3834,64 +3835,59 @@ function renderBilling() {
   const todayMs = new Date(today).getTime();
   const dayMs = 24 * 60 * 60 * 1000;
 
-  // Gather billing data from ALL accounts' most recent cycle
+  // Gather billing data from ALL cycles across ALL accounts
   const billingData = [];
   allAccounts.forEach(a => {
     const cycles = a.cycles || [];
     if (!cycles.length) return;
 
-    // For each account, find the most recent / active cycle
-    const todayStr = getTodayStr();
-    let activeCyc = cycles.find(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= todayStr && c.cycleEndDate >= todayStr);
-    if (!activeCyc) activeCyc = cycles[cycles.length - 1]; // fallback to latest
-    const c = activeCyc;
-    const ci = cycles.indexOf(c);
+    cycles.forEach((c, ci) => {
+      const endMs = c.cycleEndDate ? new Date(c.cycleEndDate).getTime() : null;
+      const daysUntilEnd = endMs ? Math.ceil((endMs - todayMs) / dayMs) : null;
+      const daysSinceEnd = endMs ? Math.ceil((todayMs - endMs) / dayMs) : null;
+      const cycleEnded = daysUntilEnd !== null && daysUntilEnd < 0;
+      const gtb = (c.goodToBill || '').trim().toLowerCase();
+      const bld = (c.billed || '').trim().toLowerCase();
+      const isBilled = bld === 'yes';
+      const isGoodToBill = gtb === 'yes';
+      const isFailed = bld === 'failed' || bld === 'failed payment';
+      const isLost = bld === 'lost';
+      const isRetryBilled = bld === 'try again';
+      const isRetryGTB = gtb === 'try again';
 
-    const endMs = c.cycleEndDate ? new Date(c.cycleEndDate).getTime() : null;
-    const daysUntilEnd = endMs ? Math.ceil((endMs - todayMs) / dayMs) : null;
-    const daysSinceEnd = endMs ? Math.ceil((todayMs - endMs) / dayMs) : null;
-    const cycleEnded = daysUntilEnd !== null && daysUntilEnd < 0;
-    const gtb = (c.goodToBill || '').trim().toLowerCase();
-    const bld = (c.billed || '').trim().toLowerCase();
-    const isBilled = bld === 'yes';
-    const isGoodToBill = gtb === 'yes';
-    const isFailed = bld === 'failed' || bld === 'failed payment';
-    const isLost = bld === 'lost';
-    const isRetryBilled = bld === 'try again';
-    const isRetryGTB = gtb === 'try again';
+      // Categorize
+      let category = 'active'; // default for mid-cycle
+      if (isLost) {
+        category = 'lost';
+      } else if (isBilled) {
+        category = 'billed';
+      } else if (isFailed) {
+        category = 'failed';
+      } else if (isRetryBilled || isRetryGTB) {
+        category = 'retry';
+      } else if (isGoodToBill && !isBilled) {
+        category = 'readyToBill';
+      } else if (cycleEnded && daysSinceEnd > 7) {
+        category = 'overdue';
+      } else if (cycleEnded && daysSinceEnd <= 7) {
+        category = 'late';
+      } else if (!cycleEnded && daysUntilEnd !== null && daysUntilEnd <= 7 && daysUntilEnd >= 0) {
+        category = 'upcoming';
+      }
 
-    // Categorize
-    let category = 'active'; // default for mid-cycle
-    if (isLost) {
-      category = 'lost';
-    } else if (isBilled) {
-      category = 'billed';
-    } else if (isFailed) {
-      category = 'failed';
-    } else if (isRetryBilled || isRetryGTB) {
-      category = 'retry';
-    } else if (isGoodToBill && !isBilled) {
-      category = 'readyToBill';
-    } else if (cycleEnded && daysSinceEnd > 7) {
-      category = 'overdue';
-    } else if (cycleEnded && daysSinceEnd <= 7) {
-      category = 'late';
-    } else if (!cycleEnded && daysUntilEnd !== null && daysUntilEnd <= 7 && daysUntilEnd >= 0) {
-      category = 'upcoming';
-    }
-
-    billingData.push({
-      account: a, cycleObj: c, cycleIndex: ci,
-      cycle: c.cycle, cycleEndDate: c.cycleEndDate,
-      spent: c.amountSpent,
-      goodToBill: c.goodToBill || '',
-      billed: c.billed || '',
-      billingNotes: c.billingNotes || '',
-      monthlyBudget: c.monthlyBudget || a.monthlyBudget,
-      manager: c.manager || a.manager,
-      daysUntilEnd, daysSinceEnd, cycleEnded,
-      isGoodToBill, isBilled, isFailed, isLost, isRetryBilled, isRetryGTB, category,
-      isPaused: a.isPaused,
+      billingData.push({
+        account: a, cycleObj: c, cycleIndex: ci,
+        cycle: c.cycle, cycleEndDate: c.cycleEndDate,
+        spent: c.amountSpent,
+        goodToBill: c.goodToBill || '',
+        billed: c.billed || '',
+        billingNotes: c.billingNotes || '',
+        monthlyBudget: c.monthlyBudget || a.monthlyBudget,
+        manager: c.manager || a.manager,
+        daysUntilEnd, daysSinceEnd, cycleEnded,
+        isGoodToBill, isBilled, isFailed, isLost, isRetryBilled, isRetryGTB, category,
+        isPaused: a.isPaused,
+      });
     });
   });
 
@@ -4005,14 +4001,23 @@ function renderBilling() {
     '</tr>';
   }
 
+  _billingSectionId = 0;
   function sectionTable(items) {
+    const id = 'billing-section-' + (_billingSectionId++);
+    const limit = 20;
+    const hasMore = items.length > limit;
+    const visibleRows = items.slice(0, limit).map(billingRow).join('');
+    const hiddenRows = hasMore ? items.slice(limit).map(billingRow).join('') : '';
     return '<div class="overflow-x-auto"><table class="w-full text-sm">' +
       '<thead><tr class="border-b border-dark-600 text-dark-400 text-[10px] uppercase tracking-wider">' +
         '<th class="py-2 px-4 text-left">Account</th><th class="py-2 px-4 text-left">Cycle</th>' +
         '<th class="py-2 px-4 text-left">Cycle End</th><th class="py-2 px-4 text-right">Retainer</th>' +
         '<th class="py-2 px-4 text-left">Status</th>' +
         '<th class="py-2 px-4 text-left">Actions</th><th class="py-2 px-4 text-left">Notes</th>' +
-      '</tr></thead><tbody>' + items.map(billingRow).join('') + '</tbody></table></div>';
+      '</tr></thead><tbody>' + visibleRows +
+      (hasMore ? '<tr id="'+id+'-hidden" style="display:none"><td colspan="7"><table class="w-full text-sm"><tbody>' + hiddenRows + '</tbody></table></td></tr>' : '') +
+      '</tbody></table></div>' +
+      (hasMore ? '<div id="'+id+'-btn" class="p-3 text-center border-t border-dark-700/50"><button onclick="document.getElementById(\''+id+'-hidden\').style.display=\'\';document.getElementById(\''+id+'-btn\').style.display=\'none\';" class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-dark-700/50 text-dark-300 border border-dark-600/30 hover:text-white hover:border-dark-500 transition-all">Show ' + (items.length - limit) + ' more</button></div>' : '');
   }
 
   const showAll = billingViewFilter === 'all';
@@ -4084,7 +4089,7 @@ function renderBilling() {
     <div class="glass rounded-2xl overflow-hidden mb-4">
       <div class="p-4 border-b border-dark-600 flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-brand-500"></span>
-        <h3 class="text-white font-bold">All Accounts — Current Cycle (${billingData.length})</h3>
+        <h3 class="text-white font-bold">All Cycles (${billingData.length})</h3>
       </div>
       ${sectionTable(billingData)}
     </div>
@@ -5969,7 +5974,7 @@ function handleSignOut() {
 }
 
 // ═══════════════════════════════════════════════
-// INITs
+// INIT
 // ═══════════════════════════════════════════════
 checkExistingSession();
 </script>
