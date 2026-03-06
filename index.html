@@ -1173,8 +1173,9 @@ function getDate(row, idx) {
   return String(v);
 }
 
-async function loadAllData() {
-  document.getElementById('loading-state').classList.remove('hidden');
+async function loadAllData(opts) {
+  const silent = opts && opts.silent;
+  if (!silent) document.getElementById('loading-state').classList.remove('hidden');
 
   // Auto-detect pod tabs from Google Sheet (so manually-added pods appear)
   if (APPS_SCRIPT_URL) {
@@ -1314,14 +1315,33 @@ async function loadAllData() {
     }
   });
 
-  document.getElementById('loading-state').classList.add('hidden');
-  navigate('dashboard');
+  if (!silent) document.getElementById('loading-state').classList.add('hidden');
+
+  // Restore saved navigation state (or default to dashboard)
+  const savedNav = JSON.parse(localStorage.getItem('nav_state') || 'null');
+  if (savedNav && savedNav.view) {
+    try { navigate(savedNav.view, savedNav.param || undefined); }
+    catch(e) { navigate('dashboard'); }
+  } else {
+    navigate('dashboard');
+  }
 }
 
 async function refreshData() {
   document.getElementById('data-status').className = 'w-2 h-2 rounded-full bg-yellow-500 pulse';
   document.getElementById('data-status-text').textContent = 'Refreshing...';
-  await loadAllData();
+  await loadAllData({ silent: true });
+}
+
+// ── Auto-refresh: re-fetch data every 60 seconds without disrupting the view ──
+let _autoRefreshTimer = null;
+function startAutoRefresh(intervalMs) {
+  if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
+  _autoRefreshTimer = setInterval(async () => {
+    console.log('[AutoRefresh] Refreshing data…');
+    try { await refreshData(); }
+    catch(e) { console.warn('[AutoRefresh] Error:', e); }
+  }, intervalMs || 60000);
 }
 
 // ═══════════════════════════════════════════════
@@ -1748,6 +1768,9 @@ function navigate(view, param) {
   document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   currentView = view;
+
+  // Persist navigation state so refreshes/auto-refresh restore the same view
+  try { localStorage.setItem('nav_state', JSON.stringify({ view, param: param || null })); } catch(e) {}
 
   // Smooth scroll to top on view change
   document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' });
@@ -5956,8 +5979,8 @@ function onAuthSuccess(user, freshLogin) {
     if (user.picture) { pic.src = user.picture; } else { pic.classList.add('hidden'); }
   }
 
-  // Load dashboard data
-  loadAllData();
+  // Load dashboard data, then start auto-refresh every 60s
+  loadAllData().then(() => startAutoRefresh(60000));
 }
 
 function handleSignOut() {
