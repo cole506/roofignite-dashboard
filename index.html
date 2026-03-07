@@ -5309,7 +5309,7 @@ function showDeletePodVerification(podName) {
       heights.push(`${ft}'${inc}"`);
     }
   }
-  const optionsHtml = heights.map(h => `<option value="${h}">${h}</option>`).join('');
+  const optionsHtml = heights.map(h => `<option value="${h.replace(/"/g, '&quot;')}">${h}</option>`).join('');
 
   const overlay = document.createElement('div');
   overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4';
@@ -5992,7 +5992,7 @@ function showToast(message, type = 'info') {
   const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
 
   const toast = document.createElement('div');
-  toast.className = 'fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 z-[200] flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium bg-gradient-to-r ' + (colors[type] || colors.info);
+  toast.className = 'fixed bottom-4 left-4 right-4 md:left-auto md:right-6 md:bottom-6 z-[300] flex items-center gap-3 px-5 py-3 rounded-xl shadow-2xl text-white text-sm font-medium bg-gradient-to-r ' + (colors[type] || colors.info);
   toast.style.cssText = 'animation: slideIn 0.3s ease-out; opacity: 0; transform: translateY(20px);';
   toast.innerHTML = `<span class="text-lg">${icons[type] || icons.info}</span> ${message}`;
 
@@ -6250,8 +6250,8 @@ function onAuthSuccess(user, freshLogin) {
     if (user.picture) { pic.src = user.picture; } else { pic.classList.add('hidden'); }
   }
 
-  // Load dashboard data, then start auto-refresh every 60s
-  loadAllData().then(() => startAutoRefresh(60000));
+  // Load dashboard data (auto-refresh disabled)
+  loadAllData();
 }
 
 function handleSignOut() {
