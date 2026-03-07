@@ -4308,7 +4308,11 @@ const POD_COLORS = ['amber', 'cyan', 'indigo', 'teal', 'rose', 'emerald', 'purpl
 function renderSidebarPods() {
   const container = document.getElementById('sidebar-pods');
   if (!container) return;
-  const podNames = Object.keys(SHEETS);
+  const podNames = Object.keys(SHEETS).sort((a, b) => {
+    const numA = parseInt((a.match(/Pod\s*(\d+)/i) || [])[1]) || 999;
+    const numB = parseInt((b.match(/Pod\s*(\d+)/i) || [])[1]) || 999;
+    return numA - numB;
+  });
   container.innerHTML = podNames.map((name, idx) => {
     const accent = POD_COLORS[idx % POD_COLORS.length];
     const shortLabel = name.replace(/ - RoofIgnite/i, '').replace(/Pod\s*/i, '');
