@@ -4369,9 +4369,9 @@ function renderAdminView() {
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
           New Client
         </button>
-        <button onclick="showAddPodModal()" class="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:from-teal-600 hover:to-cyan-700 transition-all shadow-lg shadow-teal-500/20">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-          Add Pod
+        <button onclick="showPodSettingsModal()" class="flex items-center gap-2 bg-gradient-to-r from-teal-500 to-cyan-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:from-teal-600 hover:to-cyan-700 transition-all shadow-lg shadow-teal-500/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+          Pod Settings
         </button>
         <button onclick="refreshData()" class="flex items-center gap-2 bg-dark-700/60 text-dark-200 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-dark-600/60 border border-dark-600/50 transition-all">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -5133,12 +5133,12 @@ async function createNewClient() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  ADD POD — creates a new pod sheet tab via Apps Script
+//  POD SETTINGS — manage pods (add / delete)
 // ═══════════════════════════════════════════════════════════════
 
-function showAddPodModal() {
+function showPodSettingsModal() {
   if (!APPS_SCRIPT_URL) {
-    showToast('Connect Apps Script first to add pods', 'warning');
+    showToast('Connect Apps Script first to manage pods', 'warning');
     return;
   }
 
@@ -5150,19 +5150,46 @@ function showAddPodModal() {
   });
   const suggestedName = `Pod ${maxNum + 1} - RoofIgnite`;
 
+  // Build existing pods list
+  const podNames = Object.keys(SHEETS);
+  const podListHtml = podNames.map(name => `
+    <div class="flex items-center justify-between bg-dark-800/60 rounded-xl px-4 py-3 border border-dark-600/30">
+      <div class="flex items-center gap-3">
+        <div class="w-2 h-2 rounded-full bg-teal-400"></div>
+        <span class="text-white text-sm font-medium">${esc(name)}</span>
+      </div>
+      <button onclick="confirmDeletePod('${esc(name).replace(/'/g, "\\'")}')" class="text-dark-500 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-500/10" title="Delete pod">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+      </button>
+    </div>
+  `).join('');
+
   const modal = document.createElement('div');
   modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
-  modal.id = 'add-pod-modal';
+  modal.id = 'pod-settings-modal';
   modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
   modal.innerHTML = `
-    <div class="glass rounded-2xl p-6 max-w-md w-full scale-in">
+    <div class="glass rounded-2xl p-6 max-w-md w-full scale-in" onclick="event.stopPropagation()">
       <div class="flex items-center justify-between mb-6">
-        <h2 class="text-xl font-bold text-white">Add New Pod</h2>
-        <button onclick="document.getElementById('add-pod-modal').remove()" class="text-dark-400 hover:text-white transition-colors">
+        <h2 class="text-xl font-bold text-white">Pod Settings</h2>
+        <button onclick="document.getElementById('pod-settings-modal').remove()" class="text-dark-400 hover:text-white transition-colors">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
         </button>
       </div>
 
+      <!-- Existing Pods -->
+      <div class="mb-6">
+        <h3 class="text-sm font-semibold text-dark-300 mb-3">Existing Pods (${podNames.length})</h3>
+        <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+          ${podListHtml}
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div class="border-t border-dark-600/30 mb-5"></div>
+
+      <!-- Add New Pod -->
+      <h3 class="text-sm font-semibold text-dark-300 mb-3">Add New Pod</h3>
       <div class="space-y-4">
         <div>
           <label class="block text-sm text-dark-300 mb-1.5">Pod Name</label>
@@ -5179,7 +5206,7 @@ function showAddPodModal() {
         </div>
 
         <div class="flex justify-end gap-3 pt-2">
-          <button onclick="document.getElementById('add-pod-modal').remove()" class="px-4 py-2 rounded-xl text-sm text-dark-400 hover:text-white transition-colors">Cancel</button>
+          <button onclick="document.getElementById('pod-settings-modal').remove()" class="px-4 py-2 rounded-xl text-sm text-dark-400 hover:text-white transition-colors">Close</button>
           <button onclick="createNewPod()" class="px-5 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-teal-500 to-cyan-600 text-white hover:from-teal-600 hover:to-cyan-700 transition-all shadow-lg">Create Pod</button>
         </div>
       </div>
@@ -5205,7 +5232,7 @@ async function createNewPod() {
   }
 
   // Close modal
-  const modal = document.getElementById('add-pod-modal');
+  const modal = document.getElementById('pod-settings-modal');
   if (modal) modal.remove();
 
   showToast(`Creating "${podName}"...`, 'info');
@@ -5234,6 +5261,132 @@ async function createNewPod() {
     renderAdminView();
   } else {
     showToast(`Failed to create pod: ${result.error || 'Unknown error'}`, 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DELETE POD — two-step verification flow
+// ═══════════════════════════════════════════════════════════════
+
+function confirmDeletePod(podName) {
+  // Safety: can't delete the last pod
+  if (Object.keys(SHEETS).length <= 1) {
+    showToast('Cannot delete the last pod — at least one must exist', 'error');
+    return;
+  }
+
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4';
+  overlay.id = 'delete-pod-confirm';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="glass rounded-2xl p-6 max-w-sm w-full border border-red-500/30 scale-in" onclick="event.stopPropagation()">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center">
+          <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+        </div>
+        <h3 class="text-white font-bold text-lg">Delete Pod</h3>
+      </div>
+
+      <p class="text-dark-200 text-sm mb-6">Are you sure you want to delete <span class="text-red-400 font-bold">${esc(podName)}</span>? This will permanently remove the sheet tab and all its data.</p>
+
+      <div class="flex justify-end gap-3">
+        <button onclick="document.getElementById('delete-pod-confirm').remove()" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-300 hover:text-white bg-dark-700/50 hover:bg-dark-600/50 border border-dark-600/30 transition-all">Cancel</button>
+        <button onclick="document.getElementById('delete-pod-confirm').remove(); showDeletePodVerification('${esc(podName).replace(/'/g, "\\'")}')" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/20 transition-all">Yes, Delete</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function showDeletePodVerification(podName) {
+  // Build height options from 5'2" to 6'2"
+  const heights = [];
+  for (let ft = 5; ft <= 6; ft++) {
+    const startIn = (ft === 5) ? 2 : 0;
+    const endIn = (ft === 6) ? 2 : 11;
+    for (let inc = startIn; inc <= endIn; inc++) {
+      heights.push(`${ft}'${inc}"`);
+    }
+  }
+  const optionsHtml = heights.map(h => `<option value="${h}">${h}</option>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4';
+  overlay.id = 'delete-pod-verify';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="glass rounded-2xl p-6 max-w-sm w-full border border-amber-500/30 scale-in" onclick="event.stopPropagation()">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+          <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        </div>
+        <h3 class="text-white font-bold text-lg">Verification</h3>
+      </div>
+
+      <p class="text-dark-200 text-sm mb-4">How tall is Mani Asadi?</p>
+
+      <select id="delete-pod-height-answer" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500/50 mb-5">
+        <option value="" disabled selected>Select height...</option>
+        ${optionsHtml}
+      </select>
+
+      <div class="flex justify-end gap-3">
+        <button onclick="document.getElementById('delete-pod-verify').remove()" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-300 hover:text-white bg-dark-700/50 hover:bg-dark-600/50 border border-dark-600/30 transition-all">Cancel</button>
+        <button onclick="submitDeletePodVerification('${esc(podName).replace(/'/g, "\\'")}')" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 shadow-lg shadow-red-500/20 transition-all">Confirm Delete</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function submitDeletePodVerification(podName) {
+  const select = document.getElementById('delete-pod-height-answer');
+  const answer = select ? select.value : '';
+
+  if (!answer) {
+    showToast('Please select an answer', 'error');
+    return;
+  }
+
+  if (answer !== '5\'2"') {
+    showToast('Incorrect answer', 'error');
+    return;
+  }
+
+  // Correct answer — close verification and execute delete
+  const verifyModal = document.getElementById('delete-pod-verify');
+  if (verifyModal) verifyModal.remove();
+
+  executeDeletePod(podName);
+}
+
+async function executeDeletePod(podName) {
+  // Close the pod settings modal too
+  const settingsModal = document.getElementById('pod-settings-modal');
+  if (settingsModal) settingsModal.remove();
+
+  showToast(`Deleting "${podName}"...`, 'info');
+
+  const result = await writeToSheet('deletePod', { podName });
+
+  if (result.ok) {
+    // Remove from live config
+    delete SHEETS[podName];
+    if (CONFIG.POD_LEAD_SOURCES) {
+      delete CONFIG.POD_LEAD_SOURCES[podName];
+    }
+
+    // Re-render sidebar
+    renderSidebarPods();
+
+    // Reload data
+    await loadAllData({ silent: true });
+
+    showToast(`Pod "${podName}" deleted successfully`, 'success');
+    renderAdminView();
+  } else {
+    showToast(`Failed to delete pod: ${result.error || 'Unknown error'}`, 'error');
   }
 }
 
