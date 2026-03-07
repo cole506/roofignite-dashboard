@@ -15,10 +15,20 @@ const CONFIG = {
   // Google Sheet ID
   SHEET_ID: '1W560POSt6T4QsNObZGxz2BKyCNvRIW7dubAxhIVkAy4',
 
-  // Pod sheet GIDs
+  // Pod sheet GIDs — these are fallback defaults.
+  // On load, the dashboard fetches the live Pod Registry from Apps Script
+  // and merges any new pods into this object automatically.
   SHEETS: {
     'Pod 2 - RoofIgnite': 0,
     'Pod 1 - RoofIgnite': 295240236
+  },
+
+  // Pod-to-lead-source mapping — populated dynamically from Pod Registry.
+  // Fallback defaults used if registry isn't available yet.
+  POD_LEAD_SOURCES: {
+    'Pod 2 - RoofIgnite': { primary: 'ALL_ROOF', fallback: 'ALL_CiGN' },
+    'Pod 1 - RoofIgnite': { primary: 'ALL_ROOF', fallback: 'ALL_CiGN' },
+    'ContractorsIgnite':  { primary: 'ALL_CiGN', fallback: 'ALL_ROOF' }
   },
 
   // Lead sheet GIDs
