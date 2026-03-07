@@ -754,6 +754,8 @@ function parseLeadCSV(csvText, source) {
   const COL_SUB      = findCol('sub account', 'subaccount');
   const COL_NAME     = findCol('name');
   const COL_STATUS   = findCol('status');
+  const COL_ADDRESS  = findCol('address');
+  const COL_DISTANCE = findCol('distance', 'drive time', 'drivetime', 'distance & drive time');
   // Followup note columns (1st Call, 2nd Day, 3rd Day, 4th Day, 5th Day...)
   const followupCols = [];
   headerCells.forEach((h, idx) => {
@@ -793,6 +795,8 @@ function parseLeadCSV(csvText, source) {
       subAccount,
       name:       COL_NAME >= 0 ? (cells[COL_NAME] || '').trim() : '',
       status:     COL_STATUS >= 0 ? (cells[COL_STATUS] || '').trim() : '',
+      address:    COL_ADDRESS >= 0 ? (cells[COL_ADDRESS] || '').trim() : '',
+      distance:   COL_DISTANCE >= 0 ? (cells[COL_DISTANCE] || '').trim() : '',
       lastNote,
     });
   }
@@ -3149,18 +3153,22 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
             <tr class="border-b border-dark-600 text-dark-400 uppercase tracking-wider">
               <th class="text-left py-2 px-2 font-medium">Date</th>
               <th class="text-left py-2 px-2 font-medium">Name</th>
+              <th class="text-left py-2 px-2 font-medium">Address</th>
+              <th class="text-left py-2 px-2 font-medium">Distance &amp; Drive Time</th>
               <th class="text-left py-2 px-2 font-medium">Status</th>
               <th class="text-left py-2 px-2 font-medium">Last Note</th>
             </tr>
           </thead>
           <tbody>
-            ${filtered.length === 0 ? '<tr><td colspan="4" class="py-4 px-2 text-dark-400 text-center">No leads match this filter</td></tr>' : ''}
+            ${filtered.length === 0 ? '<tr><td colspan="6" class="py-4 px-2 text-dark-400 text-center">No leads match this filter</td></tr>' : ''}
             ${dates.map(d => {
               const dayLeads = byDate[d];
               return dayLeads.map((l, li) => `
               <tr class="border-b border-dark-700/30">
                 ${li === 0 ? `<td class="py-1.5 px-2 text-dark-200 whitespace-nowrap align-top" rowspan="${dayLeads.length}">${fmtDate(d)} <span class="text-dark-500">(${dayLeads.length})</span></td>` : ''}
                 <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.name || '—'}</td>
+                <td class="py-1.5 px-2 text-dark-300" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(l.address||'').replace(/"/g,'&quot;')}">${l.address || '<span class="text-dark-600">—</span>'}</td>
+                <td class="py-1.5 px-2 text-dark-300 whitespace-nowrap">${l.distance || '<span class="text-dark-600">—</span>'}</td>
                 <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.status || '—'}</td>
                 <td class="py-1.5 px-2 text-dark-400" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(l.lastNote||'').replace(/"/g,'&quot;')}">${l.lastNote || '<span class="text-dark-600">—</span>'}</td>
               </tr>`).join('');
@@ -3285,12 +3293,41 @@ async function renderCycleCompCards() {
     }
   }
 
+  // Override lead counts from lead breakdown sheet instead of Meta/metadata
+  if (_compAcctName) {
+    const sheetLeadsA = getLeadsForAccount(_compAcctName, a.cycleStartDate, a.cycleEndDate);
+    const sheetLeadsB = getLeadsForAccount(_compAcctName, b.cycleStartDate, b.cycleEndDate);
+    // If using windowed daily data, only count leads within the comparison window
+    let leadCountA, leadCountB;
+    if (usedDailyData && aggA && aggB) {
+      const windowEndA = new Date(new Date(a.cycleStartDate + 'T00:00:00').getTime() + (compWindow - 1) * 86400000);
+      const windowEndAStr = windowEndA.toISOString().slice(0, 10);
+      const windowEndB = new Date(new Date(b.cycleStartDate + 'T00:00:00').getTime() + (compWindow - 1) * 86400000);
+      const windowEndBStr = windowEndB.toISOString().slice(0, 10);
+      leadCountA = sheetLeadsA.filter(l => l.date && l.date <= windowEndAStr).length;
+      leadCountB = sheetLeadsB.filter(l => l.date && l.date <= windowEndBStr).length;
+    } else {
+      leadCountA = sheetLeadsA.length;
+      leadCountB = sheetLeadsB.length;
+    }
+    if (aggA) {
+      aggA.leads = leadCountA;
+      aggA.cpl = leadCountA > 0 ? aggA.spend / leadCountA : 0;
+    }
+    if (aggB) {
+      aggB.leads = leadCountB;
+      aggB.cpl = leadCountB > 0 ? aggB.spend / leadCountB : 0;
+    }
+  }
+
   // Fallback to sheet-level cycle totals
   if (!aggA || !aggB) {
-    aggA = { spend: a.amountSpent || 0, leads: a.totalLeads || 0, bookings: a.bookedAppts || 0,
-             cpl: a.totalLeads > 0 ? (a.amountSpent || 0) / a.totalLeads : 0, cpa: a.cpa || 0 };
-    aggB = { spend: b.amountSpent || 0, leads: b.totalLeads || 0, bookings: b.bookedAppts || 0,
-             cpl: b.totalLeads > 0 ? (b.amountSpent || 0) / b.totalLeads : 0, cpa: b.cpa || 0 };
+    const fallbackLeadsA = _compAcctName ? getLeadsForAccount(_compAcctName, a.cycleStartDate, a.cycleEndDate).length : (a.totalLeads || 0);
+    const fallbackLeadsB = _compAcctName ? getLeadsForAccount(_compAcctName, b.cycleStartDate, b.cycleEndDate).length : (b.totalLeads || 0);
+    aggA = { spend: a.amountSpent || 0, leads: fallbackLeadsA, bookings: a.bookedAppts || 0,
+             cpl: fallbackLeadsA > 0 ? (a.amountSpent || 0) / fallbackLeadsA : 0, cpa: a.cpa || 0 };
+    aggB = { spend: b.amountSpent || 0, leads: fallbackLeadsB, bookings: b.bookedAppts || 0,
+             cpl: fallbackLeadsB > 0 ? (b.amountSpent || 0) / fallbackLeadsB : 0, cpa: b.cpa || 0 };
   }
 
   // Update window label
@@ -3349,11 +3386,18 @@ async function renderCycleCompCards() {
   }).join('');
 
   // Render sparklines using full-cycle sheet data for all-cycle trend overview
+  // Use lead breakdown sheet for lead counts instead of metadata
+  const sparkLeadCounts = _compCycles.map(c => {
+    if (_compAcctName && c.cycleStartDate && c.cycleEndDate) {
+      return getLeadsForAccount(_compAcctName, c.cycleStartDate, c.cycleEndDate).length;
+    }
+    return c.totalLeads || 0;
+  });
   const sparkData = {
-    leads:    _compCycles.map(c => c.totalLeads || 0),
+    leads:    sparkLeadCounts,
     bookings: _compCycles.map(c => c.bookedAppts || 0),
     spend:    _compCycles.map(c => c.amountSpent || 0),
-    cpl:      _compCycles.map(c => c.totalLeads > 0 ? (c.amountSpent || 0) / c.totalLeads : 0),
+    cpl:      sparkLeadCounts.map((lc, i) => lc > 0 ? (_compCycles[i].amountSpent || 0) / lc : 0),
     cpa:      _compCycles.map(c => c.cpa || 0),
   };
   const labels = _compCycles.map(c => c.cycle.replace('Cycle ', 'C'));
