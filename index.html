@@ -1340,15 +1340,201 @@ async function refreshData() {
   await loadAllData({ silent: true });
 }
 
-// ── Auto-refresh: re-fetch data every 60 seconds without disrupting the view ──
+// ═══════════════════════════════════════════════════════════════
+//  SMART LIVE REFRESH — silent poll + diff + surgical re-render
+// ═══════════════════════════════════════════════════════════════
+//
+//  Instead of calling loadAllData() (which re-renders everything,
+//  resets scroll, flashes the page), this system:
+//    1. Fetches fresh data silently in the background
+//    2. Computes a fingerprint of the old vs new data
+//    3. Only re-renders the CURRENT VIEW if data actually changed
+//    4. Preserves scroll position throughout
+//    5. Shows a subtle dot pulse while fetching, no loading screen
+//
+let _liveRefreshTimer = null;
+let _liveRefreshBusy = false;
+
+function startLiveRefresh(intervalMs) {
+  if (_liveRefreshTimer) clearInterval(_liveRefreshTimer);
+  const interval = intervalMs || 90000; // default 90 seconds
+  console.log(`[LiveRefresh] Started — polling every ${interval / 1000}s`);
+
+  _liveRefreshTimer = setInterval(async () => {
+    if (_liveRefreshBusy) {
+      console.log('[LiveRefresh] Skipped — previous fetch still running');
+      return;
+    }
+    try {
+      _liveRefreshBusy = true;
+      await liveRefreshCycle();
+    } catch (e) {
+      console.warn('[LiveRefresh] Error:', e);
+    } finally {
+      _liveRefreshBusy = false;
+    }
+  }, interval);
+}
+
+function stopLiveRefresh() {
+  if (_liveRefreshTimer) {
+    clearInterval(_liveRefreshTimer);
+    _liveRefreshTimer = null;
+    console.log('[LiveRefresh] Stopped');
+  }
+}
+
+// Build a quick fingerprint string for an array of objects
+// Used to detect if data actually changed without deep comparison
+function dataFingerprint(arr) {
+  if (!arr || !arr.length) return '0';
+  // Hash key fields that change most often: billing, goals, leads, spend
+  let hash = arr.length.toString();
+  for (let i = 0; i < arr.length; i++) {
+    const o = arr[i];
+    hash += '|' + (o.name || o.account || '') +
+            (o.bookedAppts || '') +
+            (o.amountSpent || '') +
+            (o.goodToBill || '') +
+            (o.billed || '') +
+            (o.billingNotes || '') +
+            (o.dailyBudget || '') +
+            (o.monthlyBudget || '') +
+            (o.totalLeads || '') +
+            (o.manager || o.accountManager || '') +
+            (o.isPaused || '');
+  }
+  return hash;
+}
+
+async function liveRefreshCycle() {
+  console.log('[LiveRefresh] Fetching fresh data…');
+
+  // Show subtle status indicator (yellow dot, no loading screen)
+  const statusDot = document.getElementById('data-status');
+  const statusText = document.getElementById('data-status-text');
+  if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 pulse';
+
+  // Snapshot old fingerprints BEFORE fetching
+  const oldAccountsFP = dataFingerprint(allAccounts);
+  const oldCyclesFP = dataFingerprint(allCycles);
+  const oldLeadsFP = dataFingerprint(allLeads);
+
+  try {
+    // ── Fetch all data silently (same as loadAllData but no UI work) ──
+    const podNames = Object.keys(SHEETS);
+    const [podResults, leadResults, adIdMaps] = await Promise.all([
+      Promise.all(podNames.map(name => fetchSheetData(name, SHEETS[name]))),
+      Promise.all([
+        fetchLeadData('ALL_ROOF', LEAD_SHEETS['ALL_ROOF']),
+        fetchLeadData('ALL_CiGN', LEAD_SHEETS['ALL_CiGN'])
+      ]),
+      Promise.all(podNames.map(name => fetchAdIdMapCSV(SHEETS[name])))
+    ]);
+
+    const newAccounts = podResults.flatMap(r => r.accounts);
+    const newCycles = podResults.flatMap(r => r.cycles);
+    const newLeads = leadResults.flat();
+
+    // Merge CSV-derived ad account IDs
+    const combinedAdIdMap = new Map(adIdMaps.flatMap(m => [...m]));
+    newAccounts.forEach(acct => {
+      if (!acct.adAccountId) {
+        const csvId = combinedAdIdMap.get(acct.name);
+        if (csvId) acct.adAccountId = csvId;
+      }
+      (acct.cycles || []).forEach(c => {
+        if (!c.adAccountId && acct.adAccountId) c.adAccountId = acct.adAccountId;
+      });
+    });
+    newCycles.forEach(c => {
+      if (!c.adAccountId) {
+        const csvId = combinedAdIdMap.get(c.account);
+        if (csvId) c.adAccountId = csvId;
+      }
+    });
+
+    // ── Compare fingerprints ──
+    const newAccountsFP = dataFingerprint(newAccounts);
+    const newCyclesFP = dataFingerprint(newCycles);
+    const newLeadsFP = dataFingerprint(newLeads);
+
+    const accountsChanged = (newAccountsFP !== oldAccountsFP);
+    const cyclesChanged = (newCyclesFP !== oldCyclesFP);
+    const leadsChanged = (newLeadsFP !== oldLeadsFP);
+    const anythingChanged = accountsChanged || cyclesChanged || leadsChanged;
+
+    if (!anythingChanged) {
+      console.log('[LiveRefresh] No changes detected — skipping re-render');
+      if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-green-500';
+      return;
+    }
+
+    console.log(`[LiveRefresh] Changes detected — accounts:${accountsChanged} cycles:${cyclesChanged} leads:${leadsChanged}`);
+
+    // ── Swap in new data ──
+    allAccounts = newAccounts;
+    allCycles = newCycles;
+    allLeads = newLeads;
+
+    // Rebuild managerPodMap
+    managerPodMap = {};
+    allAccounts.forEach(a => {
+      if (a.manager && a.pod && !managerPodMap[a.manager]) {
+        managerPodMap[a.manager] = a.pod;
+      }
+    });
+
+    // Update status bar count
+    if (statusText) statusText.textContent = `${allAccounts.length} accounts · ${allLeads.length} leads`;
+
+    // ── Surgical re-render: only re-render the CURRENT view, preserve scroll ──
+    const mainContent = document.querySelector('.main-content');
+    const scrollTop = mainContent ? mainContent.scrollTop : 0;
+
+    const savedNav = JSON.parse(localStorage.getItem('nav_state') || 'null');
+    const view = currentView || (savedNav && savedNav.view) || 'dashboard';
+
+    switch (view) {
+      case 'dashboard':    renderDashboard(); break;
+      case 'pod':          if (currentPod) renderPodView(currentPod); break;
+      case 'manager':      if (currentManager) renderManagerView(currentManager); break;
+      case 'account':
+        if (savedNav && savedNav.param) renderAccountDetail(savedNav.param.name, savedNav.param.adAccountId);
+        break;
+      case 'billing':      renderBilling(); break;
+      case 'admin':        renderAdminView(); break;
+    }
+
+    // Restore scroll position (prevents jump to top)
+    if (mainContent) mainContent.scrollTop = scrollTop;
+
+    // Update sidebar badges
+    renderSidebarManagers();
+    getManagers().forEach(mgr => {
+      const alerts = getAlertAccountsForManager(mgr);
+      const key = mgr.toLowerCase().replace(/\s+/g, '-');
+      const badge = document.getElementById('alert-badge-' + key);
+      if (badge && alerts.length > 0) {
+        badge.textContent = alerts.length;
+        badge.classList.remove('hidden');
+      }
+    });
+
+    console.log('[LiveRefresh] View re-rendered successfully');
+
+  } catch (e) {
+    console.warn('[LiveRefresh] Fetch error (will retry next cycle):', e.message);
+  }
+
+  // Restore green status dot
+  if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-green-500';
+}
+
+// Legacy alias — keeps old callers working
 let _autoRefreshTimer = null;
 function startAutoRefresh(intervalMs) {
-  if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
-  _autoRefreshTimer = setInterval(async () => {
-    console.log('[AutoRefresh] Refreshing data…');
-    try { await refreshData(); }
-    catch(e) { console.warn('[AutoRefresh] Error:', e); }
-  }, intervalMs || 60000);
+  startLiveRefresh(intervalMs);
 }
 
 // ═══════════════════════════════════════════════
@@ -6254,8 +6440,8 @@ function onAuthSuccess(user, freshLogin) {
     if (user.picture) { pic.src = user.picture; } else { pic.classList.add('hidden'); }
   }
 
-  // Load dashboard data (auto-refresh disabled)
-  loadAllData();
+  // Load dashboard data, then start smart live refresh every 90s
+  loadAllData().then(() => startLiveRefresh(90000));
 }
 
 function handleSignOut() {
