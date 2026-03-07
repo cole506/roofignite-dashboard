@@ -3077,7 +3077,7 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
     if (!byDate[d]) byDate[d] = [];
     byDate[d].push(l);
   });
-  const dates = Object.keys(byDate).sort();
+  const dates = Object.keys(byDate).sort().reverse();
 
   // Group by week (from all leads, not filtered)
   const weeks = { 'Week 1': [], 'Week 2': [], 'Week 3': [], 'Week 4': [], 'Week 5+': [] };
