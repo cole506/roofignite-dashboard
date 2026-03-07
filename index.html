@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>RoofIgnite Command Center</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>😊</text></svg>">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -286,40 +286,106 @@ tailwind.config = {
   @media (max-width: 900px) { .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; } }
   @media (max-width: 640px) { .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; } }
 
+  /* ══════ SAFE AREA (notched devices) ══════ */
+  @supports (padding: max(0px)) {
+    body {
+      padding-left: env(safe-area-inset-left);
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+
+  /* ══════ RESPONSIVE UTILITY CLASSES ══════ */
+  .mobile-hide { }
+  .mobile-only { display: none !important; }
+
   /* ══════ MOBILE ══════ */
   @media (max-width: 767px) {
     .sidebar {
       transform: translateX(-100%);
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       z-index: 200;
+      width: 85vw; max-width: 300px; min-width: unset;
     }
     .sidebar.open { transform: translateX(0); }
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 199; }
     .sidebar-overlay.active { display: block; }
-    .main-content { margin-left: 0 !important; padding: 16px !important; padding-top: 72px !important; }
+    .main-content { margin-left: 0 !important; padding: 12px !important; padding-top: 68px !important; }
     .mobile-header { display: flex !important; }
-    .chart-container { height: 180px; }
-    .modal-inner { max-width: 100% !important; max-height: 92vh !important; margin: 8px; border-radius: 16px; }
+    .chart-container { height: 170px; }
+    .modal-inner { max-width: 100% !important; max-height: 92vh !important; margin: 6px; border-radius: 14px; }
     .section-title { font-size: 15px; }
     .section-title::before { width: 3px !important; height: 16px !important; }
-    .section-divider { margin: 18px 0; }
+    .section-divider { margin: 16px 0; }
     .health-ring { width: 38px; height: 38px; font-size: 11px; }
-    .filter-badge { padding: 8px 14px; font-size: 11px; min-height: 40px; display: inline-flex; align-items: center; }
-    .tab-btn { padding: 10px 16px; min-height: 40px; }
+    .filter-badge { padding: 6px 10px; font-size: 11px; min-height: 40px; display: inline-flex; align-items: center; }
+    .tab-btn { padding: 10px 14px; min-height: 44px; font-size: 12px; }
     .badge { font-size: 10px; padding: 2px 8px; }
-    .back-btn { min-height: 40px; }
-    .nav-item { min-height: 44px; }
+    .back-btn { min-height: 44px; }
+    .nav-item { min-height: 44px; display: flex; align-items: center; }
+    .mobile-hide { display: none !important; }
+    .mobile-only { display: revert !important; }
+
+    /* Touch-friendly buttons and inputs */
+    button, select, input, .nav-item a { min-height: 44px; }
+    select { font-size: 16px !important; /* prevents iOS zoom on focus */ }
+    input[type="text"], input[type="email"], input[type="search"], input[type="number"], textarea {
+      font-size: 16px !important; min-height: 44px;
+    }
+
+    /* Table scroll hint */
     .table-scroll-hint { position: relative; }
     .table-scroll-hint::after {
       content: '';
-      position: absolute;
-      top: 0; right: 0; bottom: 0;
-      width: 30px;
+      position: absolute; top: 0; right: 0; bottom: 0; width: 30px;
       background: linear-gradient(90deg, transparent, rgba(6,11,24,0.8));
-      pointer-events: none;
-      z-index: 5;
+      pointer-events: none; z-index: 5;
     }
+
+    /* Glass cards reduce padding */
+    .glass { padding: 12px; }
+
+    /* KPI / metric cards */
+    .kpi-grid-7 { gap: 8px !important; }
+
+    /* Cycle comparison grid */
+    #cycle-comp-cards { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+
+    /* Funnel bar text */
+    .funnel-bar { font-size: 10px; height: 24px; padding: 0 6px; }
   }
+
+  /* ══════ VERY SMALL PHONES (≤374px) ══════ */
+  @media (max-width: 374px) {
+    .main-content { padding: 8px !important; padding-top: 64px !important; }
+    .filter-badge { padding: 5px 8px; font-size: 10px; }
+    .section-title { font-size: 13px; }
+    .kpi-grid-7 { grid-template-columns: 1fr !important; }
+    #cycle-comp-cards { grid-template-columns: 1fr !important; }
+    .chart-container { height: 150px; }
+    .tab-btn { padding: 8px 10px; font-size: 11px; }
+    .glass { padding: 8px; }
+  }
+
+  /* ══════ SMALL PHONES (375-479px) ══════ */
+  @media (min-width: 375px) and (max-width: 479px) {
+    .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+
+  /* ══════ LANDSCAPE MOBILE ══════ */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .main-content { padding-top: 56px !important; }
+    .chart-container { height: 140px; }
+    .modal-inner { max-height: 95vh !important; }
+    .health-scroll { max-height: 180px; }
+    .mobile-header { padding-top: 4px !important; padding-bottom: 4px !important; }
+  }
+
+  /* ══════ TABLET (768-1023px) ══════ */
+  @media (min-width: 768px) and (max-width: 1023px) {
+    .kpi-grid-7 { grid-template-columns: repeat(3, 1fr) !important; }
+  }
+
   @media (min-width: 768px) {
     .mobile-header { display: none !important; }
     .sidebar-overlay { display: none !important; }
@@ -368,7 +434,7 @@ tailwind.config = {
 
 <!-- Login Gate -->
 <div id="login-gate" class="fixed inset-0 z-[999] flex items-center justify-center" style="background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #020617 100%);">
-  <div class="text-center max-w-md mx-auto px-6">
+  <div class="text-center max-w-full sm:max-w-md mx-auto px-4 sm:px-6">
     <!-- Logo -->
     <div class="mb-8">
       <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-500/20">
@@ -2548,25 +2614,25 @@ function renderAccountTable(active, inactive, mgrName) {
   return `
     <div class="glass rounded-2xl overflow-hidden">
       <div class="overflow-x-auto table-scroll-hint">
-        <table class="w-full text-sm min-w-[1200px]">
+        <table class="w-full text-sm min-w-[500px] md:min-w-[1200px]">
           <thead>
             <tr class="border-b border-dark-600 text-dark-400 text-[10px] uppercase tracking-wider" style="background:rgba(15,23,42,0.5);">
               <th class="text-center py-3 px-3 font-medium">HP</th>
               <th class="text-left py-3 px-3 font-medium">Account</th>
-              <th class="text-left py-3 px-3 font-medium">Cycle</th>
+              <th class="text-left py-3 px-3 font-medium mobile-hide">Cycle</th>
               <th class="text-right py-3 px-3 font-medium">Leads</th>
-              <th class="text-right py-3 px-3 font-medium">L2B</th>
-              <th class="text-right py-3 px-3 font-medium">OSA%</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">L2B</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">OSA%</th>
               <th class="text-right py-3 px-3 font-medium">Bkd</th>
-              <th class="text-right py-3 px-3 font-medium">Est.Bkd</th>
-              <th class="text-right py-3 px-3 font-medium">Goal</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">Est.Bkd</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">Goal</th>
               <th class="text-right py-3 px-3 font-medium">CPA</th>
-              <th class="text-right py-3 px-3 font-medium">CPA Goal</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">CPA Goal</th>
               <th class="text-right py-3 px-3 font-medium">Spent</th>
-              <th class="text-right py-3 px-3 font-medium">Pace</th>
-              <th class="text-right py-3 px-3 font-medium">CTR</th>
-              <th class="text-right py-3 px-3 font-medium">Freq</th>
-              <th class="text-center py-3 px-3 font-medium">Track</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">Pace</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">CTR</th>
+              <th class="text-right py-3 px-3 font-medium mobile-hide">Freq</th>
+              <th class="text-center py-3 px-3 font-medium mobile-hide">Track</th>
             </tr>
           </thead>
           <tbody>
@@ -2584,20 +2650,20 @@ function renderAccountTable(active, inactive, mgrName) {
                     <div class="text-white font-medium">${a.name}</div>
                     <div class="text-dark-400 text-xs">${a.manager}</div>
                   </td>
-                  <td class="py-3 px-3 text-dark-300 text-xs">${c ? c.cycle : '—'}</td>
+                  <td class="py-3 px-3 text-dark-300 text-xs mobile-hide">${c ? c.cycle : '—'}</td>
                   <td class="py-3 px-3 text-right text-white">${c ? fmt(c.totalLeads) : '—'}</td>
-                  <td class="py-3 px-3 text-right">${l2b !== null ? `<span class="${l2b >= 0.375 ? 'metric-good' : 'metric-warn'}">${(l2b*100).toFixed(0)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
-                  <td class="py-3 px-3 text-right"><span class="${c ? osaColor(c.osaPct) : 'text-dark-400'}">${c ? fmtPct(c.osaPct) : '—'}</span></td>
+                  <td class="py-3 px-3 text-right mobile-hide">${l2b !== null ? `<span class="${l2b >= 0.375 ? 'metric-good' : 'metric-warn'}">${(l2b*100).toFixed(0)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
+                  <td class="py-3 px-3 text-right mobile-hide"><span class="${c ? osaColor(c.osaPct) : 'text-dark-400'}">${c ? fmtPct(c.osaPct) : '—'}</span></td>
                   <td class="py-3 px-3 text-right text-green-400 font-semibold">${c ? fmt(c.bookedAppts) : '—'}</td>
-                  <td class="py-3 px-3 text-right text-white">${c ? fmt(c.estBookedAppts) : '—'}</td>
-                  <td class="py-3 px-3 text-right text-dark-400">${c ? fmt(c.bookedGoal) : '—'}</td>
+                  <td class="py-3 px-3 text-right text-white mobile-hide">${c ? fmt(c.estBookedAppts) : '—'}</td>
+                  <td class="py-3 px-3 text-right text-dark-400 mobile-hide">${c ? fmt(c.bookedGoal) : '—'}</td>
                   <td class="py-3 px-3 text-right"><span class="${c ? cpaColor(c.cpa, cpaGoal) : 'text-dark-400'}">${c ? fmtDollar(c.cpa,2) : '—'}</span></td>
-                  <td class="py-3 px-3 text-right text-dark-400">${cpaGoal ? fmtDollar(cpaGoal,2) : '—'}</td>
+                  <td class="py-3 px-3 text-right text-dark-400 mobile-hide">${cpaGoal ? fmtDollar(cpaGoal,2) : '—'}</td>
                   <td class="py-3 px-3 text-right text-white">${c ? fmtDollar(c.amountSpent,0) : '—'}</td>
-                  <td class="py-3 px-3 text-right">${bkPace ? `<span class="text-xs font-medium" style="color:${bookingPaceColor(bkPace.status)}">${bkPace.status === 'behind' ? '▲' : '●'} ${Math.round(bkPace.pctOfGoal*100)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
-                  <td class="py-3 px-3 text-right"><span class="${c ? ctrColor(c.linkCTR) : 'text-dark-400'}">${c && c.linkCTR ? fmtPctDec(c.linkCTR) : '—'}</span></td>
-                  <td class="py-3 px-3 text-right"><span class="${c ? freqColor(c.frequency) : 'text-dark-400'}">${c && c.frequency ? c.frequency.toFixed(1) : '—'}</span></td>
-                  <td class="py-3 px-3 text-center">${onTrackBadge(c)}</td>
+                  <td class="py-3 px-3 text-right mobile-hide">${bkPace ? `<span class="text-xs font-medium" style="color:${bookingPaceColor(bkPace.status)}">${bkPace.status === 'behind' ? '▲' : '●'} ${Math.round(bkPace.pctOfGoal*100)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
+                  <td class="py-3 px-3 text-right mobile-hide"><span class="${c ? ctrColor(c.linkCTR) : 'text-dark-400'}">${c && c.linkCTR ? fmtPctDec(c.linkCTR) : '—'}</span></td>
+                  <td class="py-3 px-3 text-right mobile-hide"><span class="${c ? freqColor(c.frequency) : 'text-dark-400'}">${c && c.frequency ? c.frequency.toFixed(1) : '—'}</span></td>
+                  <td class="py-3 px-3 text-center mobile-hide">${onTrackBadge(c)}</td>
                 </tr>
               `;
             }).join('')}
@@ -3153,10 +3219,10 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
             <tr class="border-b border-dark-600 text-dark-400 uppercase tracking-wider">
               <th class="text-left py-2 px-2 font-medium">Date</th>
               <th class="text-left py-2 px-2 font-medium">Name</th>
-              <th class="text-left py-2 px-2 font-medium">Address</th>
-              <th class="text-left py-2 px-2 font-medium">Distance &amp; Drive Time</th>
+              <th class="text-left py-2 px-2 font-medium mobile-hide">Address</th>
+              <th class="text-left py-2 px-2 font-medium mobile-hide">Distance &amp; Drive Time</th>
               <th class="text-left py-2 px-2 font-medium">Status</th>
-              <th class="text-left py-2 px-2 font-medium">Last Note</th>
+              <th class="text-left py-2 px-2 font-medium mobile-hide">Last Note</th>
             </tr>
           </thead>
           <tbody>
@@ -3167,10 +3233,10 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
               <tr class="border-b border-dark-700/30">
                 ${li === 0 ? `<td class="py-1.5 px-2 text-dark-200 whitespace-nowrap align-top" rowspan="${dayLeads.length}">${fmtDate(d)} <span class="text-dark-500">(${dayLeads.length})</span></td>` : ''}
                 <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.name || '—'}</td>
-                <td class="py-1.5 px-2 text-dark-300" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(l.address||'').replace(/"/g,'&quot;')}">${l.address || '<span class="text-dark-600">—</span>'}</td>
-                <td class="py-1.5 px-2 text-dark-300 whitespace-nowrap">${l.distance || '<span class="text-dark-600">—</span>'}</td>
+                <td class="py-1.5 px-2 text-dark-300 mobile-hide" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(l.address||'').replace(/"/g,'&quot;')}">${l.address || '<span class="text-dark-600">—</span>'}</td>
+                <td class="py-1.5 px-2 text-dark-300 whitespace-nowrap mobile-hide">${l.distance || '<span class="text-dark-600">—</span>'}</td>
                 <td class="py-1.5 px-2 ${leadStatusColor(l.status)}">${l.status || '—'}</td>
-                <td class="py-1.5 px-2 text-dark-400" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(l.lastNote||'').replace(/"/g,'&quot;')}">${l.lastNote || '<span class="text-dark-600">—</span>'}</td>
+                <td class="py-1.5 px-2 text-dark-400 mobile-hide" style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(l.lastNote||'').replace(/"/g,'&quot;')}">${l.lastNote || '<span class="text-dark-600">—</span>'}</td>
               </tr>`).join('');
             }).join('')}
           </tbody>
@@ -3592,22 +3658,22 @@ function renderMetaDailyTable(data, cycle) {
 
   el.innerHTML = `
     <div class="overflow-x-auto table-scroll-hint rounded-lg border border-dark-600/50">
-      <table class="w-full text-xs min-w-[900px]">
+      <table class="w-full text-xs min-w-[380px] md:min-w-[900px]">
         <thead>
           <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
             <th class="py-2 px-2 text-left font-medium">Date</th>
             <th class="py-2 px-2 text-right font-medium">Spend</th>
-            <th class="py-2 px-2 text-right font-medium">Freq</th>
-            <th class="py-2 px-2 text-right font-medium">Impr</th>
-            <th class="py-2 px-2 text-right font-medium">Clicks</th>
-            <th class="py-2 px-2 text-right font-medium">Link Clicks</th>
-            <th class="py-2 px-2 text-right font-medium">CPC (Link)</th>
-            <th class="py-2 px-2 text-right font-medium">CTR (Link)</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Freq</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Impr</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Clicks</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Link Clicks</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CPC (Link)</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CTR (Link)</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
-            <th class="py-2 px-2 text-right font-medium">Bookings</th>
-            <th class="py-2 px-2 text-right font-medium">CPA</th>
-            <th class="py-2 px-2 text-right font-medium">CPM</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Bookings</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CPA</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CPM</th>
           </tr>
         </thead>
         <tbody>
@@ -3622,17 +3688,17 @@ function renderMetaDailyTable(data, cycle) {
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
               <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${dateStr}</td>
               <td class="py-1.5 px-2 text-right text-dark-200">${fmtDollar(d.spend,2)}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', d.frequency, cycle)}">${d.frequency > 0 ? d.frequency.toFixed(2) : '—'}</td>
-              <td class="py-1.5 px-2 text-right text-dark-200">${fmt(d.impressions)}</td>
-              <td class="py-1.5 px-2 text-right text-dark-200">${fmt(d.clicks)}</td>
-              <td class="py-1.5 px-2 text-right text-dark-200">${d.outboundClicks}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', linkCPC, cycle)}">${linkCPC > 0 ? fmtDollar(linkCPC,2) : '—'}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', d.linkCTR, cycle)}">${d.linkCTR > 0 ? d.linkCTR.toFixed(2)+'%' : '—'}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('frequency', d.frequency, cycle)}">${d.frequency > 0 ? d.frequency.toFixed(2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide text-dark-200">${fmt(d.impressions)}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide text-dark-200">${fmt(d.clicks)}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide text-dark-200">${d.outboundClicks}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpc', linkCPC, cycle)}">${linkCPC > 0 ? fmtDollar(linkCPC,2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('linkCTR', d.linkCTR, cycle)}">${d.linkCTR > 0 ? d.linkCTR.toFixed(2)+'%' : '—'}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('leads', d.leads, cycle)}">${d.leads}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', cpl, cycle)}">${d.leads > 0 ? fmtDollar(cpl,2) : '—'}</td>
-              <td class="py-1.5 px-2 text-right ${dailyBookings > 0 ? 'metric-cell-green' : ''}">${dailyBookings}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
-              <td class="py-1.5 px-2 text-right ${metricCellClass('cpm', dayCpm, cycle)}">${dayCpm > 0 ? fmtDollar(dayCpm,2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide ${dailyBookings > 0 ? 'metric-cell-green' : ''}">${dailyBookings}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
+              <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpm', dayCpm, cycle)}">${dayCpm > 0 ? fmtDollar(dayCpm,2) : '—'}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -3734,22 +3800,22 @@ function renderMetaAggTable(aggData, cycle) {
   if (!el || !aggData || !aggData.length) return;
   el.innerHTML = `
     <div class="overflow-x-auto table-scroll-hint rounded-lg border border-dark-600/50">
-      <table class="w-full text-xs min-w-[900px]">
+      <table class="w-full text-xs min-w-[380px] md:min-w-[900px]">
         <thead>
           <tr class="bg-dark-800/80 text-dark-400 text-[9px] uppercase tracking-wider">
             <th class="py-2 px-2 text-left font-medium">Period</th>
             <th class="py-2 px-2 text-right font-medium">Spend</th>
-            <th class="py-2 px-2 text-right font-medium">Freq</th>
-            <th class="py-2 px-2 text-right font-medium">Impr</th>
-            <th class="py-2 px-2 text-right font-medium">Clicks</th>
-            <th class="py-2 px-2 text-right font-medium">Link Clicks</th>
-            <th class="py-2 px-2 text-right font-medium">CPC (Link)</th>
-            <th class="py-2 px-2 text-right font-medium">CTR (Link)</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Freq</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Impr</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Clicks</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Link Clicks</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CPC (Link)</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CTR (Link)</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
-            <th class="py-2 px-2 text-right font-medium">Bookings</th>
-            <th class="py-2 px-2 text-right font-medium">CPA</th>
-            <th class="py-2 px-2 text-right font-medium">CPM</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">Bookings</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CPA</th>
+            <th class="py-2 px-2 text-right font-medium mobile-hide">CPM</th>
           </tr>
         </thead>
         <tbody>
@@ -3759,17 +3825,17 @@ function renderMetaAggTable(aggData, cycle) {
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
             <td class="py-1.5 px-2 text-dark-200 font-medium">${w.label}${dateRange}</td>
             <td class="py-1.5 px-2 text-right">${fmtDollar(w.spend,2)}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
-            <td class="py-1.5 px-2 text-right text-dark-200">${fmt(w.impressions)}</td>
-            <td class="py-1.5 px-2 text-right text-dark-200">${fmt(w.clicks)}</td>
-            <td class="py-1.5 px-2 text-right text-dark-200">${fmt(w.outboundClicks)}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('cpc', linkCPC, cycle)}">${linkCPC > 0 ? fmtDollar(linkCPC,2) : '—'}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
+            <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('frequency', w.frequency, cycle)}">${w.frequency.toFixed(2)}</td>
+            <td class="py-1.5 px-2 text-right text-dark-200 mobile-hide">${fmt(w.impressions)}</td>
+            <td class="py-1.5 px-2 text-right text-dark-200 mobile-hide">${fmt(w.clicks)}</td>
+            <td class="py-1.5 px-2 text-right text-dark-200 mobile-hide">${fmt(w.outboundClicks)}</td>
+            <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpc', linkCPC, cycle)}">${linkCPC > 0 ? fmtDollar(linkCPC,2) : '—'}</td>
+            <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('leads', w.leads, cycle)}">${w.leads}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', w.cpl, cycle)}">${w.leads > 0 ? fmtDollar(w.cpl,2) : '—'}</td>
-            <td class="py-1.5 px-2 text-right ${w.bookings > 0 ? 'metric-cell-green' : ''}">${w.bookings || 0}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('cpa', w.cpa, cycle)}">${w.cpa > 0 ? fmtDollar(w.cpa,0) : '—'}</td>
-            <td class="py-1.5 px-2 text-right ${metricCellClass('cpm', w.cpm, cycle)}">${w.cpm > 0 ? fmtDollar(w.cpm,2) : '—'}</td>
+            <td class="py-1.5 px-2 text-right mobile-hide ${w.bookings > 0 ? 'metric-cell-green' : ''}">${w.bookings || 0}</td>
+            <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpa', w.cpa, cycle)}">${w.cpa > 0 ? fmtDollar(w.cpa,0) : '—'}</td>
+            <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpm', w.cpm, cycle)}">${w.cpm > 0 ? fmtDollar(w.cpm,2) : '—'}</td>
           </tr>`;}).join('')}
         </tbody>
       </table>
@@ -5252,23 +5318,23 @@ function renderCycleEditor() {
         </div>
         <div class="overflow-y-auto max-h-[calc(80vh-80px)] p-5">
           <div class="overflow-x-auto table-scroll-hint">
-            <table class="w-full text-xs min-w-[1100px]">
+            <table class="w-full text-xs min-w-[480px] md:min-w-[1100px]">
               <thead>
                 <tr class="text-dark-300 border-b border-dark-600/40">
                   <th class="text-left px-3 py-2 font-semibold">Cycle</th>
                   <th class="text-left px-3 py-2 font-semibold">Start</th>
                   <th class="text-left px-3 py-2 font-semibold">End</th>
-                  <th class="text-center px-3 py-2 font-semibold">Days</th>
-                  <th class="text-right px-3 py-2 font-semibold">Bk Goal</th>
-                  <th class="text-right px-3 py-2 font-semibold">Greg $</th>
-                  <th class="text-right px-3 py-2 font-semibold">CPA $</th>
-                  <th class="text-right px-3 py-2 font-semibold">Daily $</th>
-                  <th class="text-right px-3 py-2 font-semibold">Monthly $</th>
+                  <th class="text-center px-3 py-2 font-semibold mobile-hide">Days</th>
+                  <th class="text-right px-3 py-2 font-semibold mobile-hide">Bk Goal</th>
+                  <th class="text-right px-3 py-2 font-semibold mobile-hide">Greg $</th>
+                  <th class="text-right px-3 py-2 font-semibold mobile-hide">CPA $</th>
+                  <th class="text-right px-3 py-2 font-semibold mobile-hide">Daily $</th>
+                  <th class="text-right px-3 py-2 font-semibold mobile-hide">Monthly $</th>
                   <th class="text-right px-3 py-2 font-semibold">Leads</th>
                   <th class="text-right px-3 py-2 font-semibold">Booked</th>
                   <th class="text-right px-3 py-2 font-semibold">Spent</th>
-                  <th class="text-center px-3 py-2 font-semibold">GTB</th>
-                  <th class="text-center px-3 py-2 font-semibold">Billed</th>
+                  <th class="text-center px-3 py-2 font-semibold mobile-hide">GTB</th>
+                  <th class="text-center px-3 py-2 font-semibold mobile-hide">Billed</th>
                   <th class="text-center px-3 py-2 font-semibold">Edit</th>
                 </tr>
               </thead>
@@ -5280,17 +5346,17 @@ function renderCycleEditor() {
                   <td class="px-3 py-2 font-semibold text-white">${c.cycle}${ci === cycles.length - 1 ? ' <span class="text-brand-400 text-[9px]">CURRENT</span>' : ''}</td>
                   <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-start" type="date" value="'+(c.cycleStartDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleStartDate || '—')}</td>
                   <td class="px-3 py-2 text-dark-200">${isEditingThis ? '<input id="ce-end" type="date" value="'+(c.cycleEndDate||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-28"/>' : (c.cycleEndDate || '—')}</td>
-                  <td class="px-3 py-2 text-center text-dark-300">${c.cycleStartDate && c.cycleEndDate ? Math.round((parseLocalDate(c.cycleEndDate) - parseLocalDate(c.cycleStartDate)) / 86400000) : '—'}</td>
-                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-bgoal" type="number" value="'+(c.bookedGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.bookedGoal ?? '—')}</td>
-                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-ggoal" type="number" value="'+(c.gregGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.gregGoal ?? '—')}</td>
-                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-cpa" type="number" value="'+(c.cpaGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.cpaGoal ? '$'+c.cpaGoal : '—')}</td>
-                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-daily" type="number" value="'+(c.dailyBudget||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.dailyBudget ? '$'+c.dailyBudget : '—')}</td>
-                  <td class="px-3 py-2 text-right text-dark-200">${isEditingThis ? '<input id="ce-monthly" type="number" value="'+(c.monthlyBudget||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-20 text-right"/>' : (c.monthlyBudget ? '$'+Number(c.monthlyBudget).toLocaleString() : '—')}</td>
+                  <td class="px-3 py-2 text-center text-dark-300 mobile-hide">${c.cycleStartDate && c.cycleEndDate ? Math.round((parseLocalDate(c.cycleEndDate) - parseLocalDate(c.cycleStartDate)) / 86400000) : '—'}</td>
+                  <td class="px-3 py-2 text-right text-dark-200 mobile-hide">${isEditingThis ? '<input id="ce-bgoal" type="number" value="'+(c.bookedGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.bookedGoal ?? '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200 mobile-hide">${isEditingThis ? '<input id="ce-ggoal" type="number" value="'+(c.gregGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.gregGoal ?? '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200 mobile-hide">${isEditingThis ? '<input id="ce-cpa" type="number" value="'+(c.cpaGoal||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.cpaGoal ? '$'+c.cpaGoal : '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200 mobile-hide">${isEditingThis ? '<input id="ce-daily" type="number" value="'+(c.dailyBudget||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-16 text-right"/>' : (c.dailyBudget ? '$'+c.dailyBudget : '—')}</td>
+                  <td class="px-3 py-2 text-right text-dark-200 mobile-hide">${isEditingThis ? '<input id="ce-monthly" type="number" value="'+(c.monthlyBudget||'')+'" class="bg-dark-700 border border-dark-500 rounded px-1.5 py-0.5 text-white text-[11px] w-20 text-right"/>' : (c.monthlyBudget ? '$'+Number(c.monthlyBudget).toLocaleString() : '—')}</td>
                   <td class="px-3 py-2 text-right ${c.totalLeads > 0 ? 'text-white font-medium' : 'text-dark-400'}">${c.totalLeads ?? '—'}</td>
                   <td class="px-3 py-2 text-right ${c.bookedAppts > 0 ? 'text-white font-medium' : 'text-dark-400'}">${c.bookedAppts ?? '—'}</td>
                   <td class="px-3 py-2 text-right text-dark-200">${c.amountSpent ? '$'+Number(c.amountSpent).toLocaleString() : '—'}</td>
-                  <td class="px-3 py-2 text-center"><span class="text-[10px] ${(c.goodToBill||'').toLowerCase()==='yes' ? 'text-emerald-400 font-semibold' : 'text-dark-500'}">${(c.goodToBill||'').toLowerCase()==='yes' ? '✓' : '—'}</span></td>
-                  <td class="px-3 py-2 text-center"><span class="text-[10px] ${(c.billed||'').toLowerCase()==='yes' ? 'text-blue-400 font-semibold' : 'text-dark-500'}">${(c.billed||'').toLowerCase()==='yes' ? '✓' : '—'}</span></td>
+                  <td class="px-3 py-2 text-center mobile-hide"><span class="text-[10px] ${(c.goodToBill||'').toLowerCase()==='yes' ? 'text-emerald-400 font-semibold' : 'text-dark-500'}">${(c.goodToBill||'').toLowerCase()==='yes' ? '✓' : '—'}</span></td>
+                  <td class="px-3 py-2 text-center mobile-hide"><span class="text-[10px] ${(c.billed||'').toLowerCase()==='yes' ? 'text-blue-400 font-semibold' : 'text-dark-500'}">${(c.billed||'').toLowerCase()==='yes' ? '✓' : '—'}</span></td>
                   <td class="px-3 py-2 text-center">
                     ${isEditingThis ? `
                       <button onclick="saveCycleEdit('${esc(acct.name)}',${ci})" class="text-green-400 hover:text-green-300 text-[10px] font-semibold mr-1">Save</button>
@@ -5303,7 +5369,7 @@ function renderCycleEditor() {
                   </td>
                 </tr>`;
                 }).join('')}
-                ${cycles.length === 0 ? '<tr><td colspan="12" class="text-center py-6 text-dark-400">No cycles yet</td></tr>' : ''}
+                ${cycles.length === 0 ? '<tr><td colspan="15" class="text-center py-6 text-dark-400">No cycles yet</td></tr>' : ''}
               </tbody>
             </table>
           </div>
@@ -6500,6 +6566,39 @@ function handleSignOut() {
   document.getElementById('google-signin-btn').innerHTML = '';
   showLoginGate();
 }
+
+// ═══════════════════════════════════════════════
+// MOBILE: Chart resize on window resize / sidebar toggle
+// ═══════════════════════════════════════════════
+(function() {
+  let resizeTimer;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
+      // Resize all active Chart.js instances
+      Chart.helpers?.each?.(Chart.instances, function(chart) { chart.resize(); });
+      // Fallback: iterate if helpers not available
+      if (!Chart.helpers?.each && typeof Chart.instances === 'object') {
+        Object.values(Chart.instances).forEach(function(chart) { try { chart.resize(); } catch(e){} });
+      }
+    }, 250);
+  });
+})();
+
+// ═══════════════════════════════════════════════
+// MOBILE: Scroll focused inputs into view (virtual keyboard)
+// ═══════════════════════════════════════════════
+(function() {
+  if (!/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) return;
+  document.addEventListener('focusin', function(e) {
+    const el = e.target;
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+      setTimeout(function() {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
+  });
+})();
 
 // ═══════════════════════════════════════════════
 // INIT
