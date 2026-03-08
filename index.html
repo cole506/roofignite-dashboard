@@ -3144,6 +3144,8 @@ function renderLeadBreakdown(acct, cycles, forceCycleIdx) {
     byDate[d].push(l);
   });
   const dates = Object.keys(byDate).sort().reverse();
+  // Reverse leads within each day so newest lead appears first
+  dates.forEach(d => byDate[d].reverse());
 
   // Group by week (from all leads, not filtered)
   const weeks = { 'Week 1': [], 'Week 2': [], 'Week 3': [], 'Week 4': [], 'Week 5+': [] };
