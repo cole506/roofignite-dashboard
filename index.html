@@ -1155,6 +1155,17 @@ function parseSheetData(data, podName) {
     }
   }
 
+  // Post-parse fixup: correct account manager from cycle data (cycle rows are source of truth)
+  accounts.forEach(acct => {
+    if (acct.cycles.length > 0) {
+      const cycleMgr = acct.cycles.find(c => c.accountManager && c.accountManager !== acct.manager);
+      if (cycleMgr && cycleMgr.accountManager) {
+        console.log(`[Mgr-PostFix] ${acct.name}: correcting manager "${acct.manager}" → "${cycleMgr.accountManager}" (from cycle data)`);
+        acct.manager = cycleMgr.accountManager;
+      }
+    }
+  });
+
   // Post-parse fixup: scan cycles for ad IDs and propagate to parent accounts
   accounts.forEach(acct => {
     if (!acct.adAccountId) {
