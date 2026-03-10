@@ -4941,14 +4941,14 @@ function renderSettingsTab(managers) {
         <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/20 flex items-center justify-center text-sm">🔔</span>
         <div>
           <h3 class="text-base font-bold text-white">Notification Toggles</h3>
-          <p class="text-dark-400 text-xs mt-0.5">Enable or disable Daily Reports and Cycle End Warnings per manager</p>
+          <p class="text-dark-400 text-xs mt-0.5">Enable or disable Automatic Accounts Summary (Mon. &amp; Fri.) and Cycle End Warnings per manager</p>
         </div>
       </div>
 
       <div class="space-y-3 mt-4">
         <div class="grid grid-cols-[1fr_100px_100px] gap-2 px-3">
           <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider">Manager</span>
-          <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">Daily Reports</span>
+          <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">Acct Summary</span>
           <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">Cycle Warnings</span>
         </div>
         ${managers.map(m => {
@@ -5088,7 +5088,7 @@ async function toggleSlackNotify(manager, type, enabled) {
       if (enabled) { delete slackConfigCache.notifyToggles.warnings[manager]; }
       else { slackConfigCache.notifyToggles.warnings[manager] = false; }
     }
-    showToast(`${type === 'reports' ? 'Daily Reports' : 'Cycle Warnings'} ${enabled ? 'enabled' : 'disabled'} for ${manager}`, 'success');
+    showToast(`${type === 'reports' ? 'Acct Summary (Mon. & Fri.)' : 'Cycle Warnings'} ${enabled ? 'enabled' : 'disabled'} for ${manager}`, 'success');
     renderAdminView();
   } else {
     showToast('Failed to update toggle', 'error');
