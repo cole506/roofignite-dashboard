@@ -1010,6 +1010,9 @@ function parseSheetData(data, podName) {
       if (!knownSubSections.includes(cellATrimmed.toLowerCase())) {
         currentMgr = cellATrimmed;
         console.log(`[${podName}] Manager set from section header: "${cellATrimmed}"`);
+      } else {
+        // Sub-section (Paused, Winter, etc.) — reset manager so orphan rows show as Unassigned
+        currentMgr = '';
       }
       continue;
     }
@@ -4868,7 +4871,8 @@ function renderAdminView() {
 // ═══════════════════════════════════════════════
 function renderSettingsTab(managers) {
   const hasGAS = !!APPS_SCRIPT_URL;
-  const cfg = slackConfigCache || { webhooks: {}, billingAdmin: '' };
+  const cfg = slackConfigCache || { webhooks: {}, billingAdmin: '', notifyToggles: { reports: {}, warnings: {} } };
+  const toggles = (cfg.notifyToggles) || { reports: {}, warnings: {} };
   const savedBillingAdmin = localStorage.getItem('roofignite_billing_admin') || cfg.billingAdmin || (CONFIG.SLACK && CONFIG.SLACK.DEFAULT_BILLING_ADMIN) || '';
 
   return `
@@ -4929,6 +4933,45 @@ function renderSettingsTab(managers) {
         </button>
         <p class="text-[10px] text-dark-500 max-w-xs text-right">Account managers receive <span class="text-green-400">Billed</span> &amp; <span class="text-red-400">Failed Payment</span> notifications on their own webhook.</p>
       </div>
+    </div>
+
+    <!-- Notification Toggles -->
+    <div class="glass rounded-2xl p-6 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/20 flex items-center justify-center text-sm">🔔</span>
+        <div>
+          <h3 class="text-base font-bold text-white">Notification Toggles</h3>
+          <p class="text-dark-400 text-xs mt-0.5">Enable or disable Daily Reports and Cycle End Warnings per manager</p>
+        </div>
+      </div>
+
+      <div class="space-y-3 mt-4">
+        <div class="grid grid-cols-[1fr_100px_100px] gap-2 px-3">
+          <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider">Manager</span>
+          <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">Daily Reports</span>
+          <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">Cycle Warnings</span>
+        </div>
+        ${managers.map(m => {
+          const reportsOn = toggles.reports[m] !== false;
+          const warningsOn = toggles.warnings[m] !== false;
+          return `
+          <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 grid grid-cols-[1fr_100px_100px] gap-2 items-center">
+            <span class="text-sm font-medium text-white">${m}</span>
+            <div class="flex justify-center">
+              <button onclick="toggleSlackNotify('${m}','reports',${!reportsOn})" class="relative w-11 h-6 rounded-full transition-colors duration-200 ${reportsOn ? 'bg-green-500' : 'bg-dark-600'}" title="${reportsOn ? 'Enabled' : 'Disabled'}">
+                <span class="absolute top-0.5 ${reportsOn ? 'left-[22px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all duration-200"></span>
+              </button>
+            </div>
+            <div class="flex justify-center">
+              <button onclick="toggleSlackNotify('${m}','warnings',${!warningsOn})" class="relative w-11 h-6 rounded-full transition-colors duration-200 ${warningsOn ? 'bg-green-500' : 'bg-dark-600'}" title="${warningsOn ? 'Enabled' : 'Disabled'}">
+                <span class="absolute top-0.5 ${warningsOn ? 'left-[22px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all duration-200"></span>
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <p class="text-[10px] text-dark-500 mt-3">When disabled, the script will skip Slack messages for that manager. Default is <span class="text-green-400">enabled</span> for all.</p>
     </div>
 
     <!-- Apps Script Connection -->
@@ -5029,6 +5072,27 @@ async function saveBillingAdmin(name) {
     await writeToSheet('saveBillingAdmin', { name: name });
   }
   showToast(`Billing admin set to ${name || 'none'}`, 'success');
+}
+
+async function toggleSlackNotify(manager, type, enabled) {
+  if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
+  const result = await writeToSheet('setSlackNotifyToggle', { manager, type, enabled });
+  if (result.ok) {
+    // Update local cache immediately for instant UI feedback
+    if (!slackConfigCache) slackConfigCache = { webhooks: {}, billingAdmin: '', notifyToggles: { reports: {}, warnings: {} } };
+    if (!slackConfigCache.notifyToggles) slackConfigCache.notifyToggles = { reports: {}, warnings: {} };
+    if (type === 'reports') {
+      if (enabled) { delete slackConfigCache.notifyToggles.reports[manager]; }
+      else { slackConfigCache.notifyToggles.reports[manager] = false; }
+    } else {
+      if (enabled) { delete slackConfigCache.notifyToggles.warnings[manager]; }
+      else { slackConfigCache.notifyToggles.warnings[manager] = false; }
+    }
+    showToast(`${type === 'reports' ? 'Daily Reports' : 'Cycle Warnings'} ${enabled ? 'enabled' : 'disabled'} for ${manager}`, 'success');
+    renderAdminView();
+  } else {
+    showToast('Failed to update toggle', 'error');
+  }
 }
 
 function renderNewManagerForm() {
@@ -6608,6 +6672,3 @@ function handleSignOut() {
 // INIT
 // ═══════════════════════════════════════════════
 checkExistingSession();
-</script>
-</body>
-</html>
