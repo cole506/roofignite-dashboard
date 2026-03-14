@@ -2881,67 +2881,49 @@ function renderAccountDetail(name, adAccountId) {
 
         <div class="glass rounded-xl p-4">
           <div class="flex items-center justify-between mb-2">
-            <div class="text-dark-400 text-[10px] uppercase tracking-wider">Greg's Lead CPL Goal</div>
-            <button onclick="document.getElementById('greg-goal-edit').classList.toggle('hidden')" class="text-[9px] text-dark-500 hover:text-brand-400 transition-colors" title="Edit Greg Goal">⚙️ Adjust</button>
+            <div class="text-dark-400 text-[10px] uppercase tracking-wider">Greg Guardrails</div>
+            <button onclick="document.getElementById('greg-settings-edit').classList.toggle('hidden')" class="text-[9px] text-dark-500 hover:text-brand-400 transition-colors" title="Edit Greg Settings">⚙️ Adjust</button>
           </div>
-          ${gregCPL !== null ? `
-            <div class="text-xl font-bold text-white">${fmtDollar(gregCPL,2)}</div>
-            <div class="text-xs text-dark-400 mt-1">Booking Goal ${fmtDollar(cpaGoal,2)} × ${(Math.min(0.60,Math.max(0.375,l2b))*100).toFixed(1)}% L2B</div>
-            ${(() => {
-              const currentCPL = (activeCyc.amountSpent && activeCyc.totalLeads && activeCyc.totalLeads > 0) ? activeCyc.amountSpent / activeCyc.totalLeads : null;
-              return currentCPL !== null ? `<div class="text-xs mt-2 ${currentCPL <= gregCPL ? 'metric-good' : 'metric-bad'}">Current CPL: ${fmtDollar(currentCPL,2)} ${currentCPL <= gregCPL ? '✓ under goal' : '⚠ over goal'}</div>` : '';
-            })()}
-          ` : '<div class="text-dark-400 text-sm mt-2">Need CPA goal + L2B data</div>'}
-          <div id="greg-goal-edit" class="hidden mt-3 pt-3 border-t border-dark-600/40">
-            <label class="text-[10px] text-dark-500">Greg Goal (Booked Appointments) — Override</label>
-            <div class="text-[9px] text-dark-400 mt-0.5 mb-1.5">This is a <strong class="text-dark-300">booked appointment target</strong> used to squeeze performance. If an account is projected well above its normal goal, raise this to judge ad sets against the higher bar. Greg derives a lead CPL threshold from this value × the L2B rate.</div>
-            <div class="flex gap-2">
-              <input id="qe-greg-goal" type="number" step="1" value="${activeCyc ? activeCyc.gregGoal||'' : ''}" class="flex-1 bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" placeholder="e.g. 40" />
-              <button onclick="saveGregGoal('${esc(name)}','${activeCyc ? esc(activeCyc.cycle) : ''}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold text-white bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 transition-all text-red-300">Save</button>
-            </div>
-            <div class="text-[9px] text-red-400/70 mt-1">⚠ DANGEROUS — Setting this too high will aggressively pause underperforming ad sets. Only raise when an account is clearly outperforming its cycle goal.</div>
-          </div>
-        </div>
-
-        <div class="glass rounded-xl p-4">
-          <div class="flex items-center justify-between mb-2">
-            <div class="text-dark-400 text-[10px] uppercase tracking-wider">Greg CPC Controls</div>
-            <button onclick="document.getElementById('greg-cpc-edit').classList.toggle('hidden')" class="text-[9px] text-dark-500 hover:text-brand-400 transition-colors" title="Edit CPC Settings">⚙️ Adjust</button>
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <div class="text-[10px] text-dark-500">CPC Median</div>
-              <div class="text-lg font-bold text-white">${activeCyc.cpcMedian ? fmtDollar(activeCyc.cpcMedian, 2) : '—'}</div>
-              <div class="text-[9px] text-dark-500 mt-0.5">Auto-set from Meta data</div>
-            </div>
-            <div>
-              <div class="text-[10px] text-dark-500">CPC Multiplier</div>
-              <div class="text-lg font-bold text-white">${activeCyc.cpcMultiplier ? activeCyc.cpcMultiplier + '×' : '1.4× (default)'}</div>
-              <div class="text-[9px] text-dark-500 mt-0.5">Pause if CPC ≥ median × this</div>
-            </div>
-          </div>
-          ${activeCyc.cpcMedian ? (() => {
-            const cappedMedian = Math.min(activeCyc.cpcMedian, 6);
-            const mult = activeCyc.cpcMultiplier || 1.4;
-            const limit = cappedMedian * mult;
+          ${(() => {
+            const currentCPL = (activeCyc.amountSpent && activeCyc.totalLeads && activeCyc.totalLeads > 0) ? activeCyc.amountSpent / activeCyc.totalLeads : null;
+            const cpcMed = activeCyc.cpcMedian || null;
+            const cpcMult = activeCyc.cpcMultiplier || 1.4;
+            const cappedMed = cpcMed ? Math.min(cpcMed, 6) : null;
+            const maxCPC = cappedMed ? cappedMed * cpcMult : null;
             const currentCPC = activeCyc.linkCPC || null;
-            return '<div class="text-[10px] text-dark-400 mt-2 pt-2 border-t border-dark-600/40">' +
-              'Pause limit: ' + fmtDollar(limit, 2) + ' (' + mult + '× ' + fmtDollar(cappedMedian, 2) + (activeCyc.cpcMedian > 6 ? ', capped from ' + fmtDollar(activeCyc.cpcMedian, 2) : '') + ')' +
-              (currentCPC ? '<br>Current CPC: <span class="' + (currentCPC < limit ? 'metric-good' : 'metric-bad') + '">' + fmtDollar(currentCPC, 2) + ' ' + (currentCPC < limit ? '✓ under limit' : '⚠ over limit') + '</span>' : '') +
+            return '<div class="grid grid-cols-2 gap-x-4 gap-y-2">' +
+              '<div>' +
+                '<div class="text-[10px] text-dark-500">Lead CPL Goal</div>' +
+                '<div class="text-lg font-bold text-white">' + (gregCPL !== null ? fmtDollar(gregCPL,2) : '—') + '</div>' +
+                (gregCPL !== null ? '<div class="text-[9px] text-dark-500">' + fmtDollar(cpaGoal,2) + ' × ' + (Math.min(0.60,Math.max(0.375,l2b))*100).toFixed(1) + '% L2B</div>' : '') +
+                (currentCPL !== null && gregCPL !== null ? '<div class="text-[10px] mt-1 ' + (currentCPL <= gregCPL ? 'metric-good' : 'metric-bad') + '">Now: ' + fmtDollar(currentCPL,2) + ' ' + (currentCPL <= gregCPL ? '✓' : '⚠') + '</div>' : '') +
+              '</div>' +
+              '<div>' +
+                '<div class="text-[10px] text-dark-500">CPC Median</div>' +
+                '<div class="text-lg font-bold text-white">' + (cpcMed ? fmtDollar(cpcMed,2) : '—') + '</div>' +
+                '<div class="text-[9px] text-dark-500">× ' + cpcMult + ' = ' + (maxCPC ? fmtDollar(maxCPC,2) + ' max' : '—') + '</div>' +
+                (currentCPC && maxCPC ? '<div class="text-[10px] mt-1 ' + (currentCPC < maxCPC ? 'metric-good' : 'metric-bad') + '">Now: ' + fmtDollar(currentCPC,2) + ' ' + (currentCPC < maxCPC ? '✓' : '⚠') + '</div>' : '') +
+              '</div>' +
             '</div>';
-          })() : ''}
-          <div id="greg-cpc-edit" class="hidden mt-3 pt-3 border-t border-dark-600/40">
-            <div class="space-y-3">
-              <div>
-                <label class="text-[10px] text-dark-500">CPC Multiplier Override</label>
-                <div class="text-[9px] text-dark-400 mt-0.5 mb-1.5">How strict CPC judgement is. Default 1.4×. Video ads always use 2×. Lower = stricter.</div>
-                <div class="flex gap-2">
-                  <input id="qe-cpc-mult" type="number" step="0.1" min="1" max="3" value="${activeCyc.cpcMultiplier || ''}" class="flex-1 bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" placeholder="1.4 (default)" />
-                  <button onclick="saveCpcSettings('${esc(name)}','${activeCyc ? esc(activeCyc.cycle) : ''}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold text-white bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 transition-all">Save</button>
-                </div>
+          })()}
+          <div id="greg-settings-edit" class="hidden mt-3 pt-3 border-t border-dark-600/40 space-y-3">
+            <div>
+              <label class="text-[10px] text-dark-500">Greg Goal Override (Booked Appointments)</label>
+              <div class="text-[9px] text-dark-400 mt-0.5 mb-1.5">Raise to tighten CPL threshold. Greg derives lead CPL from this × L2B rate.</div>
+              <div class="flex gap-2">
+                <input id="qe-greg-goal" type="number" step="1" value="${activeCyc ? activeCyc.gregGoal||'' : ''}" class="flex-1 bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" placeholder="e.g. 40" />
+                <button onclick="saveGregGoal('${esc(name)}','${activeCyc ? esc(activeCyc.cycle) : ''}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold text-white bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 transition-all text-red-300">Save</button>
+              </div>
+              <div class="text-[9px] text-red-400/70 mt-1">⚠ Setting too high will aggressively pause ads.</div>
+            </div>
+            <div>
+              <label class="text-[10px] text-dark-500">CPC Multiplier</label>
+              <div class="text-[9px] text-dark-400 mt-0.5 mb-1.5">Default 1.4×. Video ads always use 2×. Lower = stricter.</div>
+              <div class="flex gap-2">
+                <input id="qe-cpc-mult" type="number" step="0.1" min="1" max="3" value="${activeCyc.cpcMultiplier || ''}" class="flex-1 bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" placeholder="1.4 (default)" />
+                <button onclick="saveCpcSettings('${esc(name)}','${activeCyc ? esc(activeCyc.cycle) : ''}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold text-white bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 transition-all">Save</button>
               </div>
             </div>
-            <div class="text-[9px] text-dark-500 mt-2">CPC Median is auto-calculated by Greg from Meta data. Use "Update CPC Medians" in the Greg menu to refresh.</div>
           </div>
         </div>
       </div>`;
