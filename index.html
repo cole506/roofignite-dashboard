@@ -2893,16 +2893,16 @@ function renderAccountDetail(name, adAccountId) {
             const currentCPC = activeCyc.linkCPC || null;
             return '<div class="grid grid-cols-2 gap-x-4 gap-y-2">' +
               '<div>' +
-                '<div class="text-[10px] text-dark-500">Lead CPL Goal</div>' +
-                '<div class="text-lg font-bold text-white">' + (gregCPL !== null ? fmtDollar(gregCPL,2) : '—') + '</div>' +
-                (gregCPL !== null ? '<div class="text-[9px] text-dark-500">' + fmtDollar(cpaGoal,2) + ' × ' + (Math.min(0.60,Math.max(0.375,l2b))*100).toFixed(1) + '% L2B</div>' : '') +
-                (currentCPL !== null && gregCPL !== null ? '<div class="text-[10px] mt-1 ' + (currentCPL <= gregCPL ? 'metric-good' : 'metric-bad') + '">Now: ' + fmtDollar(currentCPL,2) + ' ' + (currentCPL <= gregCPL ? '✓' : '⚠') + '</div>' : '') +
+                '<div class="text-xs text-dark-400">Lead CPL Goal</div>' +
+                '<div class="text-xl font-bold text-white">' + (gregCPL !== null ? fmtDollar(gregCPL,2) : '—') + '</div>' +
+                (gregCPL !== null ? '<div class="text-[11px] text-dark-400">' + fmtDollar(cpaGoal,2) + ' × ' + (Math.min(0.60,Math.max(0.375,l2b))*100).toFixed(1) + '% L2B</div>' : '') +
+                (currentCPL !== null && gregCPL !== null ? '<div class="text-xs mt-1 ' + (currentCPL <= gregCPL ? 'metric-good' : 'metric-bad') + '">Now: ' + fmtDollar(currentCPL,2) + ' ' + (currentCPL <= gregCPL ? '✓' : '⚠') + '</div>' : '') +
               '</div>' +
               '<div>' +
-                '<div class="text-[10px] text-dark-500">CPC Median</div>' +
-                '<div class="text-lg font-bold text-white">' + (cpcMed ? fmtDollar(cpcMed,2) : '—') + '</div>' +
-                '<div class="text-[9px] text-dark-500">× ' + cpcMult + ' = ' + (maxCPC ? fmtDollar(maxCPC,2) + ' max' : '—') + '</div>' +
-                (currentCPC && maxCPC ? '<div class="text-[10px] mt-1 ' + (currentCPC < maxCPC ? 'metric-good' : 'metric-bad') + '">Now: ' + fmtDollar(currentCPC,2) + ' ' + (currentCPC < maxCPC ? '✓' : '⚠') + '</div>' : '') +
+                '<div class="text-xs text-dark-400">CPC Median</div>' +
+                '<div class="text-xl font-bold text-white">' + (cpcMed ? fmtDollar(cpcMed,2) : '—') + '</div>' +
+                '<div class="text-[11px] text-dark-400">× ' + cpcMult + ' = ' + (maxCPC ? fmtDollar(maxCPC,2) + ' max' : '—') + '</div>' +
+                (currentCPC && maxCPC ? '<div class="text-xs mt-1 ' + (currentCPC < maxCPC ? 'metric-good' : 'metric-bad') + '">Now: ' + fmtDollar(currentCPC,2) + ' ' + (currentCPC < maxCPC ? '✓' : '⚠') + '</div>' : '') +
               '</div>' +
             '</div>';
           })()}
