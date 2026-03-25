@@ -92,6 +92,12 @@ tailwind.config = {
   .scale-in { animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
   @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 
+  @keyframes progressPulse {
+    0% { opacity: 0.4; transform: translateX(-60%); }
+    50% { opacity: 1; transform: translateX(0); }
+    100% { opacity: 0.4; transform: translateX(60%); }
+  }
+
   @keyframes shimmer {
     0% { background-position: -200% 0; }
     100% { background-position: 200% 0; }
@@ -6468,13 +6474,69 @@ function showToast(message, type = 'info') {
 
 // ═══ Google Apps Script Write-Back ═══
 
+// ═══ Blocking progress modal for write operations ═══
+const WRITE_ACTION_LABELS = {
+  updateCycle:          'Saving cycle changes',
+  addCycle:             'Adding new cycle',
+  createClient:        'Creating new client',
+  updateManager:        'Updating manager',
+  transferAccount:      'Transferring account',
+  toggleStatus:         'Updating account status',
+  updateBilling:        'Saving billing changes',
+  setManagerGregMode:   'Updating Greg mode',
+  setAccountGregMode:   'Updating Greg mode',
+  addManager:           'Adding manager',
+  deleteManager:        'Removing manager',
+  saveSlackWebhook:     'Saving Slack webhook',
+  testSlackWebhook:     'Testing Slack webhooks',
+  saveBillingAdmin:     'Saving billing admin',
+  setSlackNotifyToggle: 'Updating notification settings',
+  createPod:            'Creating new pod',
+  deletePod:            'Deleting pod',
+};
+// Read-only actions that should NOT show the blocking modal
+const READ_ONLY_ACTIONS = ['getSheetList', 'getSlackConfig', 'getSlackNotifyToggles', 'getPodRegistry'];
+
+function showWriteProgressModal_(action) {
+  const label = WRITE_ACTION_LABELS[action] || 'Saving changes';
+  const overlay = document.createElement('div');
+  overlay.id = 'write-progress-modal';
+  overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center';
+  overlay.style.cssText = 'background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
+  overlay.innerHTML = `
+    <div class="glass rounded-2xl p-8 max-w-sm w-full mx-4 text-center scale-in" style="border:1px solid rgba(249,115,22,0.2);box-shadow:0 0 40px rgba(249,115,22,0.1);">
+      <div class="relative mx-auto mb-5" style="width:48px;height:48px;">
+        <div style="width:48px;height:48px;border:3px solid rgba(100,116,139,0.2);border-top-color:#f97316;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+      </div>
+      <p class="text-white text-sm font-semibold mb-1">${label}...</p>
+      <p class="text-dark-400 text-xs">Syncing with Google Sheets — do not close this page</p>
+      <div class="mt-4 w-full bg-dark-700/50 rounded-full h-1 overflow-hidden">
+        <div class="h-full rounded-full" style="background:linear-gradient(90deg,#f97316,#fb923c);animation:progressPulse 1.5s ease-in-out infinite;width:100%;"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function hideWriteProgressModal_() {
+  const m = document.getElementById('write-progress-modal');
+  if (m) m.remove();
+}
+
 async function writeToSheet(action, data, opts = {}) {
   const silent = opts.silent || false; // if true, don't show toasts (caller will handle)
+  const isReadOnly = READ_ONLY_ACTIONS.includes(action);
+  const showModal = !silent && !isReadOnly && !!APPS_SCRIPT_URL;
+
   if (!APPS_SCRIPT_URL) {
     console.log('[GAS] No Apps Script URL configured. Action:', action, 'Data:', data);
     if (!silent) showToast('⚠️ Apps Script not connected — changes only saved locally', 'warning');
     return { ok: false, error: 'No Apps Script URL configured' };
   }
+
+  let modal = null;
+  if (showModal) modal = showWriteProgressModal_(action);
 
   try {
     // Use text/plain to avoid CORS preflight, GAS will still parse JSON
@@ -6498,6 +6560,8 @@ async function writeToSheet(action, data, opts = {}) {
       // If response isn't readable (opaque), assume success if no network error
     }
 
+    if (modal) hideWriteProgressModal_();
+
     if (result.ok) {
       console.log('[GAS] Write success:', action);
       return result;
@@ -6509,6 +6573,7 @@ async function writeToSheet(action, data, opts = {}) {
     }
 
   } catch (e) {
+    if (modal) hideWriteProgressModal_();
     console.error('[GAS] Write failed:', action, e);
     if (!silent) showToast(`❌ Could not reach Apps Script — ${e.message}`, 'error');
     return { ok: false, error: e.message };
