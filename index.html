@@ -1903,11 +1903,12 @@ function navigate(view, param) {
   closeSidebar();
 
   // Clean up any open modals (prevents orphaned overlays)
-  document.querySelectorAll('#quick-edit-modal, #write-progress-modal, .fixed.z-\\[200\\], .fixed.z-\\[250\\]').forEach(m => m.remove());
-  // Also catch generic modals created with onclick close
-  document.querySelectorAll('.fixed.inset-0.bg-black\\/60').forEach(m => {
-    // Don't remove the write-progress modal (z-999) — it's protecting an in-flight save
-    if (!m.id || m.id !== 'write-progress-modal') m.remove();
+  document.querySelectorAll('.fixed.inset-0').forEach(m => {
+    // Don't remove the write-progress modal — it's protecting an in-flight save
+    if (m.id === 'write-progress-modal') return;
+    // Don't remove the sidebar overlay or login screen
+    if (m.id === 'sidebar-overlay' || m.id === 'login-screen') return;
+    m.remove();
   });
 
   // Flush any pending debounced billing notes save
