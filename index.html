@@ -3824,8 +3824,8 @@ async function toggleBillingField(accountName, cycleName, field) {
   setBillingStatus(accountName, cycleName, field, current === 'yes' ? '' : 'Yes');
 }
 
-let _billingNotesTimeout = null;
-let _billingNotesPendingSave = null; // stored so navigate() can flush it
+var _billingNotesTimeout = null;
+var _billingNotesPendingSave = null; // stored so navigate() can flush it
 async function updateBillingNotes(accountName, cycleName, notes) {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct) return;
