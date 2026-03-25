@@ -527,7 +527,7 @@ tailwind.config = {
         <div id="data-status" class="w-2 h-2 rounded-full bg-yellow-500 pulse"></div>
         <span id="data-status-text" class="font-medium">Connecting…</span>
       </div>
-      <button onclick="refreshData()" class="mt-3 w-full text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1.5 justify-center py-1.5 rounded-lg hover:bg-brand-500/5 transition-all font-medium">
+      <button id="refresh-data-btn" onclick="refreshData()" class="mt-3 w-full text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1.5 justify-center py-1.5 rounded-lg hover:bg-brand-500/5 transition-all font-medium">
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
         Refresh Data
       </button>
@@ -1428,208 +1428,57 @@ async function loadAllData(opts) {
   }
 }
 
+let _refreshBusy = false;
+let _lastRefreshTime = null;
+
 async function refreshData() {
-  document.getElementById('data-status').className = 'w-2 h-2 rounded-full bg-yellow-500 pulse';
-  document.getElementById('data-status-text').textContent = 'Refreshing...';
-  await loadAllData({ silent: true });
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  SMART LIVE REFRESH — silent poll + diff + surgical re-render
-// ═══════════════════════════════════════════════════════════════
-//
-//  Instead of calling loadAllData() (which re-renders everything,
-//  resets scroll, flashes the page), this system:
-//    1. Fetches fresh data silently in the background
-//    2. Computes a fingerprint of the old vs new data
-//    3. Only re-renders the CURRENT VIEW if data actually changed
-//    4. Preserves scroll position throughout
-//    5. Shows a subtle dot pulse while fetching, no loading screen
-//
-let _liveRefreshTimer = null;
-let _liveRefreshBusy = false;
-
-function startLiveRefresh(intervalMs) {
-  if (_liveRefreshTimer) clearInterval(_liveRefreshTimer);
-  const interval = intervalMs || 90000; // default 90 seconds
-  console.log(`[LiveRefresh] Started — polling every ${interval / 1000}s`);
-
-  _liveRefreshTimer = setInterval(async () => {
-    if (_liveRefreshBusy) {
-      console.log('[LiveRefresh] Skipped — previous fetch still running');
-      return;
-    }
-    try {
-      _liveRefreshBusy = true;
-      await liveRefreshCycle();
-    } catch (e) {
-      console.warn('[LiveRefresh] Error:', e);
-    } finally {
-      _liveRefreshBusy = false;
-    }
-  }, interval);
-}
-
-function stopLiveRefresh() {
-  if (_liveRefreshTimer) {
-    clearInterval(_liveRefreshTimer);
-    _liveRefreshTimer = null;
-    console.log('[LiveRefresh] Stopped');
-  }
-}
-
-// Build a quick fingerprint string for an array of objects
-// Used to detect if data actually changed without deep comparison
-function dataFingerprint(arr) {
-  if (!arr || !arr.length) return '0';
-  // Hash key fields that change most often: billing, goals, leads, spend
-  let hash = arr.length.toString();
-  for (let i = 0; i < arr.length; i++) {
-    const o = arr[i];
-    hash += '|' + (o.name || o.account || '') +
-            (o.bookedAppts || '') +
-            (o.amountSpent || '') +
-            (o.goodToBill || '') +
-            (o.billed || '') +
-            (o.billingNotes || '') +
-            (o.dailyBudget || '') +
-            (o.monthlyBudget || '') +
-            (o.totalLeads || '') +
-            (o.manager || o.accountManager || '') +
-            (o.isPaused || '');
-  }
-  return hash;
-}
-
-async function liveRefreshCycle() {
-  console.log('[LiveRefresh] Fetching fresh data…');
-
-  // Show subtle status indicator (yellow dot, no loading screen)
+  if (_refreshBusy) { showToast('Refresh already in progress', 'info'); return; }
+  _refreshBusy = true;
   const statusDot = document.getElementById('data-status');
   const statusText = document.getElementById('data-status-text');
+  const refreshBtn = document.getElementById('refresh-data-btn');
   if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-yellow-500 pulse';
+  if (statusText) statusText.textContent = 'Refreshing...';
+  if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.style.opacity = '0.5'; }
 
-  // Snapshot old fingerprints BEFORE fetching
-  const oldAccountsFP = dataFingerprint(allAccounts);
-  const oldCyclesFP = dataFingerprint(allCycles);
-  const oldLeadsFP = dataFingerprint(allLeads);
+  // Preserve scroll and view state
+  const mainContent = document.querySelector('.main-content');
+  const scrollTop = mainContent ? mainContent.scrollTop : 0;
+  const savedNav = JSON.parse(localStorage.getItem('nav_state') || 'null');
 
   try {
-    // ── Fetch all data silently (same as loadAllData but no UI work) ──
-    const podNames = Object.keys(SHEETS);
-    const [podResults, leadResults, adIdMaps] = await Promise.all([
-      Promise.all(podNames.map(name => fetchSheetData(name, SHEETS[name]))),
-      Promise.all([
-        fetchLeadData('ALL_ROOF', LEAD_SHEETS['ALL_ROOF']),
-        fetchLeadData('ALL_CiGN', LEAD_SHEETS['ALL_CiGN'])
-      ]),
-      Promise.all(podNames.map(name => fetchAdIdMapCSV(SHEETS[name])))
-    ]);
+    await loadAllData({ silent: true });
 
-    const newAccounts = podResults.flatMap(r => r.accounts);
-    const newCycles = podResults.flatMap(r => r.cycles);
-    const newLeads = leadResults.flat();
+    // Restore scroll position after re-render
+    if (mainContent) requestAnimationFrame(() => { mainContent.scrollTop = scrollTop; });
 
-    // Merge CSV-derived ad account IDs
-    const combinedAdIdMap = new Map(adIdMaps.flatMap(m => [...m]));
-    newAccounts.forEach(acct => {
-      if (!acct.adAccountId) {
-        const csvId = combinedAdIdMap.get(acct.name);
-        if (csvId) acct.adAccountId = csvId;
-      }
-      (acct.cycles || []).forEach(c => {
-        if (!c.adAccountId && acct.adAccountId) c.adAccountId = acct.adAccountId;
-      });
-    });
-    newCycles.forEach(c => {
-      if (!c.adAccountId) {
-        const csvId = combinedAdIdMap.get(c.account);
-        if (csvId) c.adAccountId = csvId;
-      }
-    });
-
-    // ── Compare fingerprints ──
-    const newAccountsFP = dataFingerprint(newAccounts);
-    const newCyclesFP = dataFingerprint(newCycles);
-    const newLeadsFP = dataFingerprint(newLeads);
-
-    const accountsChanged = (newAccountsFP !== oldAccountsFP);
-    const cyclesChanged = (newCyclesFP !== oldCyclesFP);
-    const leadsChanged = (newLeadsFP !== oldLeadsFP);
-    const anythingChanged = accountsChanged || cyclesChanged || leadsChanged;
-
-    if (!anythingChanged) {
-      console.log('[LiveRefresh] No changes detected — skipping re-render');
-      if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-green-500';
-      return;
-    }
-
-    console.log(`[LiveRefresh] Changes detected — accounts:${accountsChanged} cycles:${cyclesChanged} leads:${leadsChanged}`);
-
-    // ── Swap in new data ──
-    allAccounts = newAccounts;
-    allCycles = newCycles;
-    allLeads = newLeads;
-
-    // Rebuild managerPodMap
-    managerPodMap = {};
-    allAccounts.forEach(a => {
-      if (a.manager && a.pod && !managerPodMap[a.manager]) {
-        managerPodMap[a.manager] = a.pod;
-      }
-    });
-
-    // Update status bar count
-    if (statusText) statusText.textContent = `${allAccounts.length} accounts · ${allLeads.length} leads`;
-
-    // ── Surgical re-render: only re-render the CURRENT view, preserve scroll ──
-    const mainContent = document.querySelector('.main-content');
-    const scrollTop = mainContent ? mainContent.scrollTop : 0;
-
-    const savedNav = JSON.parse(localStorage.getItem('nav_state') || 'null');
-    const view = currentView || (savedNav && savedNav.view) || 'dashboard';
-
-    switch (view) {
-      case 'dashboard':    renderDashboard(); break;
-      case 'pod':          if (currentPod) renderPodView(currentPod); break;
-      case 'manager':      if (currentManager) renderManagerView(currentManager); break;
-      case 'account':
-        if (savedNav && savedNav.param) renderAccountDetail(savedNav.param.name, savedNav.param.adAccountId);
-        break;
-      case 'billing':      renderBilling(); break;
-      case 'admin':        renderAdminView(); break;
-    }
-
-    // Restore scroll position (prevents jump to top)
-    if (mainContent) mainContent.scrollTop = scrollTop;
-
-    // Update sidebar badges
-    renderSidebarManagers();
-    getManagers().forEach(mgr => {
-      const alerts = getAlertAccountsForManager(mgr);
-      const key = mgr.toLowerCase().replace(/\s+/g, '-');
-      const badge = document.getElementById('alert-badge-' + key);
-      if (badge && alerts.length > 0) {
-        badge.textContent = alerts.length;
-        badge.classList.remove('hidden');
-      }
-    });
-
-    console.log('[LiveRefresh] View re-rendered successfully');
-
+    _lastRefreshTime = new Date();
+    if (statusText) statusText.textContent = `${allAccounts.length} accounts · ${allLeads.length} leads · just now`;
+    showToast('Data refreshed', 'success');
   } catch (e) {
-    console.warn('[LiveRefresh] Fetch error (will retry next cycle):', e.message);
+    console.warn('[Refresh] Error:', e);
+    if (statusText) statusText.textContent = 'Refresh failed';
+    showToast('Refresh failed — try again', 'error');
+  } finally {
+    _refreshBusy = false;
+    if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-green-500';
+    if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.style.opacity = '1'; }
   }
-
-  // Restore green status dot
-  if (statusDot) statusDot.className = 'w-2 h-2 rounded-full bg-green-500';
 }
 
-// Legacy alias — keeps old callers working
-let _autoRefreshTimer = null;
-function startAutoRefresh(intervalMs) {
-  startLiveRefresh(intervalMs);
-}
+// Update "last refreshed" timestamp every minute
+setInterval(() => {
+  if (!_lastRefreshTime) return;
+  const statusText = document.getElementById('data-status-text');
+  if (!statusText) return;
+  const mins = Math.floor((Date.now() - _lastRefreshTime.getTime()) / 60000);
+  const ago = mins < 1 ? 'just now' : mins === 1 ? '1 min ago' : `${mins} min ago`;
+  statusText.textContent = `${allAccounts.length} accounts · ${allLeads.length} leads · ${ago}`;
+}, 60000);
+
+// Legacy stubs — prevent errors if anything still references these
+function startLiveRefresh() {}
+function stopLiveRefresh() {}
 
 // ═══════════════════════════════════════════════
 // HELPERS
@@ -2052,6 +1901,23 @@ function closeSidebar() {
 // ═══════════════════════════════════════════════
 function navigate(view, param) {
   closeSidebar();
+
+  // Clean up any open modals (prevents orphaned overlays)
+  document.querySelectorAll('#quick-edit-modal, #write-progress-modal, .fixed.z-\\[200\\], .fixed.z-\\[250\\]').forEach(m => m.remove());
+  // Also catch generic modals created with onclick close
+  document.querySelectorAll('.fixed.inset-0.bg-black\\/60').forEach(m => {
+    // Don't remove the write-progress modal (z-999) — it's protecting an in-flight save
+    if (!m.id || m.id !== 'write-progress-modal') m.remove();
+  });
+
+  // Flush any pending debounced billing notes save
+  if (_billingNotesTimeout) {
+    const pendingFn = _billingNotesPendingSave;
+    clearTimeout(_billingNotesTimeout);
+    _billingNotesTimeout = null;
+    if (typeof pendingFn === 'function') pendingFn();
+  }
+
   document.querySelectorAll('[id^="view-"]').forEach(v => v.classList.add('hidden'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   currentView = view;
@@ -3959,6 +3825,7 @@ async function toggleBillingField(accountName, cycleName, field) {
 }
 
 let _billingNotesTimeout = null;
+let _billingNotesPendingSave = null; // stored so navigate() can flush it
 async function updateBillingNotes(accountName, cycleName, notes) {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct) return;
@@ -3967,9 +3834,9 @@ async function updateBillingNotes(accountName, cycleName, notes) {
 
   c.billingNotes = notes;
 
-  // Debounce save — wait 800ms after last keystroke
-  if (_billingNotesTimeout) clearTimeout(_billingNotesTimeout);
-  _billingNotesTimeout = setTimeout(async () => {
+  // Build the save function so it can be flushed by navigate()
+  const doSave = async () => {
+    _billingNotesPendingSave = null;
     if (APPS_SCRIPT_URL) {
       const result = await writeToSheet('updateBilling', {
         name: accountName, cycle: cycleName,
@@ -3981,7 +3848,12 @@ async function updateBillingNotes(accountName, cycleName, notes) {
         showToast(`⚠️ Notes saved locally but failed to save to Sheet`, 'error');
       }
     }
-  }, 800);
+  };
+
+  // Debounce save — wait 800ms after last keystroke
+  if (_billingNotesTimeout) clearTimeout(_billingNotesTimeout);
+  _billingNotesPendingSave = doSave;
+  _billingNotesTimeout = setTimeout(doSave, 800);
 }
 
 // Parse retainer info from billingNotes prefix: {"rb":4000,"rp":10}|notes
@@ -6397,6 +6269,9 @@ async function executeAddCycle(accountName) {
   const dailyBudget = parseFloat(document.getElementById('nc-daily')?.value) || null;
   const bookedGoal = parseInt(document.getElementById('nc-booked')?.value) || null;
   const startDate = document.getElementById('nc-start')?.value || new Date().toISOString().split('T')[0];
+
+  // Confirmation — prevent accidental cycle creation
+  if (!confirm(`Add a new cycle to "${accountName}"?\n\nDaily Budget: ${dailyBudget ? '$' + dailyBudget : '(none)'}\nBooked Goal: ${bookedGoal || '(none)'}\nStart: ${startDate}`)) return;
   const endDate = new Date(new Date(startDate).getTime() + 28 * 86400000).toISOString().split('T')[0];
   const monthlyBudget = dailyBudget ? Math.round(dailyBudget * 28 * 100) / 100 : null;
 
@@ -6799,8 +6674,8 @@ function onAuthSuccess(user, freshLogin) {
     if (user.picture) { pic.src = user.picture; } else { pic.classList.add('hidden'); }
   }
 
-  // Load dashboard data, then start smart live refresh every 90s
-  loadAllData().then(() => startLiveRefresh(90000));
+  // Load dashboard data (no auto-refresh — use the Refresh Data button in sidebar)
+  loadAllData();
 }
 
 function handleSignOut() {
