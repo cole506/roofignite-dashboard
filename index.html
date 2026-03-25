@@ -6185,7 +6185,7 @@ function openQuickEditModal(accountName, cycleName, vals) {
         </div>
         <div>
           <label class="text-[10px] text-dark-400 font-medium">Cycle Length (days)</label>
-          <input id="qe-cycle-length" type="number" value="${cycleLength}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+          <input id="qe-cycle-length" type="number" value="${cycleLength}" data-original="${cycleLength}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
         </div>
         <div>
           <label class="text-[10px] text-dark-400 font-medium">Daily Budget</label>
@@ -6222,7 +6222,9 @@ async function quickEditCycle(accountName, cycleName) {
 
   const cpaGoal = document.getElementById('qe-cpa-goal')?.value;
   const bookedGoal = document.getElementById('qe-booked-goal')?.value;
-  const cycleLength = document.getElementById('qe-cycle-length')?.value;
+  const cycleLengthEl = document.getElementById('qe-cycle-length');
+  const cycleLength = cycleLengthEl?.value;
+  const originalLength = cycleLengthEl?.dataset?.original || '';
   const daily = document.getElementById('qe-daily')?.value;
   const monthly = document.getElementById('qe-monthly')?.value;
   const cycleStart = document.getElementById('qe-cycle-start')?.value;
@@ -6237,10 +6239,12 @@ async function quickEditCycle(accountName, cycleName) {
   if (daily !== '') c.dailyBudget = parseFloat(daily) || null;
   if (monthly !== '') c.monthlyBudget = parseFloat(monthly) || null;
 
-  // Handle cycle length → auto-adjust end date from start
+  // Handle dates: apply cycle length override ONLY if the user changed it
   if (cycleStart) c.cycleStartDate = cycleStart;
   if (cycleEnd) c.cycleEndDate = cycleEnd;
-  if (cycleLength && c.cycleStartDate) {
+  const cycleLengthChanged = (cycleLength !== originalLength && cycleLength !== '');
+  if (cycleLengthChanged && c.cycleStartDate) {
+    // User explicitly changed cycle length → recalculate end date from start
     const startMs = parseLocalDate(c.cycleStartDate).getTime();
     c.cycleEndDate = new Date(startMs + parseInt(cycleLength) * 86400000).toLocaleDateString('en-CA');
   }
