@@ -2748,7 +2748,7 @@ function renderAccountDetail(name, adAccountId) {
           </div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-          <button onclick="document.getElementById('quick-edit-panel').classList.toggle('hidden')" class="flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold text-dark-200 hover:text-white bg-dark-700/60 hover:bg-dark-700/90 border border-dark-600/40 transition-all">
+          <button onclick="openQuickEditModal('${esc(name)}','${esc(activeCyc.cycle)}',${JSON.stringify({cpaGoal:activeCyc.cpaGoal||'',bookedGoal:activeCyc.bookedGoal||'',dailyBudget:activeCyc.dailyBudget||'',monthlyBudget:activeCyc.monthlyBudget||'',cycleStartDate:activeCyc.cycleStartDate||'',cycleEndDate:activeCyc.cycleEndDate||''}).replace(/"/g,'&quot;')})" class="flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold text-dark-200 hover:text-white bg-dark-700/60 hover:bg-dark-700/90 border border-dark-600/40 transition-all">
             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             Edit Cycle
           </button>
@@ -2929,42 +2929,7 @@ function renderAccountDetail(name, adAccountId) {
       </div>`;
     })()}
 
-      <!-- Quick Edit: Hidden by default, toggled by Edit Cycle button -->
-      <div id="quick-edit-panel" class="glass rounded-xl p-4 mb-4 hidden">
-        <div class="text-dark-400 text-[10px] uppercase tracking-wider mb-3">Quick Edit — Current Cycle</div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div>
-            <label class="text-[10px] text-dark-500">CPA Goal</label>
-            <input id="qe-cpa-goal" type="number" step="0.01" value="${activeCyc.cpaGoal||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label class="text-[10px] text-dark-500">Booked Goal</label>
-            <input id="qe-booked-goal" type="number" value="${activeCyc.bookedGoal||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label class="text-[10px] text-dark-500">Cycle Length (days)</label>
-            <input id="qe-cycle-length" type="number" value="${activeCyc.cycleStartDate && activeCyc.cycleEndDate ? Math.round((parseLocalDate(activeCyc.cycleEndDate) - parseLocalDate(activeCyc.cycleStartDate)) / 86400000) : 28}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label class="text-[10px] text-dark-500">Daily Budget</label>
-            <input id="qe-daily" type="number" step="0.01" value="${activeCyc.dailyBudget||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label class="text-[10px] text-dark-500">Monthly Budget</label>
-            <input id="qe-monthly" type="number" step="0.01" value="${activeCyc.monthlyBudget||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label class="text-[10px] text-dark-500">Cycle Start</label>
-            <input id="qe-cycle-start" type="date" value="${activeCyc.cycleStartDate||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
-          </div>
-          <div>
-            <label class="text-[10px] text-dark-500">Cycle End</label>
-            <input id="qe-cycle-end" type="date" value="${activeCyc.cycleEndDate||''}" class="w-full bg-dark-700/80 border border-dark-600/50 rounded-lg text-xs text-white px-2 py-1.5 focus:outline-none focus:border-brand-500" />
-          </div>
-        </div>
-        <div class="text-[9px] text-dark-500 mt-1.5 mb-1">Changing cycle length auto-adjusts end date from start date</div>
-        <button onclick="quickEditCycle('${esc(name)}','${esc(activeCyc.cycle)}')" class="mt-1 w-full py-1.5 rounded-lg text-xs font-semibold text-white bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 transition-all">Save Changes</button>
-      </div>
+      <!-- Quick Edit modal is now rendered by openQuickEditModal() -->
 
     <!-- Conversion Funnel -->
     ${(() => {
@@ -6184,6 +6149,65 @@ async function saveCycleEdit(accountName, cycleIndex) {
   }
 }
 
+function openQuickEditModal(accountName, cycleName, vals) {
+  const cycleLength = (vals.cycleStartDate && vals.cycleEndDate)
+    ? Math.round((parseLocalDate(vals.cycleEndDate) - parseLocalDate(vals.cycleStartDate)) / 86400000)
+    : 28;
+  const modal = document.createElement('div');
+  modal.id = 'quick-edit-modal';
+  modal.className = 'fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div class="glass rounded-2xl p-6 max-w-lg w-full scale-in" onclick="event.stopPropagation()">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-base font-bold text-white">Edit Cycle</h2>
+          <p class="text-[11px] text-dark-400 mt-0.5">${accountName} — ${cycleName}</p>
+        </div>
+        <button onclick="document.getElementById('quick-edit-modal').remove()" class="text-dark-400 hover:text-white transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="text-[10px] text-dark-400 font-medium">CPA Goal</label>
+          <input id="qe-cpa-goal" type="number" step="0.01" value="${vals.cpaGoal}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+        </div>
+        <div>
+          <label class="text-[10px] text-dark-400 font-medium">Booked Goal</label>
+          <input id="qe-booked-goal" type="number" value="${vals.bookedGoal}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+        </div>
+        <div>
+          <label class="text-[10px] text-dark-400 font-medium">Cycle Length (days)</label>
+          <input id="qe-cycle-length" type="number" value="${cycleLength}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+        </div>
+        <div>
+          <label class="text-[10px] text-dark-400 font-medium">Daily Budget</label>
+          <input id="qe-daily" type="number" step="0.01" value="${vals.dailyBudget}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+        </div>
+        <div>
+          <label class="text-[10px] text-dark-400 font-medium">Monthly Budget</label>
+          <input id="qe-monthly" type="number" step="0.01" value="${vals.monthlyBudget}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+        </div>
+        <div>
+          <label class="text-[10px] text-dark-400 font-medium">Cycle Start</label>
+          <input id="qe-cycle-start" type="date" value="${vals.cycleStartDate}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+        </div>
+        <div class="sm:col-span-2">
+          <label class="text-[10px] text-dark-400 font-medium">Cycle End</label>
+          <input id="qe-cycle-end" type="date" value="${vals.cycleEndDate}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-lg text-sm text-white px-3 py-2 mt-1 focus:outline-none focus:border-brand-500 transition-colors" />
+        </div>
+      </div>
+      <div class="text-[9px] text-dark-500 mt-2">Changing cycle length auto-adjusts end date from start date</div>
+      <div class="flex gap-2 mt-4">
+        <button onclick="document.getElementById('quick-edit-modal').remove()" class="flex-1 py-2 rounded-xl text-xs font-semibold text-dark-300 hover:text-white bg-dark-700/50 hover:bg-dark-700/80 border border-dark-600/30 transition-all">Cancel</button>
+        <button onclick="quickEditCycle('${accountName.replace(/'/g,"\\'")}','${cycleName.replace(/'/g,"\\'")}')" class="flex-1 py-2 rounded-xl text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 shadow-lg shadow-brand-500/20 transition-all">Save Changes</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
 async function quickEditCycle(accountName, cycleName) {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct) return;
@@ -6197,6 +6221,9 @@ async function quickEditCycle(accountName, cycleName) {
   const monthly = document.getElementById('qe-monthly')?.value;
   const cycleStart = document.getElementById('qe-cycle-start')?.value;
   const cycleEnd = document.getElementById('qe-cycle-end')?.value;
+
+  // Close the modal
+  document.getElementById('quick-edit-modal')?.remove();
 
   // Update local data (gregGoal intentionally excluded — edit via Greg card only)
   if (cpaGoal !== '') c.cpaGoal = parseFloat(cpaGoal) || null;
@@ -6231,7 +6258,7 @@ async function quickEditCycle(accountName, cycleName) {
     if (result.ok) {
       showToast(`Updated ${c.cycle} for ${accountName} ✓ Saved`, 'success');
     } else {
-      showToast(`⚠️ Updated locally, but failed to save to Sheet`, 'error');
+      showToast(`⚠️ Failed to save to Sheet: ${result.error || 'unknown error'}`, 'error');
     }
   } else {
     showToast(`Updated ${c.cycle} for ${accountName} (local only)`, 'success');
