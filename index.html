@@ -1225,15 +1225,27 @@ async function fetchGregConfig() {
     if (!jsonStr) { console.log('[Greg Config] No config tab found — using defaults'); return; }
     const data = JSON.parse(jsonStr[1]);
     const rows = data.table?.rows || [];
+    const VALID = ['HARD','SOFT','OFF'];
     rows.forEach(row => {
       const type = row.c?.[0]?.v?.toString().trim().toLowerCase();
       const name = row.c?.[1]?.v?.toString().trim();
-      const mode = row.c?.[2]?.v?.toString().trim().toUpperCase();
-      if (!type || !name || !mode) return;
-      if (type === 'manager' && ['HARD','SOFT','OFF'].includes(mode)) {
-        gregConfig.managerModes[name] = mode;
-      } else if (type === 'account' && ['HARD','SOFT','OFF'].includes(mode)) {
-        gregConfig.accountModes[name] = mode;
+      const colC = (row.c?.[2]?.v?.toString().trim() || '').toUpperCase();
+      const colD = (row.c?.[3]?.v?.toString().trim() || '').toUpperCase();
+      if (!type || !name) return;
+      let modeObj;
+      if (VALID.includes(colC) && VALID.includes(colD)) {
+        // New 4-column format: Col C = CPC, Col D = CPL
+        modeObj = { cpc: colC, cpl: colD };
+      } else if (VALID.includes(colC)) {
+        // Legacy 3-column format: single mode applies to both
+        modeObj = { cpc: colC, cpl: colC };
+      } else {
+        return;
+      }
+      if (type === 'manager') {
+        gregConfig.managerModes[name] = modeObj;
+      } else if (type === 'account') {
+        gregConfig.accountModes[name] = modeObj;
       }
     });
     console.log('[Greg Config] Loaded:', gregConfig);
@@ -4970,67 +4982,98 @@ let slackConfigCache = null; // cached webhook config from backend
 
 // ═══ Greg Configuration State ═══
 // Mirrors Greg Apps Script's OWNER_RUN_FLAGS and DISABLED_ACCOUNTS
-// Modes: 'HARD' (pauses ads), 'SOFT' (Slack alerts only), 'OFF' (disabled)
+// Modes per metric: { cpc: 'HARD'|'SOFT'|'OFF', cpl: 'HARD'|'SOFT'|'OFF' }
 const gregConfig = {
-  managerModes: {},    // { 'Cole': 'HARD', 'Tyler': 'SOFT', ... }
-  accountModes: {},    // { 'Some Account': 'OFF' } — per-account overrides
-  defaultMode: 'SOFT'  // Fallback for managers not listed
+  managerModes: {},    // { 'Cole': { cpc: 'HARD', cpl: 'SOFT' }, ... }
+  accountModes: {},    // { 'Some Account': { cpc: 'OFF', cpl: 'HARD' } } — per-account overrides
+  defaultMode: { cpc: 'SOFT', cpl: 'SOFT' }  // Fallback for managers not listed
 };
+
+// Helper: normalize a mode value — handles legacy strings + new objects
+function normalizeGregMode(val) {
+  if (val && typeof val === 'object' && val.cpc) return val;
+  const m = (typeof val === 'string') ? val.toUpperCase() : 'SOFT';
+  return { cpc: m, cpl: m };
+}
 
 function initGregConfig() {
   const managers = getManagers();
   managers.forEach(m => {
-    if (!gregConfig.managerModes[m]) gregConfig.managerModes[m] = gregConfig.defaultMode;
+    if (!gregConfig.managerModes[m]) gregConfig.managerModes[m] = { ...gregConfig.defaultMode };
   });
 }
 
 function getGregMode(accountName, managerName) {
-  if (gregConfig.accountModes[accountName]) return gregConfig.accountModes[accountName];
-  return gregConfig.managerModes[managerName] || gregConfig.defaultMode;
+  if (gregConfig.accountModes[accountName]) return normalizeGregMode(gregConfig.accountModes[accountName]);
+  return normalizeGregMode(gregConfig.managerModes[managerName] || gregConfig.defaultMode);
 }
 
-async function setManagerGregMode(manager, mode) {
-  gregConfig.managerModes[manager] = mode;
+// Legacy helper: get a single combined mode label for display
+function getGregModeLabel(accountName, managerName) {
+  const m = getGregMode(accountName, managerName);
+  if (m.cpc === m.cpl) return m.cpc;
+  return `CPC:${m.cpc} CPL:${m.cpl}`;
+}
+
+// Set Greg mode for a manager. metric = 'cpc' | 'cpl' | 'both'
+async function setManagerGregMode(manager, mode, metric = 'both') {
+  if (!gregConfig.managerModes[manager]) gregConfig.managerModes[manager] = { ...gregConfig.defaultMode };
+  const modeObj = gregConfig.managerModes[manager];
+  if (metric === 'both' || metric === 'cpc') modeObj.cpc = mode;
+  if (metric === 'both' || metric === 'cpl') modeObj.cpl = mode;
   renderAdminView();
 
+  const label = metric === 'both' ? mode : `${metric.toUpperCase()}: ${mode}`;
   if (APPS_SCRIPT_URL) {
-    const result = await writeToSheet('setManagerGregMode', { manager, mode });
+    const result = await writeToSheet('setManagerGregMode', { manager, cpcMode: modeObj.cpc, cplMode: modeObj.cpl });
     if (result.ok) {
-      showToast(`Greg → ${mode} for all of ${manager}'s accounts ✓ Saved to Sheet`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+      showToast(`Greg → ${label} for all of ${manager}'s accounts ✓ Saved to Sheet`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
     } else {
-      showToast(`⚠️ Greg set to ${mode} locally, but failed to save to Sheet`, 'error');
+      showToast(`⚠️ Greg set to ${label} locally, but failed to save to Sheet`, 'error');
     }
   } else {
-    showToast(`Greg → ${mode} for all of ${manager}'s accounts (local only)`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
+    showToast(`Greg → ${label} for all of ${manager}'s accounts (local only)`, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
   }
 }
 
-async function setAccountGregMode(accountName, mode) {
+// Set Greg mode for a specific account. metric = 'cpc' | 'cpl' | 'both'
+async function setAccountGregMode(accountName, mode, metric = 'both') {
   const acct = allAccounts.find(a => a.name === accountName);
   if (!acct) return;
-  const managerMode = gregConfig.managerModes[acct.manager] || gregConfig.defaultMode;
-  if (mode === managerMode) {
+  const managerMode = normalizeGregMode(gregConfig.managerModes[acct.manager] || gregConfig.defaultMode);
+
+  // Build the target mode object
+  let current = gregConfig.accountModes[accountName] ? normalizeGregMode(gregConfig.accountModes[accountName]) : { ...managerMode };
+  if (metric === 'both' || metric === 'cpc') current.cpc = mode;
+  if (metric === 'both' || metric === 'cpl') current.cpl = mode;
+
+  // If matches manager default, remove the override
+  if (current.cpc === managerMode.cpc && current.cpl === managerMode.cpl) {
     delete gregConfig.accountModes[accountName];
   } else {
-    gregConfig.accountModes[accountName] = mode;
+    gregConfig.accountModes[accountName] = current;
   }
   renderAdminView();
 
-  const sendMode = mode === managerMode ? null : mode;
+  const isDefault = current.cpc === managerMode.cpc && current.cpl === managerMode.cpl;
+  const label = metric === 'both' ? mode : `${metric.toUpperCase()}: ${mode}`;
   if (APPS_SCRIPT_URL) {
-    const result = await writeToSheet('setAccountGregMode', { name: accountName, mode: sendMode });
+    const payload = isDefault
+      ? { name: accountName, cpcMode: null, cplMode: null }
+      : { name: accountName, cpcMode: current.cpc, cplMode: current.cpl };
+    const result = await writeToSheet('setAccountGregMode', payload);
     if (result.ok) {
-      const msg = sendMode === null
-        ? `${accountName}: Greg reset to manager default (${managerMode}) ✓ Saved`
-        : `${accountName}: Greg → ${mode} ✓ Saved to Sheet`;
+      const msg = isDefault
+        ? `${accountName}: Greg reset to manager default ✓ Saved`
+        : `${accountName}: Greg → ${label} ✓ Saved to Sheet`;
       showToast(msg, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
     } else {
       showToast(`⚠️ ${accountName}: Greg set locally, but failed to save to Sheet`, 'error');
     }
   } else {
-    const msg = sendMode === null
-      ? `${accountName}: Greg reset to manager default (${managerMode}) (local only)`
-      : `${accountName}: Greg → ${mode} (local only)`;
+    const msg = isDefault
+      ? `${accountName}: Greg reset to manager default (local only)`
+      : `${accountName}: Greg → ${label} (local only)`;
     showToast(msg, mode === 'HARD' ? 'success' : mode === 'SOFT' ? 'warning' : 'info');
   }
 }
@@ -5209,9 +5252,13 @@ function renderAdminView() {
       </div>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${Math.min(managers.length, 5)} gap-3">
         ${managers.map(m => {
-          const mode = gregConfig.managerModes[m] || gregConfig.defaultMode;
+          const modeObj = normalizeGregMode(gregConfig.managerModes[m] || gregConfig.defaultMode);
           const acctCount = allAccounts.filter(a => a.manager === m).length;
           const overrideCount = allAccounts.filter(a => a.manager === m && gregConfig.accountModes[a.name]).length;
+          const renderToggle = (metric, current) => ['OFF','SOFT','HARD'].map(md =>
+            \`<button onclick="setManagerGregMode('\${esc(m)}','\${md}','\${metric}')" class="flex-1 py-1 text-[9px] font-bold transition-all \${current === md
+              ? md === 'HARD' ? 'bg-green-500/30 text-green-300' : md === 'SOFT' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-dark-600/60 text-dark-300'
+              : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">\${md}</button>\`).join('');
           return `
           <div class="bg-dark-800/60 rounded-xl p-3 border border-dark-600/30">
             <div class="flex items-center justify-between mb-2">
@@ -5223,10 +5270,19 @@ function renderAdminView() {
                 </button>
               </div>
             </div>
-            <div class="flex rounded-lg overflow-hidden border border-dark-600/40">
-              ${['OFF','SOFT','HARD'].map(md => `<button onclick="setManagerGregMode('${esc(m)}','${md}')" class="flex-1 py-1.5 text-[10px] font-bold transition-all ${mode === md
-                ? md === 'HARD' ? 'bg-green-500/30 text-green-300' : md === 'SOFT' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-dark-600/60 text-dark-300'
-                : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">${md}</button>`).join('')}
+            <div class="space-y-1.5">
+              <div>
+                <span class="text-[9px] text-dark-400 uppercase tracking-wider">CPC</span>
+                <div class="flex rounded-lg overflow-hidden border border-dark-600/40 mt-0.5">
+                  ${renderToggle('cpc', modeObj.cpc)}
+                </div>
+              </div>
+              <div>
+                <span class="text-[9px] text-dark-400 uppercase tracking-wider">CPL</span>
+                <div class="flex rounded-lg overflow-hidden border border-dark-600/40 mt-0.5">
+                  ${renderToggle('cpl', modeObj.cpl)}
+                </div>
+              </div>
             </div>
             ${overrideCount > 0 ? `<div class="text-[9px] text-brand-400 mt-1.5">${overrideCount} account override${overrideCount > 1 ? 's' : ''}</div>` : ''}
           </div>`;
@@ -5303,10 +5359,23 @@ function renderAdminView() {
               </button>
             </td>
             <td class="px-3 md:px-4 py-3 text-center">
-              <div class="inline-flex rounded-lg overflow-hidden border ${hasOverride ? 'border-brand-500/40' : 'border-dark-600/30'}" title="${hasOverride ? 'Account override (manager default: '+gregConfig.managerModes[a.manager]+')' : 'Using manager default'}">
-                ${['OFF','SOFT','HARD'].map(m => `<button onclick="setAccountGregMode('${esc(a.name)}','${m}')" class="px-2 py-1 text-[10px] font-bold transition-all ${effectiveGregMode === m
-                  ? m === 'HARD' ? 'bg-green-500/30 text-green-300' : m === 'SOFT' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-dark-600/60 text-dark-400'
-                  : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">${m}</button>`).join('')}
+              <div class="space-y-1" title="${hasOverride ? 'Account override' : 'Using manager default'}">
+                <div class="flex items-center gap-1 justify-center">
+                  <span class="text-[8px] text-dark-500 w-6 text-right">CPC</span>
+                  <div class="inline-flex rounded-md overflow-hidden border ${hasOverride ? 'border-brand-500/40' : 'border-dark-600/30'}">
+                    ${['OFF','SOFT','HARD'].map(m => `<button onclick="setAccountGregMode('${esc(a.name)}','${m}','cpc')" class="px-1.5 py-0.5 text-[9px] font-bold transition-all ${effectiveGregMode.cpc === m
+                      ? m === 'HARD' ? 'bg-green-500/30 text-green-300' : m === 'SOFT' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-dark-600/60 text-dark-400'
+                      : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">${m}</button>`).join('')}
+                  </div>
+                </div>
+                <div class="flex items-center gap-1 justify-center">
+                  <span class="text-[8px] text-dark-500 w-6 text-right">CPL</span>
+                  <div class="inline-flex rounded-md overflow-hidden border ${hasOverride ? 'border-brand-500/40' : 'border-dark-600/30'}">
+                    ${['OFF','SOFT','HARD'].map(m => `<button onclick="setAccountGregMode('${esc(a.name)}','${m}','cpl')" class="px-1.5 py-0.5 text-[9px] font-bold transition-all ${effectiveGregMode.cpl === m
+                      ? m === 'HARD' ? 'bg-green-500/30 text-green-300' : m === 'SOFT' ? 'bg-yellow-500/30 text-yellow-300' : 'bg-dark-600/60 text-dark-400'
+                      : 'text-dark-500 hover:text-dark-200 hover:bg-dark-700/40'}">${m}</button>`).join('')}
+                  </div>
+                </div>
               </div>
               ${hasOverride ? '<div class="text-[8px] text-brand-400 mt-0.5">override</div>' : ''}
             </td>
@@ -5682,7 +5751,7 @@ async function createNewManager() {
   }
 
   // Update local state
-  gregConfig.managerModes[name] = 'SOFT';
+  gregConfig.managerModes[name] = { cpc: 'SOFT', cpl: 'SOFT' };
   adminShowNewManager = false;
   renderSidebarManagers();  // update sidebar with new manager
   renderAdminView();
@@ -7146,28 +7215,29 @@ account | Some Account Name | OFF</div>
   const data = JSON.parse(e.postData.contents);
   const action = data.action;
 
-  // Greg mode changes → write to "Greg Config" tab
+  // Greg mode changes → write to "Greg Config" tab (4-column: Type | Name | CPC Mode | CPL Mode)
   if (action === 'setManagerGregMode' || action === 'setAccountGregMode') {
     let configSheet = ss.getSheetByName('Greg Config');
     if (!configSheet) {
       configSheet = ss.insertSheet('Greg Config');
-      configSheet.appendRow(['Type', 'Name', 'Mode']);
+      configSheet.appendRow(['Type', 'Name', 'CPC Mode', 'CPL Mode']);
     }
     const type = action === 'setManagerGregMode' ? 'manager' : 'account';
     const name = data.manager || data.name;
-    const mode = data.mode;
+    const cpcMode = data.cpcMode;
+    const cplMode = data.cplMode;
 
     // Find existing row or append
     const vals = configSheet.getDataRange().getValues();
     let found = false;
     for (let i = 1; i &lt; vals.length; i++) {
       if (vals[i][0] === type &amp;&amp; vals[i][1] === name) {
-        if (mode === null) { configSheet.deleteRow(i + 1); } // remove override
-        else { configSheet.getRange(i + 1, 3).setValue(mode); }
+        if (cpcMode === null) { configSheet.deleteRow(i + 1); } // remove override
+        else { configSheet.getRange(i + 1, 3, 1, 2).setValues([[cpcMode, cplMode]]); }
         found = true; break;
       }
     }
-    if (!found &amp;&amp; mode !== null) configSheet.appendRow([type, name, mode]);
+    if (!found &amp;&amp; cpcMode !== null) configSheet.appendRow([type, name, cpcMode, cplMode]);
   }
 
   // Client CRUD operations
