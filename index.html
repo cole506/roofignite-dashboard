@@ -7401,10 +7401,16 @@ function renderDontTouch() {
 
   var managers = getManagers();
   var savedDtManager = localStorage.getItem('dt_manager') || managers[0] || '';
-  var activeAccts = allAccounts
-    .filter(function(a) { return a.manager === savedDtManager && a.status !== 'paused' && a.status !== 'inactive'; })
+  // Get all accounts for this manager (any status)
+  var allMgrAccts = allAccounts
+    .filter(function(a) { return a.manager === savedDtManager; })
     .map(function(a) { return a.name; })
     .filter(function(v, i, arr) { return arr.indexOf(v) === i; });
+  // Remove accounts completed today
+  var todayKey = 'dt_done_' + new Date().toISOString().slice(0, 10);
+  var doneToday = [];
+  try { doneToday = JSON.parse(localStorage.getItem(todayKey) || '[]'); } catch(e) {}
+  var activeAccts = allMgrAccts.filter(function(n) { return doneToday.indexOf(n) === -1; });
 
   var html = '<div class="max-w-4xl mx-auto py-8">';
   html += '<div class="text-center mb-8">';
@@ -7414,7 +7420,11 @@ function renderDontTouch() {
   managers.forEach(function(m) {
     html += '<option value="' + m + '"' + (m === savedDtManager ? ' selected' : '') + '>' + m + '</option>';
   });
-  html += '</select></div>';
+  html += '</select>';
+  if (allMgrAccts.length) {
+    html += '<div class="text-dark-500 text-xs mt-3">' + doneToday.length + ' / ' + allMgrAccts.length + ' accounts completed today' + (activeAccts.length === 0 ? ' — all done!' : '') + '</div>';
+  }
+  html += '</div>';
 
   if (!activeAccts.length) {
     html += '<div class="text-center py-12 text-dark-400">No accounts for ' + savedDtManager + '</div>';
@@ -7428,7 +7438,7 @@ function renderDontTouch() {
     html += '</div></div>';
     // Spin button
     html += '<div class="text-center mb-8" id="dt-spin-area">';
-    html += '<button onclick="dtSpin()" id="dt-spin-btn" class="px-10 py-4 rounded-2xl text-lg font-black bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/30 uppercase tracking-wider">OPEN CASE</button>';
+    html += '<button onclick="dtSpin()" id="dt-spin-btn" class="px-10 py-4 rounded-2xl text-lg font-black bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/30 uppercase tracking-wider">SPIN THE WHEEL</button>';
     html += '</div>';
     // Result area
     html += '<div id="dt-result" class="hidden">';
@@ -7484,12 +7494,14 @@ function dtSpin() {
   const winnerIdx = Math.floor(Math.random() * accounts.length);
   const winnerName = accounts[winnerIdx];
 
-  // Calculate target position: we want the winner card to be at center
-  // Scroll through many cards first for the spinning effect
-  const minSpinCards = accounts.length * 5; // at least 5 full rotations
-  const extraCards = Math.floor(Math.random() * accounts.length); // random extra
+  // Calculate target position: center the winner card under the needle
+  const minSpinCards = accounts.length * 5;
+  const extraCards = Math.floor(Math.random() * accounts.length);
   const targetCardIndex = minSpinCards + extraCards + winnerIdx;
-  const targetOffset = (targetCardIndex * CARD_W) - (containerWidth / 2) + (CARD_W / 2);
+  // Each card is 200px wide with 6px margin on each side (mx-1.5) = 212px per slot
+  // Card center = targetCardIndex * 212 + 100 (half of 200px card width) + 6 (left margin)
+  const cardCenter = (targetCardIndex * CARD_W) + 106;
+  const targetOffset = cardCenter - (containerWidth / 2);
 
   // Disable button
   btn.disabled = true;
@@ -7506,22 +7518,62 @@ function dtSpin() {
   strip.style.transition = 'transform 6s cubic-bezier(0.15, 0.85, 0.2, 1)';
   strip.style.transform = `translateX(-${targetOffset}px)`;
 
-  // Play tick sound effect via subtle visual feedback
+  // Audio context for tick sounds
+  var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playTick(freq, vol) {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq || 800;
+    osc.type = 'square';
+    gain.gain.value = vol || 0.08;
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.06);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.06);
+  }
+  function playWinSound() {
+    [0, 100, 200, 350].forEach(function(delay, i) {
+      setTimeout(function() {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = [523, 659, 784, 1047][i];
+        osc.type = 'sine';
+        gain.gain.value = 0.12;
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+      }, delay);
+    });
+  }
+
+  // Fast ticks with sound
   let tickInterval = setInterval(() => {
+    playTick(800 + Math.random() * 400, 0.06);
     strip.parentElement.style.boxShadow = '0 0 20px rgba(249,115,22,0.3)';
     setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 50);
   }, 80);
 
   // Slow down ticks
   setTimeout(() => { clearInterval(tickInterval); tickInterval = setInterval(() => {
+    playTick(600 + Math.random() * 200, 0.1);
     strip.parentElement.style.boxShadow = '0 0 30px rgba(249,115,22,0.4)';
     setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 100);
   }, 200); }, 3000);
 
+  // Even slower near the end
+  setTimeout(() => { clearInterval(tickInterval); tickInterval = setInterval(() => {
+    playTick(500, 0.12);
+    strip.parentElement.style.boxShadow = '0 0 35px rgba(249,115,22,0.5)';
+    setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 150);
+  }, 400); }, 5000);
+
   // When done
   setTimeout(() => {
     clearInterval(tickInterval);
-    // Flash the winner
+    playWinSound();
     strip.parentElement.style.boxShadow = '0 0 40px rgba(249,115,22,0.6)';
     setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 500);
 
@@ -7538,27 +7590,25 @@ function dtSpin() {
     document.getElementById('dt-done-area').style.display = 'block';
 
     btn.textContent = 'LOCKED — FINISH YOUR ACCOUNT';
+    btn.onclick = function() { showToast('Finish your current account first!', 'error'); };
     btn.disabled = false;
     btn.classList.remove('opacity-50');
   }, 6500);
 }
 
 function dtFinish() {
+  // Save completed account for today
+  if (dtCurrentAccount) {
+    var todayKey = 'dt_done_' + new Date().toISOString().slice(0, 10);
+    var doneToday = [];
+    try { doneToday = JSON.parse(localStorage.getItem(todayKey) || '[]'); } catch(e) {}
+    if (doneToday.indexOf(dtCurrentAccount) === -1) doneToday.push(dtCurrentAccount);
+    localStorage.setItem(todayKey, JSON.stringify(doneToday));
+  }
   dtSpinLocked = false;
   dtCurrentAccount = null;
-  const btn = document.getElementById('dt-spin-btn');
-  if (btn) {
-    btn.textContent = 'OPEN CASE';
-  }
-  const result = document.getElementById('dt-result');
-  if (result) result.classList.add('hidden');
-  // Rebuild strip for fresh spin
-  const strip = document.getElementById('dt-strip');
-  if (strip && strip._accounts) {
-    strip.style.transition = 'none';
-    strip.style.transform = 'translateX(0)';
-    dtBuildStrip(strip._accounts);
-  }
+  // Re-render to rebuild strip without completed accounts
+  renderDontTouch();
 }
 
 // ═══════════════════════════════════════════════
