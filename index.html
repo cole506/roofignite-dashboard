@@ -603,7 +603,7 @@ async function fetchMetaDailyInsights(adAccountId, dateStart, dateEnd) {
   const actId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
   try {
     let allData = [];
-    let url = `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,actions,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&time_increment=1&level=account&limit=100&access_token=${META_ACCESS_TOKEN}`;
+    let url = `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,actions,cost_per_action_type,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&time_increment=1&level=account&limit=100&access_token=${META_ACCESS_TOKEN}`;
     // Paginate through all results
     while (url) {
       const resp = await fetch(url);
@@ -617,12 +617,14 @@ async function fetchMetaDailyInsights(adAccountId, dateStart, dateEnd) {
       const obClicks = (d.outbound_clicks || []).find(a => a.action_type === 'outbound_click');
       const outboundClicks = obClicks ? parseInt(obClicks.value || 0) : 0;
       const impressions = parseInt(d.impressions || 0);
+      const cprEntry = (d.cost_per_action_type || []).find(a => a.action_type === 'lead' || a.action_type === 'offsite_conversion.fb_pixel_lead');
       return {
         date: d.date_start,
         spend: parseFloat(d.spend || 0),
         impressions,
         clicks: parseInt(d.clicks || 0),
         leads: leads ? parseInt(leads.value || 0) : 0,
+        costPerResult: cprEntry ? parseFloat(cprEntry.value || 0) : 0,
         cpc: parseFloat(d.cpc || 0),
         cpm: parseFloat(d.cpm || 0),
         ctr: parseFloat(d.ctr || 0),
@@ -659,7 +661,7 @@ async function fetchMetaAdInsights(adAccountId, dateStart, dateEnd, filters) {
       filterArr.push({field:'adset.id',operator:'IN',value:[f.adsetId]});
     }
     let allData = [];
-    let url = `${META_BASE}/${actId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,actions,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&level=ad&limit=100&filtering=${encodeURIComponent(JSON.stringify(filterArr))}&access_token=${META_ACCESS_TOKEN}`;
+    let url = `${META_BASE}/${actId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,actions,cost_per_action_type,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&level=ad&limit=100&filtering=${encodeURIComponent(JSON.stringify(filterArr))}&access_token=${META_ACCESS_TOKEN}`;
     while (url) {
       const resp = await fetch(url);
       if (!resp.ok) break;
@@ -674,6 +676,7 @@ async function fetchMetaAdInsights(adAccountId, dateStart, dateEnd, filters) {
       const impressions = parseInt(d.impressions || 0);
       const spend = parseFloat(d.spend || 0);
       const leadCount = leads ? parseInt(leads.value || 0) : 0;
+      const cprEntry = (d.cost_per_action_type || []).find(a => a.action_type === 'lead' || a.action_type === 'offsite_conversion.fb_pixel_lead');
       return {
         adId: d.ad_id,
         adName: d.ad_name || '(unnamed)',
@@ -681,6 +684,7 @@ async function fetchMetaAdInsights(adAccountId, dateStart, dateEnd, filters) {
         clicks: parseInt(d.clicks || 0),
         leads: leadCount,
         cpl: leadCount > 0 ? spend / leadCount : 0,
+        costPerResult: cprEntry ? parseFloat(cprEntry.value || 0) : 0,
         cpc: outboundClicks > 0 ? spend / outboundClicks : 0,
         cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
         ctr: impressions > 0 ? (outboundClicks / impressions) * 100 : 0,
@@ -999,6 +1003,7 @@ function renderMetaAdGrid(ads) {
           <div><span class="text-dark-400">Spend</span> <span class="text-white font-bold ml-1.5">$${ad.spend.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
           <div><span class="text-dark-400">Leads</span> <span class="text-white font-bold ml-1.5">${ad.leads}</span></div>
           <div><span class="text-dark-400">CPL</span> <span class="${cplColor} font-semibold ml-1.5">$${ad.leads > 0 ? ad.cpl.toFixed(2) : '—'}</span></div>
+          <div><span class="text-dark-400">Cost/Result</span> <span class="${cplColor} font-semibold ml-1.5">$${ad.costPerResult > 0 ? ad.costPerResult.toFixed(2) : '—'}</span></div>
           <div><span class="text-dark-400">CPC</span> <span class="${cpcColor} font-semibold ml-1.5">$${ad.outboundClicks > 0 ? ad.cpc.toFixed(2) : '—'}</span></div>
           <div><span class="text-dark-400">CTR</span> <span class="${ctrColor} font-semibold ml-1.5">${ad.impressions > 0 ? ad.ctr.toFixed(2) + '%' : '—'}</span></div>
           <div><span class="text-dark-400">Freq</span> <span class="text-dark-200 ml-1.5">${ad.frequency.toFixed(2)}</span></div>
@@ -4109,6 +4114,7 @@ function renderMetaDailyTable(data, cycle) {
             <th class="py-2 px-2 text-right font-medium mobile-hide">CTR (Link)</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
+            <th class="py-2 px-2 text-right font-medium">Cost/Result</th>
             <th class="py-2 px-2 text-right font-medium mobile-hide">Bookings</th>
             <th class="py-2 px-2 text-right font-medium mobile-hide">CPA</th>
             <th class="py-2 px-2 text-right font-medium mobile-hide">CPM</th>
@@ -4123,6 +4129,7 @@ function renderMetaDailyTable(data, cycle) {
             const cpa = dailyBookings > 0 ? d.spend / dailyBookings : 0;
             const linkCPC = d.outboundClicks > 0 ? d.spend / d.outboundClicks : 0;
             const dayCpm = d.impressions > 0 ? (d.spend / d.impressions) * 1000 : 0;
+            const cpr = d.costPerResult || 0;
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
               <td class="py-1.5 px-2 text-dark-200 whitespace-nowrap">${dateStr}</td>
               <td class="py-1.5 px-2 text-right text-dark-200">${fmtDollar(d.spend,2)}</td>
@@ -4134,6 +4141,7 @@ function renderMetaDailyTable(data, cycle) {
               <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('linkCTR', d.linkCTR, cycle)}">${d.linkCTR > 0 ? d.linkCTR.toFixed(2)+'%' : '—'}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('leads', d.leads, cycle)}">${d.leads}</td>
               <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', cpl, cycle)}">${d.leads > 0 ? fmtDollar(cpl,2) : '—'}</td>
+              <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', cpr, cycle)}">${cpr > 0 ? fmtDollar(cpr,2) : '—'}</td>
               <td class="py-1.5 px-2 text-right mobile-hide ${dailyBookings > 0 ? 'metric-cell-green' : ''}">${dailyBookings}</td>
               <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpa', cpa, cycle)}">${cpa > 0 ? fmtDollar(cpa,0) : '—'}</td>
               <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpm', dayCpm, cycle)}">${dayCpm > 0 ? fmtDollar(dayCpm,2) : '—'}</td>
@@ -4262,6 +4270,7 @@ function renderMetaAggTable(aggData, cycle) {
             <th class="py-2 px-2 text-right font-medium mobile-hide">CTR (Link)</th>
             <th class="py-2 px-2 text-right font-medium">Leads</th>
             <th class="py-2 px-2 text-right font-medium">CPL</th>
+            <th class="py-2 px-2 text-right font-medium">Cost/Result</th>
             <th class="py-2 px-2 text-right font-medium mobile-hide">Bookings</th>
             <th class="py-2 px-2 text-right font-medium mobile-hide">CPA</th>
             <th class="py-2 px-2 text-right font-medium mobile-hide">CPM</th>
@@ -4271,6 +4280,7 @@ function renderMetaAggTable(aggData, cycle) {
           ${aggData.map(w => {
             const dateRange = w.startDate !== w.endDate ? `<div class="text-dark-400 text-[9px]">${w.startDate.slice(5)} → ${w.endDate.slice(5)}</div>` : '';
             const linkCPC = w.linkCPC || (w.outboundClicks > 0 ? w.spend / w.outboundClicks : 0);
+            const aggCPR = w.costPerResult || (w.leads > 0 ? w.spend / w.leads : 0);
             return `<tr class="border-b border-dark-700/30 hover:bg-dark-700/30">
             <td class="py-1.5 px-2 text-dark-200 font-medium">${w.label}${dateRange}</td>
             <td class="py-1.5 px-2 text-right">${fmtDollar(w.spend,2)}</td>
@@ -4282,6 +4292,7 @@ function renderMetaAggTable(aggData, cycle) {
             <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('linkCTR', w.linkCTR, cycle)}">${w.linkCTR.toFixed(2)}%</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('leads', w.leads, cycle)}">${w.leads}</td>
             <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', w.cpl, cycle)}">${w.leads > 0 ? fmtDollar(w.cpl,2) : '—'}</td>
+            <td class="py-1.5 px-2 text-right ${metricCellClass('cpl', aggCPR, cycle)}">${aggCPR > 0 ? fmtDollar(aggCPR,2) : '—'}</td>
             <td class="py-1.5 px-2 text-right mobile-hide ${w.bookings > 0 ? 'metric-cell-green' : ''}">${w.bookings || 0}</td>
             <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpa', w.cpa, cycle)}">${w.cpa > 0 ? fmtDollar(w.cpa,0) : '—'}</td>
             <td class="py-1.5 px-2 text-right mobile-hide ${metricCellClass('cpm', w.cpm, cycle)}">${w.cpm > 0 ? fmtDollar(w.cpm,2) : '—'}</td>
