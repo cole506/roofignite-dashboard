@@ -793,8 +793,12 @@ async function toggleAdStatus(adId, currentStatus) {
   const label = newStatus === 'PAUSED' ? 'Pause' : 'Activate';
   if (!confirm(`${label} this ad?`)) return;
   try {
-    const resp = await fetch(`${META_BASE}/${adId}?status=${newStatus}&access_token=${META_ACCESS_TOKEN}`, { method: 'POST' });
-    if (!resp.ok) { showToast('Failed to update ad status', 'error'); return; }
+    // Route through Apps Script backend to avoid CORS
+    const result = await writeToSheet('toggleAdStatus', { adId, status: newStatus });
+    if (!result.ok) {
+      showToast('Failed: ' + (result.error || 'Unknown error'), 'error', 8000);
+      return;
+    }
     metaAdStatusCache[adId] = newStatus;
     // Update in cached ad data
     if (metaAdData) {
@@ -7006,6 +7010,7 @@ const WRITE_ACTION_LABELS = {
   saveBillingAdmin:     'Saving billing admin',
   setSlackNotifyToggle: 'Updating notification settings',
   runScript:            'Running report',
+  toggleAdStatus:       'Updating ad status',
   createPod:            'Creating new pod',
   deletePod:            'Deleting pod',
 };
