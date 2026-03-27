@@ -593,11 +593,17 @@ async function fetchMetaDailyInsights(adAccountId, dateStart, dateEnd) {
   if (metaDailyCache[cacheKey]) return metaDailyCache[cacheKey];
   const actId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
   try {
-    const url = `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,actions,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&time_increment=1&level=account&access_token=${META_ACCESS_TOKEN}`;
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    const json = await resp.json();
-    const days = (json.data || []).map(d => {
+    let allData = [];
+    let url = `${META_BASE}/${actId}/insights?fields=spend,impressions,clicks,actions,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&time_increment=1&level=account&limit=100&access_token=${META_ACCESS_TOKEN}`;
+    // Paginate through all results
+    while (url) {
+      const resp = await fetch(url);
+      if (!resp.ok) break;
+      const json = await resp.json();
+      if (json.data) allData = allData.concat(json.data);
+      url = (json.paging && json.paging.next) ? json.paging.next : null;
+    }
+    const days = allData.map(d => {
       const leads = (d.actions || []).find(a => a.action_type === 'lead' || a.action_type === 'offsite_conversion.fb_pixel_lead');
       const obClicks = (d.outbound_clicks || []).find(a => a.action_type === 'outbound_click');
       const outboundClicks = obClicks ? parseInt(obClicks.value || 0) : 0;
@@ -5003,10 +5009,11 @@ async function testSlackWebhooks() {
   if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
   showToast('Sending test to both channels...', 'success');
   const result = await writeToSheet('testSlackWebhook', {});
-  if (result.ok) {
-    showToast(`Test sent to ${result.count || 0} channel(s)`, 'success');
+  if (result.ok && result.count > 0) {
+    showToast(`Test sent to ${result.count} channel(s)`, 'success');
   } else {
-    showToast('Test failed — check bot token and channel IDs', 'error');
+    const errMsg = result.error || 'No channels received the test — check bot token, channel IDs, and that the bot is added to both channels.';
+    showToast(errMsg, 'error', 12000);
   }
 }
 
