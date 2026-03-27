@@ -657,7 +657,7 @@ async function fetchMetaAdInsights(adAccountId, dateStart, dateEnd, filters) {
   if (metaAdCache[cacheKey]) return metaAdCache[cacheKey];
   const actId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
   try {
-    // Build dynamic filtering
+    // Build dynamic filtering — only show active campaigns/ad sets
     const filterArr = [];
     if (f.campaignId) {
       filterArr.push({field:'campaign.id',operator:'IN',value:[f.campaignId]});
@@ -667,6 +667,8 @@ async function fetchMetaAdInsights(adAccountId, dateStart, dateEnd, filters) {
     if (f.adsetId) {
       filterArr.push({field:'adset.id',operator:'IN',value:[f.adsetId]});
     }
+    filterArr.push({field:'campaign.effective_status',operator:'IN',value:['ACTIVE']});
+    filterArr.push({field:'adset.effective_status',operator:'IN',value:['ACTIVE']});
     let allData = [];
     let url = `${META_BASE}/${actId}/insights?fields=ad_id,ad_name,spend,impressions,clicks,actions,cost_per_action_type,cpc,cpm,ctr,frequency,outbound_clicks&time_range={"since":"${dateStart}","until":"${dateEnd}"}&level=ad&limit=100&filtering=${encodeURIComponent(JSON.stringify(filterArr))}&access_token=${META_ACCESS_TOKEN}`;
     while (url) {
