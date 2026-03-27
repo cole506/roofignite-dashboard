@@ -7461,7 +7461,7 @@ function renderDontTouch() {
 
 function dtBuildStrip(accounts) {
   const strip = document.getElementById('dt-strip');
-  if (!strip) return;
+  if (!strip || !accounts.length) return;
   // Each card is 200px wide + 12px gap
   const CARD_W = 212;
   // Build enough cards to fill several screens worth
