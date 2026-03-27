@@ -705,18 +705,28 @@ async function fetchAdCreativesAndStatuses(ads) {
     const batch = toFetch.slice(i, i + 10);
     await Promise.all(batch.map(async (ad) => {
       try {
-        const url = `${META_BASE}/${ad.adId}?fields=creative{thumbnail_url,image_url},effective_status&access_token=${META_ACCESS_TOKEN}`;
+        const url = `${META_BASE}/${ad.adId}?fields=creative{thumbnail_url,image_url,body,title,link_url,call_to_action_type,object_story_spec},effective_status&access_token=${META_ACCESS_TOKEN}`;
         const resp = await fetch(url);
         if (!resp.ok) return;
         const json = await resp.json();
         const creative = json.creative || {};
-        metaCreativeCache[ad.adId] = creative.image_url || creative.thumbnail_url || null;
+        metaCreativeCache[ad.adId] = {
+          image: creative.image_url || creative.thumbnail_url || null,
+          body: creative.body || '',
+          title: creative.title || '',
+          linkUrl: creative.link_url || '',
+          cta: (creative.call_to_action_type || '').replace(/_/g, ' '),
+        };
         metaAdStatusCache[ad.adId] = json.effective_status || 'UNKNOWN';
       } catch (e) { console.warn('Creative/status fetch failed for ad ' + ad.adId, e); }
     }));
   }
   ads.forEach(a => {
-    if (metaCreativeCache[a.adId]) a.thumbnail = metaCreativeCache[a.adId];
+    const cached = metaCreativeCache[a.adId];
+    if (cached) {
+      a.thumbnail = typeof cached === 'string' ? cached : cached.image;
+      a.adCopy = typeof cached === 'object' ? cached : null;
+    }
     if (metaAdStatusCache[a.adId]) a.status = metaAdStatusCache[a.adId];
   });
 }
@@ -898,6 +908,28 @@ function renderMetaAdGrid(ads) {
   const el = document.getElementById('meta-daily-table');
   if (!el || !ads) return;
 
+  // Get dynamic thresholds from the active cycle/account
+  const sel = document.getElementById('meta-cycle-select');
+  const idx = sel ? parseInt(sel.value) : (_metaCycleList ? _metaCycleList.length - 1 : 0);
+  const cyc = _metaCycleList && _metaCycleList[idx] ? _metaCycleList[idx] : {};
+  const acct = _metaCycleAcct || {};
+
+  // CPL threshold: Greg's Lead CPL Goal (CPA Goal × clamped L2B rate)
+  const cpaGoal = acct.cpaGoal || cyc.cpaGoal || 0;
+  const l2b = typeof getLeadToBookedRate === 'function' && acct.name ? getLeadToBookedRate(acct.name, 45) : null;
+  const gregCPL = typeof getGregLeadCPLGoal === 'function' && cpaGoal ? getGregLeadCPLGoal(cpaGoal, l2b) : null;
+
+  // CPC threshold: cpcMedian × cpcMultiplier (capped at $6)
+  const cpcMed = cyc.cpcMedian || null;
+  const cpcMult = cyc.cpcMultiplier || 1.4;
+  const maxCPC = cpcMed ? Math.min(cpcMed, 6) * cpcMult : null;
+
+  // CPM/CTR/Freq thresholds from KPI_TARGETS
+  const kpi = (typeof KPI_TARGETS !== 'undefined') ? KPI_TARGETS : {};
+  const cpmGood = kpi.cpm || 20;      // green if under this
+  const cpmMax = 50;                    // red if over this
+  const ctrGood = kpi.linkCTR || 0.9;  // green if above this %
+
   let html = '<div class="space-y-3">';
   ads.forEach((ad, i) => {
     const isActive = ad.status === 'ACTIVE';
@@ -905,8 +937,15 @@ function renderMetaAdGrid(ads) {
     const canToggle = isActive || isPaused;
     const statusColor = isActive ? 'bg-green-500' : isPaused ? 'bg-dark-600' : 'bg-red-500/50';
     const statusLabel = ad.status ? ad.status.charAt(0) + ad.status.slice(1).toLowerCase() : 'Unknown';
-    const cplColor = ad.leads > 0 ? (ad.cpl < 150 ? 'text-green-400' : ad.cpl < 250 ? 'text-yellow-400' : 'text-red-400') : 'text-dark-500';
-    const ctrColor = ad.ctr > 1 ? 'text-green-400' : ad.ctr > 0.5 ? 'text-yellow-400' : 'text-red-400';
+
+    // Dynamic CPL color: green if under greg goal, yellow within 20% over, red otherwise
+    const cplColor = ad.leads > 0 ? (gregCPL ? (ad.cpl <= gregCPL ? 'text-green-400' : ad.cpl <= gregCPL * 1.2 ? 'text-yellow-400' : 'text-red-400') : (ad.cpl < 150 ? 'text-green-400' : ad.cpl < 250 ? 'text-yellow-400' : 'text-red-400')) : 'text-dark-500';
+    // Dynamic CPC color: green if under max, yellow within 10% of max, red over
+    const cpcColor = ad.outboundClicks > 0 ? (maxCPC ? (ad.cpc <= maxCPC * 0.8 ? 'text-green-400' : ad.cpc <= maxCPC ? 'text-yellow-400' : 'text-red-400') : (ad.cpc < 3 ? 'text-green-400' : ad.cpc < 6 ? 'text-yellow-400' : 'text-red-400')) : 'text-dark-500';
+    // Dynamic CTR color
+    const ctrColor = ad.ctr >= ctrGood ? 'text-green-400' : ad.ctr >= ctrGood * 0.5 ? 'text-yellow-400' : 'text-red-400';
+    // Dynamic CPM color
+    const cpmColor = ad.impressions > 0 ? (ad.cpm <= cpmGood ? 'text-green-400' : ad.cpm <= cpmMax ? 'text-yellow-400' : 'text-red-400') : 'text-dark-500';
     const thumbUrl = ad.thumbnail ? ad.thumbnail.replace(/'/g, "\\'") : '';
     const rank = i + 1;
 
@@ -915,8 +954,8 @@ function renderMetaAdGrid(ads) {
       <!-- Creative (left) -->
       <div class="relative flex-shrink-0 w-[200px]">
         ${ad.thumbnail
-          ? `<img src="${ad.thumbnail}" class="w-full h-full object-cover cursor-pointer min-h-[140px]" onclick="showCreativeModal('${thumbUrl}')" />`
-          : '<div class="w-full h-full min-h-[140px] bg-dark-700 flex items-center justify-center text-dark-500 text-sm">No Creative</div>'}
+          ? `<img src="${ad.thumbnail}" class="w-full h-full object-cover cursor-pointer min-h-[140px]" onclick="showAdDetailModal(${i})" />`
+          : `<div class="w-full h-full min-h-[140px] bg-dark-700 flex items-center justify-center text-dark-500 text-sm cursor-pointer" onclick="showAdDetailModal(${i})">No Creative</div>`}
         <div class="absolute top-2 left-2 bg-dark-900/80 rounded-full w-6 h-6 flex items-center justify-center backdrop-blur-sm">
           <span class="text-[10px] font-bold text-white">${rank}</span>
         </div>
@@ -937,10 +976,10 @@ function renderMetaAdGrid(ads) {
           <div><span class="text-dark-400">Spend</span> <span class="text-white font-bold ml-1.5">$${ad.spend.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
           <div><span class="text-dark-400">Leads</span> <span class="text-white font-bold ml-1.5">${ad.leads}</span></div>
           <div><span class="text-dark-400">CPL</span> <span class="${cplColor} font-semibold ml-1.5">$${ad.leads > 0 ? ad.cpl.toFixed(2) : '—'}</span></div>
-          <div><span class="text-dark-400">CPC</span> <span class="text-dark-200 ml-1.5">$${ad.outboundClicks > 0 ? ad.cpc.toFixed(2) : '—'}</span></div>
-          <div><span class="text-dark-400">CTR</span> <span class="${ctrColor} ml-1.5">${ad.impressions > 0 ? ad.ctr.toFixed(2) + '%' : '—'}</span></div>
+          <div><span class="text-dark-400">CPC</span> <span class="${cpcColor} font-semibold ml-1.5">$${ad.outboundClicks > 0 ? ad.cpc.toFixed(2) : '—'}</span></div>
+          <div><span class="text-dark-400">CTR</span> <span class="${ctrColor} font-semibold ml-1.5">${ad.impressions > 0 ? ad.ctr.toFixed(2) + '%' : '—'}</span></div>
           <div><span class="text-dark-400">Freq</span> <span class="text-dark-200 ml-1.5">${ad.frequency.toFixed(2)}</span></div>
-          <div><span class="text-dark-400">CPM</span> <span class="text-dark-200 ml-1.5">$${ad.impressions > 0 ? ad.cpm.toFixed(2) : '—'}</span></div>
+          <div><span class="text-dark-400">CPM</span> <span class="${cpmColor} font-semibold ml-1.5">$${ad.impressions > 0 ? ad.cpm.toFixed(2) : '—'}</span></div>
           <div><span class="text-dark-400">Clicks</span> <span class="text-dark-200 ml-1.5">${ad.outboundClicks}</span></div>
         </div>
       </div>
@@ -950,17 +989,89 @@ function renderMetaAdGrid(ads) {
   el.innerHTML = html;
 }
 
-function showCreativeModal(imageUrl) {
+function showAdDetailModal(adIndex) {
+  const ad = metaAdData && metaAdData[adIndex];
+  if (!ad) return;
   const existing = document.getElementById('creative-modal');
   if (existing) existing.remove();
   const modal = document.createElement('div');
   modal.id = 'creative-modal';
   modal.onclick = () => modal.remove();
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;';
-  modal.innerHTML = `<img src="${imageUrl}" style="max-width:90vw;max-height:90vh;border-radius:12px;box-shadow:0 25px 50px rgba(0,0,0,0.5);" onclick="event.stopPropagation()" />`;
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:2rem;';
+
+  const copy = ad.adCopy || {};
+  const hasImage = !!ad.thumbnail;
+  const hasCopy = copy.body || copy.title;
+
+  let content = '<div onclick="event.stopPropagation()" style="display:flex;gap:24px;max-width:900px;max-height:85vh;width:100%;">';
+
+  // Image side
+  if (hasImage) {
+    content += `<div style="flex-shrink:0;max-width:${hasCopy ? '400px' : '600px'};">
+      <img src="${ad.thumbnail}" style="max-width:100%;max-height:80vh;border-radius:12px;box-shadow:0 25px 50px rgba(0,0,0,0.5);" />
+    </div>`;
+  }
+
+  // Copy side
+  content += `<div style="flex:1;overflow-y:auto;min-width:0;">
+    <div style="background:rgba(30,41,59,0.95);border-radius:12px;padding:20px;border:1px solid rgba(148,163,184,0.1);">
+      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">${ad.adName}</div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:16px;">ID: ${ad.adId}</div>`;
+
+  if (copy.title) {
+    content += `<div style="margin-bottom:12px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:4px;">Headline</div>
+      <div style="font-size:14px;font-weight:600;color:#e2e8f0;">${escHtml(copy.title)}</div>
+    </div>`;
+  }
+
+  if (copy.body) {
+    content += `<div style="margin-bottom:12px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:4px;">Body Copy</div>
+      <div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">${escHtml(copy.body)}</div>
+    </div>`;
+  }
+
+  if (copy.cta) {
+    content += `<div style="margin-bottom:12px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:4px;">Call to Action</div>
+      <div style="display:inline-block;background:rgba(249,115,22,0.15);color:#fdba74;font-size:12px;font-weight:600;padding:4px 12px;border-radius:6px;">${escHtml(copy.cta)}</div>
+    </div>`;
+  }
+
+  if (copy.linkUrl) {
+    content += `<div style="margin-bottom:12px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:4px;">Link</div>
+      <div style="font-size:12px;color:#60a5fa;word-break:break-all;">${escHtml(copy.linkUrl)}</div>
+    </div>`;
+  }
+
+  if (!hasCopy && !copy.cta && !copy.linkUrl) {
+    content += '<div style="color:#64748b;font-size:13px;">No ad copy data available</div>';
+  }
+
+  // Quick stats
+  content += `<div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(148,163,184,0.1);">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:8px;">Performance</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 16px;font-size:12px;">
+      <div><span style="color:#64748b;">Spend</span> <span style="color:#fff;font-weight:700;float:right;">$${ad.spend.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span></div>
+      <div><span style="color:#64748b;">Leads</span> <span style="color:#fff;font-weight:700;float:right;">${ad.leads}</span></div>
+      <div><span style="color:#64748b;">CPL</span> <span style="color:#fff;float:right;">$${ad.leads > 0 ? ad.cpl.toFixed(2) : '—'}</span></div>
+      <div><span style="color:#64748b;">CPC</span> <span style="color:#fff;float:right;">$${ad.outboundClicks > 0 ? ad.cpc.toFixed(2) : '—'}</span></div>
+      <div><span style="color:#64748b;">CTR</span> <span style="color:#fff;float:right;">${ad.impressions > 0 ? ad.ctr.toFixed(2) + '%' : '—'}</span></div>
+      <div><span style="color:#64748b;">CPM</span> <span style="color:#fff;float:right;">$${ad.impressions > 0 ? ad.cpm.toFixed(2) : '—'}</span></div>
+    </div>
+  </div>`;
+
+  content += '</div></div></div>';
+  modal.innerHTML = content;
   document.body.appendChild(modal);
   const closeOnEsc = (e) => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', closeOnEsc); } };
   document.addEventListener('keydown', closeOnEsc);
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function switchMetaMode(mode) {
