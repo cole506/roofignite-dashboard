@@ -518,7 +518,7 @@ tailwind.config = {
       <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Focus</div>
       <button onclick="navigate('donttouch')" id="nav-donttouch" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
         <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        <span class="font-medium">Don't Touch</span>
+        <span class="font-medium">Gamble Mode</span>
       </button>
 
       <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Admin</div>
@@ -7388,7 +7388,7 @@ function handleSignOut() {
 })();
 
 // ═══════════════════════════════════════════════
-// DON'T TOUCH — CS2 CASE OPENING FOCUS TOOL
+// GAMBLE MODE — CS2 CASE OPENING FOCUS TOOL
 // ═══════════════════════════════════════════════
 
 let dtSpinLocked = false;
@@ -7414,7 +7414,7 @@ function renderDontTouch() {
 
   var html = '<div class="max-w-4xl mx-auto py-8">';
   html += '<div class="text-center mb-8">';
-  html += '<h1 class="text-3xl font-black text-white mb-2">DON\'T TOUCH</h1>';
+  html += '<h1 class="text-3xl font-black text-white mb-2">GAMBLE MODE</h1>';
   html += '<p class="text-dark-400 text-sm mb-4">Spin the wheel. Work the account. No switching.</p>';
   html += '<select id="dt-manager-select" onchange="localStorage.setItem(\'dt_manager\',this.value);renderDontTouch()" class="text-sm bg-dark-700 border border-dark-600 text-dark-200 rounded-lg px-4 py-2 appearance-none cursor-pointer">';
   managers.forEach(function(m) {
