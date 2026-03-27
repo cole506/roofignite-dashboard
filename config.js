@@ -41,9 +41,11 @@ const CONFIG = {
   META_ACCESS_TOKEN: 'EAASdzH5TwEUBQRgZAhUKhIO1fHvuZCW9NA5ZBxJ2kxZAiRGDcKhY3FRQBwF53rzAtU4UADlTZCjZCvAKtAzdvPlDjeHZC5mrrmVe4RpSxcn1zJwDopKk7TaIz7ydeLYDFhXGgl8tB8Yd2HwZBaeVhU6DgOJt87xz0oHRA88lU6Ym9ZAhJVK4PK0P8VN4p2NsYLzS6kAZDZD',
   META_API_VERSION: 'v20.0',
 
-  // Slack Defaults
+  // Slack Defaults (channels managed via backend Script Properties)
   SLACK: {
-    DEFAULT_BILLING_ADMIN: 'Oscar',
+    CHANNEL_B2C: 'C0AP0HTB951',  // #b2c-reports
+    CHANNEL_B2B: 'C0AP6VAV18S',  // #b2b-reports
+    APP_ID: 'A09CNAV4MCM',
     PERCENTAGE_INTERVALS: [0,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100],
   }
 };
