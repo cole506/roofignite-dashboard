@@ -6097,7 +6097,9 @@ async function createNewClient() {
   const newAcct = {
     name, manager: mgr, pod, adAccountId: adId || '', section: '',
     isPaused: false, status: 'Q1 Onboarded',
-    bookedGoal, gregGoal: bookedGoal, cpaGoal: null, dailyBudget, monthlyBudget: dailyBudget ? dailyBudget * 28 : null, cycles: [cycle1]
+    bookedGoal, gregGoal: bookedGoal, cpaGoal: null, dailyBudget, monthlyBudget: dailyBudget ? dailyBudget * 28 : null,
+    cycleStartDate: startDate, cycleEndDate: endDate,
+    cycles: [cycle1]
   };
 
   allAccounts.push(newAcct);
