@@ -7403,12 +7403,11 @@ function renderDontTouch() {
   const managers = getManagers();
   const savedDtManager = localStorage.getItem('dt_manager') || managers[0] || '';
 
-  // Get active accounts for selected manager
-  const activeAccts = allAccounts.filter(a => {
-    if (a.manager !== savedDtManager) return false;
-    const cycs = allCycles.filter(c => c.name === a.name);
-    return cycs.some(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= getTodayStr() && c.cycleEndDate >= getTodayStr());
-  }).map(a => a.name).filter((v,i,arr) => arr.indexOf(v) === i);
+  // Get accounts for selected manager (any with status not paused/inactive)
+  const activeAccts = allAccounts
+    .filter(a => a.manager === savedDtManager && a.status !== 'paused' && a.status !== 'inactive')
+    .map(a => a.name)
+    .filter((v,i,arr) => arr.indexOf(v) === i);
 
   el.innerHTML = `
     <div class="max-w-4xl mx-auto py-8">
@@ -7420,9 +7419,9 @@ function renderDontTouch() {
         </select>
       </div>
 
-      ${!activeAccts.length ? '<div class="text-center py-12 text-dark-400">No active accounts for ' + savedDtManager + '</div>' : ''}
+      ${!activeAccts.length ? '<div class="text-center py-12 text-dark-400">No accounts for ' + savedDtManager + '</div>' : `
 
-      <!-- Case Opening Strip -->
+      <!-- Case Opening Strip -->`}
       <div class="glass rounded-2xl p-6 mb-6 overflow-hidden">
         <div class="relative" style="height:120px;">
           <!-- Pointer/needle -->
@@ -7452,11 +7451,12 @@ function renderDontTouch() {
         </div>
       </div>
       ` : ''}
+      `}
     </div>
   `;
 
   // Build the strip with duplicated accounts for infinite scroll feel
-  dtBuildStrip(activeAccts);
+  if (activeAccts.length) dtBuildStrip(activeAccts);
 }
 
 function dtBuildStrip(accounts) {
