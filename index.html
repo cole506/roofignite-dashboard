@@ -4754,68 +4754,110 @@ function renderAdminView() {
 // ═══════════════════════════════════════════════
 function renderSettingsTab(managers) {
   const hasGAS = !!APPS_SCRIPT_URL;
-  const cfg = slackConfigCache || { webhooks: {}, billingAdmin: '', notifyToggles: { reports: {}, warnings: {} } };
-  const toggles = (cfg.notifyToggles) || { reports: {}, warnings: {} };
-  const savedBillingAdmin = localStorage.getItem('roofignite_billing_admin') || cfg.billingAdmin || (CONFIG.SLACK && CONFIG.SLACK.DEFAULT_BILLING_ADMIN) || '';
+  const cfg = slackConfigCache || { userIds: {}, globalConfig: {}, billingAdmin: '', notifyToggles: {} };
+  const userIds = cfg.userIds || {};
+  const gc = cfg.globalConfig || {};
+  const toggles = cfg.notifyToggles || {};
+  const savedBillingAdmin = localStorage.getItem('roofignite_billing_admin') || cfg.billingAdmin || '';
+
+  const TOGGLE_TYPES = [
+    { key: 'audit',        label: 'Audit' },
+    { key: 'pace',         label: 'Pace' },
+    { key: 'greg',         label: 'Greg' },
+    { key: 'cyclewarnings', label: 'Cycle Warn' },
+    { key: 'billingauto',  label: 'Billing Auto' },
+  ];
+
+  function toggleBtn(manager, type, isOn) {
+    return '<button onclick="toggleSlackNotify(\'' + manager + '\',\'' + type + '\',' + (!isOn) + ')" class="relative w-11 h-6 rounded-full transition-colors duration-200 ' + (isOn ? 'bg-green-500' : 'bg-dark-600') + '" title="' + (isOn ? 'Enabled' : 'Disabled') + '"><span class="absolute top-0.5 ' + (isOn ? 'left-[22px]' : 'left-0.5') + ' w-5 h-5 rounded-full bg-white shadow transition-all duration-200"></span></button>';
+  }
 
   return `
-    <!-- Slack Integrations -->
+    <!-- Slack Connection -->
     <div class="glass rounded-2xl p-6 mb-6">
       <div class="flex items-center gap-3 mb-2">
         <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-600/20 border border-purple-500/20 flex items-center justify-center text-sm">💬</span>
         <div>
-          <h3 class="text-base font-bold text-white">Slack Integrations</h3>
-          <p class="text-dark-400 text-xs mt-0.5">Billing notifications are sent to specific team members via Slack webhooks</p>
+          <h3 class="text-base font-bold text-white">Slack Connection</h3>
+          <p class="text-dark-400 text-xs mt-0.5">Bot token + channel IDs for posting reports to #b2c-reports and #b2b-reports</p>
         </div>
       </div>
 
-      <!-- Billing Admin Dropdown -->
-      <div class="bg-dark-800/60 rounded-xl p-4 border border-dark-600/30 mt-4 mb-4">
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-semibold text-white">Billing Admin</p>
-            <p class="text-[11px] text-dark-400 mt-0.5">Receives <span class="text-yellow-400 font-medium">Good to Bill</span> and <span class="text-orange-400 font-medium">Try Again</span> notifications</p>
+      <div class="space-y-3 mt-4">
+        <!-- Bot Token -->
+        <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 flex items-center gap-3">
+          <span class="text-sm font-medium text-white min-w-[100px]">Bot Token</span>
+          <div class="flex-1 relative">
+            <input id="slack-bot-token" type="password" placeholder="xoxb-..." value="${gc.hasBotToken ? '••••••••••••••••••••' : ''}"
+              onfocus="if(this.value.startsWith('••'))this.value=''"
+              class="w-full bg-dark-900/80 border border-dark-600/50 rounded-lg text-xs text-white px-3 py-2 focus:outline-none focus:border-brand-500 font-mono pr-8" />
           </div>
-          <select id="billing-admin-select" onchange="saveBillingAdmin(this.value)" class="bg-dark-900/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2 focus:outline-none focus:border-brand-500 min-w-[160px]">
-            <option value="" ${!savedBillingAdmin ? 'selected' : ''}>— Select —</option>
-            ${managers.map(m => `<option value="${m}" ${savedBillingAdmin === m ? 'selected' : ''}>${m}</option>`).join('')}
-          </select>
+          <button onclick="saveSlackGlobalConfig()" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30 hover:bg-brand-500/30 transition-all">Save</button>
+          <span class="text-[10px] font-medium ${gc.hasBotToken ? 'text-green-400' : 'text-dark-500'} min-w-[80px] text-right">${gc.hasBotToken ? '✅ Set' : '⚪ Not set'}</span>
+        </div>
+        <!-- Channel IDs -->
+        <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 flex items-center gap-3">
+          <span class="text-sm font-medium text-white min-w-[100px]">B2C Channel</span>
+          <input id="slack-channel-b2c" type="text" placeholder="C0XXXXXXX" value="${gc.channelB2C || 'C0AP0HTB951'}"
+            class="flex-1 bg-dark-900/80 border border-dark-600/50 rounded-lg text-xs text-white px-3 py-2 focus:outline-none focus:border-brand-500 font-mono" />
+        </div>
+        <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 flex items-center gap-3">
+          <span class="text-sm font-medium text-white min-w-[100px]">B2B Channel</span>
+          <input id="slack-channel-b2b" type="text" placeholder="C0XXXXXXX" value="${gc.channelB2B || 'C0AP6VAV18S'}"
+            class="flex-1 bg-dark-900/80 border border-dark-600/50 rounded-lg text-xs text-white px-3 py-2 focus:outline-none focus:border-brand-500 font-mono" />
         </div>
       </div>
 
-      <!-- Webhook URLs -->
-      <div class="space-y-3 mb-4">
-        <p class="text-xs font-semibold text-dark-300 uppercase tracking-wider">Webhook URLs</p>
+      <div class="flex items-center justify-between mt-4">
+        <button onclick="testSlackWebhooks()" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-dark-700/60 text-dark-200 border border-dark-600/50 hover:bg-dark-600/60 transition-all">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Send Test to Both Channels
+        </button>
+        <p class="text-[10px] text-dark-500 max-w-xs text-right">Sends a test message to both #b2c-reports and #b2b-reports</p>
+      </div>
+    </div>
+
+    <!-- Slack User IDs -->
+    <div class="glass rounded-2xl p-6 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 border border-blue-500/20 flex items-center justify-center text-sm">👤</span>
+        <div>
+          <h3 class="text-base font-bold text-white">Slack User IDs</h3>
+          <p class="text-dark-400 text-xs mt-0.5">Used to @mention managers in channel messages. Find via Slack profile > three dots > Copy member ID</p>
+        </div>
+      </div>
+      <div class="space-y-3 mt-4">
         ${managers.map(m => {
-          const isConfigured = cfg.webhooks && cfg.webhooks[m];
+          const isConfigured = userIds[m];
           return `
           <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 flex items-center gap-3">
             <div class="flex items-center gap-2 min-w-[100px]">
               <span class="w-2 h-2 rounded-full ${isConfigured ? 'bg-green-400' : 'bg-dark-500'}"></span>
               <span class="text-sm font-medium text-white">${m}</span>
             </div>
-            <div class="flex-1 relative">
-              <input id="slack-webhook-${m.replace(/\s/g,'_')}" type="password" placeholder="https://hooks.slack.com/services/..." value="${isConfigured ? '••••••••••••••••••••' : ''}"
-                onfocus="if(this.value.startsWith('••'))this.value=''"
-                class="w-full bg-dark-900/80 border border-dark-600/50 rounded-lg text-xs text-white px-3 py-2 focus:outline-none focus:border-brand-500 font-mono pr-8" />
-              <button onclick="const inp=document.getElementById('slack-webhook-${m.replace(/\s/g,'_')}');inp.type=inp.type==='password'?'text':'password'" class="absolute right-2 top-1/2 -translate-y-1/2 text-dark-400 hover:text-white">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-              </button>
-            </div>
-            <button onclick="saveSlackWebhook('${m}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30 hover:bg-brand-500/30 transition-all">Save</button>
-            <span class="text-[10px] font-medium ${isConfigured ? 'text-green-400' : 'text-dark-500'} min-w-[80px] text-right">${isConfigured ? '✅ Connected' : '⚪ Not set'}</span>
+            <input id="slack-uid-${m.replace(/\s/g,'_')}" type="text" placeholder="U0XXXXXXX" value="${isConfigured ? '••••••••••' : ''}"
+              onfocus="if(this.value.startsWith('••'))this.value=''"
+              class="flex-1 bg-dark-900/80 border border-dark-600/50 rounded-lg text-xs text-white px-3 py-2 focus:outline-none focus:border-brand-500 font-mono" />
+            <button onclick="saveSlackUserId('${m}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-brand-500/20 text-brand-400 border border-brand-500/30 hover:bg-brand-500/30 transition-all">Save</button>
+            <span class="text-[10px] font-medium ${isConfigured ? 'text-green-400' : 'text-dark-500'} min-w-[80px] text-right">${isConfigured ? '✅ Set' : '⚪ Not set'}</span>
           </div>`;
         }).join('')}
       </div>
+    </div>
 
-      <!-- Test + Info -->
-      <div class="flex items-center justify-between">
-        <button onclick="testSlackWebhooks()" class="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-dark-700/60 text-dark-200 border border-dark-600/50 hover:bg-dark-600/60 transition-all">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-          Send Test to All
-        </button>
-        <p class="text-[10px] text-dark-500 max-w-xs text-right">Account managers receive <span class="text-green-400">Billed</span> &amp; <span class="text-red-400">Failed Payment</span> notifications on their own webhook.</p>
+    <!-- Billing Admin -->
+    <div class="glass rounded-2xl p-6 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-600/20 border border-green-500/20 flex items-center justify-center text-sm">💰</span>
+        <div>
+          <h3 class="text-base font-bold text-white">Billing Admin</h3>
+          <p class="text-dark-400 text-xs mt-0.5">Receives <span class="text-yellow-400 font-medium">Good to Bill</span> and <span class="text-orange-400 font-medium">Try Again</span> notifications. Billing notifications are always on.</p>
+        </div>
       </div>
+      <select id="billing-admin-select" onchange="saveBillingAdmin(this.value)" class="bg-dark-900/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2 focus:outline-none focus:border-brand-500 min-w-[160px] mt-2">
+        <option value="" ${!savedBillingAdmin ? 'selected' : ''}>— Select —</option>
+        ${managers.map(m => `<option value="${m}" ${savedBillingAdmin === m ? 'selected' : ''}>${m}</option>`).join('')}
+      </select>
     </div>
 
     <!-- Notification Toggles -->
@@ -4824,37 +4866,53 @@ function renderSettingsTab(managers) {
         <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/20 flex items-center justify-center text-sm">🔔</span>
         <div>
           <h3 class="text-base font-bold text-white">Notification Toggles</h3>
-          <p class="text-dark-400 text-xs mt-0.5">Enable or disable Automatic Accounts Summary (Mon. &amp; Fri.) and Cycle End Warnings per manager</p>
+          <p class="text-dark-400 text-xs mt-0.5">Enable or disable individual report types per manager. Billing (Command Centre) notifications are always on.</p>
         </div>
       </div>
 
       <div class="space-y-3 mt-4">
-        <div class="grid grid-cols-[1fr_100px_100px] gap-2 px-3">
+        <div class="grid grid-cols-[1fr_${TOGGLE_TYPES.map(() => '75px').join('_')}] gap-2 px-3">
           <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider">Manager</span>
-          <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">Acct Summary</span>
-          <span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">Cycle Warnings</span>
+          ${TOGGLE_TYPES.map(t => `<span class="text-[10px] font-semibold text-dark-300 uppercase tracking-wider text-center">${t.label}</span>`).join('')}
         </div>
         ${managers.map(m => {
-          const reportsOn = toggles.reports[m] !== false;
-          const warningsOn = toggles.warnings[m] !== false;
           return `
-          <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 grid grid-cols-[1fr_100px_100px] gap-2 items-center">
+          <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 grid grid-cols-[1fr_${TOGGLE_TYPES.map(() => '75px').join('_')}] gap-2 items-center">
             <span class="text-sm font-medium text-white">${m}</span>
-            <div class="flex justify-center">
-              <button onclick="toggleSlackNotify('${m}','reports',${!reportsOn})" class="relative w-11 h-6 rounded-full transition-colors duration-200 ${reportsOn ? 'bg-green-500' : 'bg-dark-600'}" title="${reportsOn ? 'Enabled' : 'Disabled'}">
-                <span class="absolute top-0.5 ${reportsOn ? 'left-[22px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all duration-200"></span>
-              </button>
-            </div>
-            <div class="flex justify-center">
-              <button onclick="toggleSlackNotify('${m}','warnings',${!warningsOn})" class="relative w-11 h-6 rounded-full transition-colors duration-200 ${warningsOn ? 'bg-green-500' : 'bg-dark-600'}" title="${warningsOn ? 'Enabled' : 'Disabled'}">
-                <span class="absolute top-0.5 ${warningsOn ? 'left-[22px]' : 'left-0.5'} w-5 h-5 rounded-full bg-white shadow transition-all duration-200"></span>
-              </button>
-            </div>
+            ${TOGGLE_TYPES.map(t => {
+              const isOn = (toggles[t.key] || {})[m] !== false;
+              return '<div class="flex justify-center">' + toggleBtn(m, t.key, isOn) + '</div>';
+            }).join('')}
           </div>`;
         }).join('')}
       </div>
 
       <p class="text-[10px] text-dark-500 mt-3">When disabled, the script will skip Slack messages for that manager. Default is <span class="text-green-400">enabled</span> for all.</p>
+    </div>
+
+    <!-- Manual Run -->
+    <div class="glass rounded-2xl p-6 mb-6">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/20 flex items-center justify-center text-sm">▶️</span>
+        <div>
+          <h3 class="text-base font-bold text-white">Run Reports Manually</h3>
+          <p class="text-dark-400 text-xs mt-0.5">Trigger a specific report for a single manager. Only that manager's report will be generated and sent.</p>
+        </div>
+      </div>
+
+      <div class="space-y-3 mt-4">
+        ${managers.map(m => `
+          <div class="bg-dark-800/60 rounded-xl p-3.5 border border-dark-600/30 flex items-center gap-3">
+            <span class="text-sm font-medium text-white min-w-[100px]">${m}</span>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="runScript('audit','${m}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/30 transition-all">Run Audit</button>
+              <button onclick="runScript('pace','${m}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-teal-500/20 text-teal-300 border border-teal-500/30 hover:bg-teal-500/30 transition-all">Run Pace</button>
+              <button onclick="runScript('greg','${m}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-orange-500/20 text-orange-300 border border-orange-500/30 hover:bg-orange-500/30 transition-all">Run Greg</button>
+              <button onclick="runScript('cycleWarnings','${m}')" class="px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-all">Run Cycle Warnings</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
     </div>
 
     <!-- Apps Script Connection -->
@@ -4877,49 +4935,52 @@ function renderSettingsTab(managers) {
       ${hasGAS ? `<div class="flex items-center gap-2 mb-4">
         <button onclick="APPS_SCRIPT_URL='';localStorage.removeItem('roofignite_gas_url');showToast('Disconnected','success');renderAdminView()" class="text-[10px] text-red-400 hover:text-red-300 font-medium underline">Disconnect</button>
       </div>` : ''}
-
-      <!-- Setup Instructions (collapsible) -->
-      <details class="group">
-        <summary class="cursor-pointer text-xs font-semibold text-dark-300 hover:text-white transition-colors flex items-center gap-2">
-          <svg class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-          Setup Instructions
-        </summary>
-        <div class="mt-3 text-sm text-dark-200 space-y-3">
-          <p><strong class="text-white">1. Create a "Greg Config" sheet tab</strong> in your Google Sheet with columns:</p>
-          <div class="bg-dark-900 rounded-lg p-3 text-[11px] font-mono text-blue-300 overflow-x-auto">Type | Name | Mode
-manager | Cole | HARD
-manager | Tyler | SOFT
-account | Some Account | OFF</div>
-          <p class="text-[11px] text-dark-400">The Greg script reads this tab instead of hardcoded OWNER_RUN_FLAGS.</p>
-
-          <p><strong class="text-white">2. Deploy the Apps Script</strong> (Extensions → Apps Script → Deploy → Web app)</p>
-          <p class="text-[11px] text-dark-400">Set "Execute as" to <strong>Me</strong> and "Who has access" to <strong>Anyone</strong>. Copy the Web app URL and paste it above.</p>
-
-          <p><strong class="text-white">3. Paste the full backend code</strong> from your appscripts.gs file into the Apps Script editor.</p>
-        </div>
-      </details>
     </div>
   `;
 }
 
 // ═══ Slack Settings Helpers ═══
 
-async function saveSlackWebhook(name) {
-  const inputId = 'slack-webhook-' + name.replace(/\s/g, '_');
+async function saveSlackUserId(name) {
+  const inputId = 'slack-uid-' + name.replace(/\s/g, '_');
   const inp = document.getElementById(inputId);
   if (!inp) return;
-  const url = inp.value.trim();
-  if (url.startsWith('••')) { showToast('Click the field and paste a new URL first', 'error'); return; }
+  const uid = inp.value.trim();
+  if (uid.startsWith('••')) { showToast('Click the field and enter a Slack User ID first', 'error'); return; }
   if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
 
-  const result = await writeToSheet('saveSlackWebhook', { person: name, webhookUrl: url });
+  const result = await writeToSheet('saveSlackUserId', { person: name, slackUserId: uid });
   if (result.ok) {
-    showToast(`Webhook ${url ? 'saved' : 'removed'} for ${name}`, 'success');
+    showToast(`Slack User ID ${uid ? 'saved' : 'removed'} for ${name}`, 'success');
     slackConfigCache = null;
     await loadSlackConfig();
     renderAdminView();
   } else {
-    showToast('Failed to save webhook', 'error');
+    showToast('Failed to save Slack User ID', 'error');
+  }
+}
+
+async function saveSlackGlobalConfig() {
+  if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
+  const tokenInp = document.getElementById('slack-bot-token');
+  const b2cInp = document.getElementById('slack-channel-b2c');
+  const b2bInp = document.getElementById('slack-channel-b2b');
+  const data = {};
+  if (tokenInp) {
+    const val = tokenInp.value.trim();
+    if (!val.startsWith('••')) data.botToken = val;
+  }
+  if (b2cInp) data.channelB2C = b2cInp.value.trim();
+  if (b2bInp) data.channelB2B = b2bInp.value.trim();
+
+  const result = await writeToSheet('saveSlackGlobalConfig', data);
+  if (result.ok) {
+    showToast('Slack config saved', 'success');
+    slackConfigCache = null;
+    await loadSlackConfig();
+    renderAdminView();
+  } else {
+    showToast('Failed to save Slack config', 'error');
   }
 }
 
@@ -4940,12 +5001,12 @@ async function loadSlackConfig() {
 
 async function testSlackWebhooks() {
   if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
-  showToast('Sending test messages...', 'success');
+  showToast('Sending test to both channels...', 'success');
   const result = await writeToSheet('testSlackWebhook', {});
   if (result.ok) {
-    showToast(`Test sent to ${result.count || 'all configured'} webhook(s)`, 'success');
+    showToast(`Test sent to ${result.count || 0} channel(s)`, 'success');
   } else {
-    showToast('Test failed — check webhook URLs', 'error');
+    showToast('Test failed — check bot token and channel IDs', 'error');
   }
 }
 
@@ -4962,19 +5023,27 @@ async function toggleSlackNotify(manager, type, enabled) {
   const result = await writeToSheet('setSlackNotifyToggle', { manager, type, enabled });
   if (result.ok) {
     // Update local cache immediately for instant UI feedback
-    if (!slackConfigCache) slackConfigCache = { webhooks: {}, billingAdmin: '', notifyToggles: { reports: {}, warnings: {} } };
-    if (!slackConfigCache.notifyToggles) slackConfigCache.notifyToggles = { reports: {}, warnings: {} };
-    if (type === 'reports') {
-      if (enabled) { delete slackConfigCache.notifyToggles.reports[manager]; }
-      else { slackConfigCache.notifyToggles.reports[manager] = false; }
-    } else {
-      if (enabled) { delete slackConfigCache.notifyToggles.warnings[manager]; }
-      else { slackConfigCache.notifyToggles.warnings[manager] = false; }
-    }
-    showToast(`${type === 'reports' ? 'Acct Summary (Mon. & Fri.)' : 'Cycle Warnings'} ${enabled ? 'enabled' : 'disabled'} for ${manager}`, 'success');
+    if (!slackConfigCache) slackConfigCache = { userIds: {}, globalConfig: {}, billingAdmin: '', notifyToggles: {} };
+    if (!slackConfigCache.notifyToggles) slackConfigCache.notifyToggles = {};
+    if (!slackConfigCache.notifyToggles[type]) slackConfigCache.notifyToggles[type] = {};
+    if (enabled) { delete slackConfigCache.notifyToggles[type][manager]; }
+    else { slackConfigCache.notifyToggles[type][manager] = false; }
+    const labels = { audit: 'Audit Reports', pace: 'Pace Reports', greg: 'Greg Reports', cyclewarnings: 'Cycle Warnings', billingauto: 'Billing Auto' };
+    showToast(`${labels[type] || type} ${enabled ? 'enabled' : 'disabled'} for ${manager}`, 'success');
     renderAdminView();
   } else {
     showToast('Failed to update toggle', 'error');
+  }
+}
+
+async function runScript(scriptName, manager) {
+  if (!APPS_SCRIPT_URL) { showToast('Connect Apps Script first', 'error'); return; }
+  showToast(`Running ${scriptName} for ${manager}...`, 'success');
+  const result = await writeToSheet('runScript', { script: scriptName, manager: manager });
+  if (result.ok) {
+    showToast(`${scriptName} report sent for ${manager}`, 'success');
+  } else {
+    showToast(`Failed to run ${scriptName}: ${result.error || 'unknown error'}`, 'error');
   }
 }
 
@@ -6367,10 +6436,12 @@ const WRITE_ACTION_LABELS = {
   setAccountGregMode:   'Updating Greg mode',
   addManager:           'Adding manager',
   deleteManager:        'Removing manager',
-  saveSlackWebhook:     'Saving Slack webhook',
-  testSlackWebhook:     'Testing Slack webhooks',
+  saveSlackUserId:      'Saving Slack User ID',
+  saveSlackGlobalConfig: 'Saving Slack config',
+  testSlackWebhook:     'Testing Slack channels',
   saveBillingAdmin:     'Saving billing admin',
   setSlackNotifyToggle: 'Updating notification settings',
+  runScript:            'Running report',
   createPod:            'Creating new pod',
   deletePod:            'Deleting pod',
 };
