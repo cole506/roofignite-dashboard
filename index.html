@@ -7456,24 +7456,41 @@ function renderDontTouch() {
 function dtBuildStrip(accounts) {
   const strip = document.getElementById('dt-strip');
   if (!strip || !accounts.length) return;
-  // Each card is 200px wide + 12px gap
   const CARD_W = 212;
-  // Build enough cards to fill several screens worth
-  const repeats = Math.max(10, Math.ceil(2000 / (accounts.length * CARD_W)));
-  let html = '';
-  const colors = ['from-blue-500/20 to-blue-600/20 border-blue-500/30', 'from-purple-500/20 to-purple-600/20 border-purple-500/30', 'from-teal-500/20 to-teal-600/20 border-teal-500/30', 'from-pink-500/20 to-pink-600/20 border-pink-500/30', 'from-amber-500/20 to-amber-600/20 border-amber-500/30', 'from-indigo-500/20 to-indigo-600/20 border-indigo-500/30'];
-  for (let r = 0; r < repeats; r++) {
-    accounts.forEach((name, i) => {
-      const color = colors[i % colors.length];
-      html += `<div class="flex-shrink-0 w-[200px] h-[120px] rounded-xl bg-gradient-to-br ${color} border flex items-center justify-center mx-1.5" data-account="${name.replace(/"/g,'&quot;')}">
-        <span class="text-white font-bold text-sm text-center px-3 leading-tight">${name}</span>
-      </div>`;
+  // Build the pool: all accounts + 2 gold break cards
+  const BREAK_LABEL = '15 MIN BREAK';
+  var pool = accounts.slice();
+  pool.push(BREAK_LABEL);
+  pool.push(BREAK_LABEL);
+  // Shuffle the pool for each repeat
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  var repeats = Math.max(8, Math.ceil(1500 / (pool.length * CARD_W)));
+  var html = '';
+  var colors = ['from-blue-500/20 to-blue-600/20 border-blue-500/30', 'from-purple-500/20 to-purple-600/20 border-purple-500/30', 'from-teal-500/20 to-teal-600/20 border-teal-500/30', 'from-pink-500/20 to-pink-600/20 border-pink-500/30', 'from-amber-500/20 to-amber-600/20 border-amber-500/30', 'from-indigo-500/20 to-indigo-600/20 border-indigo-500/30'];
+  var goldStyle = 'from-yellow-400/30 to-amber-500/30 border-yellow-500/50';
+  var allCards = []; // track names in order
+  for (var r = 0; r < repeats; r++) {
+    var shuffled = shuffle(pool);
+    shuffled.forEach(function(name, i) {
+      var isBreak = (name === BREAK_LABEL);
+      var color = isBreak ? goldStyle : colors[i % colors.length];
+      var textClass = isBreak ? 'text-yellow-300' : 'text-white';
+      var icon = isBreak ? '<div class="text-2xl mb-1">&#9749;</div>' : '';
+      html += '<div class="flex-shrink-0 w-[200px] h-[120px] rounded-xl bg-gradient-to-br ' + color + ' border flex flex-col items-center justify-center mx-1.5" data-account="' + name.replace(/"/g,'&quot;') + '">';
+      html += icon + '<span class="' + textClass + ' font-bold text-sm text-center px-3 leading-tight">' + name + '</span>';
+      html += '</div>';
+      allCards.push(name);
     });
   }
   strip.innerHTML = html;
-  strip._accounts = accounts;
+  strip._accounts = pool; // includes breaks
+  strip._accountNames = allCards; // flat ordered list
   strip._cardW = CARD_W;
-  strip._totalCards = repeats * accounts.length;
+  strip._totalCards = allCards.length;
 }
 
 function dtSpin() {
@@ -7486,22 +7503,28 @@ function dtSpin() {
   const result = document.getElementById('dt-result');
   if (!strip || !strip._accounts) return;
 
-  const accounts = strip._accounts;
+  const allCards = strip._accountNames;
   const CARD_W = strip._cardW;
   const containerWidth = strip.parentElement.offsetWidth;
+  const totalCards = allCards.length;
 
-  // Pick random winner
-  const winnerIdx = Math.floor(Math.random() * accounts.length);
-  const winnerName = accounts[winnerIdx];
+  // Pick a random card from the middle section (avoid edges)
+  const safeStart = Math.floor(totalCards * 0.4);
+  const safeEnd = Math.floor(totalCards * 0.7);
+  const targetCardIndex = safeStart + Math.floor(Math.random() * (safeEnd - safeStart));
+  const winnerName = allCards[targetCardIndex];
 
-  // Calculate target position: center the winner card under the needle
-  const minSpinCards = accounts.length * 5;
-  const extraCards = Math.floor(Math.random() * accounts.length);
-  const targetCardIndex = minSpinCards + extraCards + winnerIdx;
-  // Each card is 200px wide with 6px margin on each side (mx-1.5) = 212px per slot
-  // Card center = targetCardIndex * 212 + 100 (half of 200px card width) + 6 (left margin)
-  const cardCenter = (targetCardIndex * CARD_W) + 106;
-  const targetOffset = cardCenter - (containerWidth / 2);
+  // Measure actual card positions from the DOM for accuracy
+  const cards = strip.children;
+  let targetOffset;
+  if (cards[targetCardIndex]) {
+    const cardLeft = cards[targetCardIndex].offsetLeft;
+    const cardW = cards[targetCardIndex].offsetWidth;
+    targetOffset = cardLeft + (cardW / 2) - (containerWidth / 2);
+  } else {
+    // Fallback: calculate from CARD_W
+    targetOffset = (targetCardIndex * CARD_W) + (CARD_W / 2) - (containerWidth / 2);
+  }
 
   // Disable button
   btn.disabled = true;
@@ -7581,12 +7604,19 @@ function dtSpin() {
     dtCurrentAccount = winnerName;
 
     // Show result
+    var isBreak = winnerName === '15 MIN BREAK';
     result.classList.remove('hidden');
-    document.getElementById('dt-result-header').innerHTML = `
-      <div class="text-orange-400 text-xs uppercase tracking-widest font-bold mb-3">YOUR MISSION</div>
-      <div class="text-4xl font-black text-white mb-2">${winnerName}</div>
-      <div class="text-dark-400 text-sm">Focus on this account. Click "I'm Done" when you're finished.</div>
-    `;
+    if (isBreak) {
+      document.getElementById('dt-result-header').innerHTML =
+        '<div class="text-yellow-400 text-xs uppercase tracking-widest font-bold mb-3">&#127881; GOLD &#127881;</div>' +
+        '<div class="text-4xl font-black text-yellow-300 mb-2">15 Minute Break!</div>' +
+        '<div class="text-dark-400 text-sm">You earned it. Step away, grab coffee, touch grass.</div>';
+    } else {
+      document.getElementById('dt-result-header').innerHTML =
+        '<div class="text-orange-400 text-xs uppercase tracking-widest font-bold mb-3">YOUR MISSION</div>' +
+        '<div class="text-4xl font-black text-white mb-2">' + winnerName + '</div>' +
+        '<div class="text-dark-400 text-sm">Focus on this account. Click "I\'m Done" when you\'re finished.</div>';
+    }
     document.getElementById('dt-done-area').style.display = 'block';
 
     btn.textContent = 'LOCKED — FINISH YOUR ACCOUNT';
