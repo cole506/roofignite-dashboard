@@ -705,15 +705,34 @@ async function fetchAdCreativesAndStatuses(ads) {
     const batch = toFetch.slice(i, i + 10);
     await Promise.all(batch.map(async (ad) => {
       try {
-        const url = `${META_BASE}/${ad.adId}?fields=creative{thumbnail_url,image_url,body,title,link_url,call_to_action_type,object_story_spec},effective_status&access_token=${META_ACCESS_TOKEN}`;
+        const url = `${META_BASE}/${ad.adId}?fields=creative{thumbnail_url,image_url,body,title,link_url,call_to_action_type,asset_feed_spec},effective_status&access_token=${META_ACCESS_TOKEN}`;
         const resp = await fetch(url);
         if (!resp.ok) return;
         const json = await resp.json();
         const creative = json.creative || {};
+        // Collect all primary texts: from asset_feed_spec.bodies (dynamic creative) or single body
+        const afs = creative.asset_feed_spec || {};
+        const bodies = [];
+        if (afs.bodies && afs.bodies.length) {
+          afs.bodies.forEach(b => { if (b.text) bodies.push(b.text); });
+        }
+        if (!bodies.length && creative.body) bodies.push(creative.body);
+        // Collect all titles/headlines
+        const titles = [];
+        if (afs.titles && afs.titles.length) {
+          afs.titles.forEach(t => { if (t.text) titles.push(t.text); });
+        }
+        if (!titles.length && creative.title) titles.push(creative.title);
+        // Collect all descriptions
+        const descriptions = [];
+        if (afs.descriptions && afs.descriptions.length) {
+          afs.descriptions.forEach(d => { if (d.text) descriptions.push(d.text); });
+        }
         metaCreativeCache[ad.adId] = {
           image: creative.image_url || creative.thumbnail_url || null,
-          body: creative.body || '',
-          title: creative.title || '',
+          bodies: bodies,
+          titles: titles,
+          descriptions: descriptions,
           linkUrl: creative.link_url || '',
           cta: (creative.call_to_action_type || '').replace(/_/g, ' '),
         };
@@ -989,6 +1008,7 @@ function renderMetaAdGrid(ads) {
   el.innerHTML = html;
 }
 
+let _adModalUid = 0;
 function showAdDetailModal(adIndex) {
   const ad = metaAdData && metaAdData[adIndex];
   if (!ad) return;
@@ -1000,14 +1020,31 @@ function showAdDetailModal(adIndex) {
   modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:2rem;';
 
   const copy = ad.adCopy || {};
+  const bodies = copy.bodies || (copy.body ? [copy.body] : []);
+  const titles = copy.titles || (copy.title ? [copy.title] : []);
+  const descriptions = copy.descriptions || [];
   const hasImage = !!ad.thumbnail;
-  const hasCopy = copy.body || copy.title;
+  const hasCopy = bodies.length || titles.length;
+  const MAX_LINES = 3;
 
-  let content = '<div onclick="event.stopPropagation()" style="display:flex;gap:24px;max-width:900px;max-height:85vh;width:100%;">';
+  // Helper: render a truncatable text block
+  function truncBlock(text, uid) {
+    const lines = text.split('\n');
+    const isLong = lines.length > MAX_LINES || text.length > 200;
+    if (!isLong) return `<div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">${escHtml(text)}</div>`;
+    const preview = lines.slice(0, MAX_LINES).join('\n').substring(0, 200);
+    return `<div id="trunc-${uid}">` +
+      `<div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">${escHtml(preview)}…</div>` +
+      `<button onclick="event.stopPropagation();document.getElementById('trunc-${uid}').innerHTML='<div style=\\'font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;\\'>${escHtml(text).replace(/'/g,'\\&#39;').replace(/\n/g,'\\n')}</div>'" ` +
+      `style="color:#f97316;font-size:11px;font-weight:600;background:none;border:none;cursor:pointer;padding:4px 0;margin-top:2px;">Show more</button>` +
+      `</div>`;
+  }
+
+  let content = '<div onclick="event.stopPropagation()" style="display:flex;gap:24px;max-width:950px;max-height:85vh;width:100%;">';
 
   // Image side
   if (hasImage) {
-    content += `<div style="flex-shrink:0;max-width:${hasCopy ? '400px' : '600px'};">
+    content += `<div style="flex-shrink:0;max-width:${hasCopy ? '380px' : '600px'};">
       <img src="${ad.thumbnail}" style="max-width:100%;max-height:80vh;border-radius:12px;box-shadow:0 25px 50px rgba(0,0,0,0.5);" />
     </div>`;
   }
@@ -1015,21 +1052,41 @@ function showAdDetailModal(adIndex) {
   // Copy side
   content += `<div style="flex:1;overflow-y:auto;min-width:0;">
     <div style="background:rgba(30,41,59,0.95);border-radius:12px;padding:20px;border:1px solid rgba(148,163,184,0.1);">
-      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">${ad.adName}</div>
+      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px;">${escHtml(ad.adName)}</div>
       <div style="font-size:11px;color:#64748b;margin-bottom:16px;">ID: ${ad.adId}</div>`;
 
-  if (copy.title) {
-    content += `<div style="margin-bottom:12px;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:4px;">Headline</div>
-      <div style="font-size:14px;font-weight:600;color:#e2e8f0;">${escHtml(copy.title)}</div>
-    </div>`;
+  // Headlines
+  if (titles.length) {
+    content += `<div style="margin-bottom:14px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px;">Headline${titles.length > 1 ? 's (' + titles.length + ')' : ''}</div>`;
+    titles.forEach((t, ti) => {
+      content += `<div style="font-size:14px;font-weight:600;color:#e2e8f0;${ti > 0 ? 'margin-top:8px;padding-top:8px;border-top:1px solid rgba(148,163,184,0.06);' : ''}">${escHtml(t)}</div>`;
+    });
+    content += '</div>';
   }
 
-  if (copy.body) {
-    content += `<div style="margin-bottom:12px;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:4px;">Body Copy</div>
-      <div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">${escHtml(copy.body)}</div>
-    </div>`;
+  // Primary texts (bodies)
+  if (bodies.length) {
+    content += `<div style="margin-bottom:14px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px;">Primary Text${bodies.length > 1 ? 's (' + bodies.length + ')' : ''}</div>`;
+    bodies.forEach((b, bi) => {
+      const uid = ++_adModalUid;
+      content += `<div style="${bi > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px solid rgba(148,163,184,0.06);' : ''}">`;
+      if (bodies.length > 1) content += `<div style="font-size:10px;color:#475569;margin-bottom:3px;">Variant ${bi + 1}</div>`;
+      content += truncBlock(b, uid);
+      content += '</div>';
+    });
+    content += '</div>';
+  }
+
+  // Descriptions
+  if (descriptions.length) {
+    content += `<div style="margin-bottom:14px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:6px;">Description${descriptions.length > 1 ? 's (' + descriptions.length + ')' : ''}</div>`;
+    descriptions.forEach((d, di) => {
+      content += `<div style="font-size:13px;color:#94a3b8;${di > 0 ? 'margin-top:6px;padding-top:6px;border-top:1px solid rgba(148,163,184,0.06);' : ''}">${escHtml(d)}</div>`;
+    });
+    content += '</div>';
   }
 
   if (copy.cta) {
@@ -1046,7 +1103,7 @@ function showAdDetailModal(adIndex) {
     </div>`;
   }
 
-  if (!hasCopy && !copy.cta && !copy.linkUrl) {
+  if (!hasCopy && !copy.cta && !copy.linkUrl && !descriptions.length) {
     content += '<div style="color:#64748b;font-size:13px;">No ad copy data available</div>';
   }
 
