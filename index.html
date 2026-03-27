@@ -7391,13 +7391,7 @@ function handleSignOut() {
 // DON'T TOUCH — CS2 CASE OPENING FOCUS TOOL
 // ═══════════════════════════════════════════════
 
-const ASANA_PAT = ''; // Paste your Asana Personal Access Token here
-const ASANA_WORKSPACE_GID = '1210964444834424';
-// Pod Overview project GIDs — tasks are searched here
-const ASANA_PROJECT_GIDS = ['1211275203631479', '1211211018295254']; // Pod 1 Overview, Pod 2 Overview
-const ASANA_USER_GID = '1211212448508243'; // Cole
-
-let dtSpinLocked = false; // true = must finish tasks before spinning again
+let dtSpinLocked = false;
 let dtCurrentAccount = null;
 
 function renderDontTouch() {
@@ -7405,23 +7399,28 @@ function renderDontTouch() {
   if (!el) return;
   el.classList.remove('hidden');
 
-  // Get active accounts only
+  // Get managers list for dropdown
+  const managers = getManagers();
+  const savedDtManager = localStorage.getItem('dt_manager') || managers[0] || '';
+
+  // Get active accounts for selected manager
   const activeAccts = allAccounts.filter(a => {
+    if (a.manager !== savedDtManager) return false;
     const cycs = allCycles.filter(c => c.name === a.name);
     return cycs.some(c => c.cycleStartDate && c.cycleEndDate && c.cycleStartDate <= getTodayStr() && c.cycleEndDate >= getTodayStr());
   }).map(a => a.name).filter((v,i,arr) => arr.indexOf(v) === i);
-
-  if (!activeAccts.length) {
-    el.innerHTML = '<div class="flex items-center justify-center h-full"><div class="text-dark-400 text-lg">No active accounts loaded. Go to Dashboard first.</div></div>';
-    return;
-  }
 
   el.innerHTML = `
     <div class="max-w-4xl mx-auto py-8">
       <div class="text-center mb-8">
         <h1 class="text-3xl font-black text-white mb-2">DON'T TOUCH</h1>
-        <p class="text-dark-400 text-sm">Spin the wheel. Work the account. No switching.</p>
+        <p class="text-dark-400 text-sm mb-4">Spin the wheel. Work the account. No switching.</p>
+        <select id="dt-manager-select" onchange="localStorage.setItem('dt_manager',this.value);renderDontTouch()" class="text-sm bg-dark-700 border border-dark-600 text-dark-200 rounded-lg px-4 py-2 appearance-none cursor-pointer">
+          ${managers.map(m => `<option value="${m}" ${m === savedDtManager ? 'selected' : ''}>${m}</option>`).join('')}
+        </select>
       </div>
+
+      ${!activeAccts.length ? '<div class="text-center py-12 text-dark-400">No active accounts for ' + savedDtManager + '</div>' : ''}
 
       <!-- Case Opening Strip -->
       <div class="glass rounded-2xl p-6 mb-6 overflow-hidden">
@@ -7435,6 +7434,7 @@ function renderDontTouch() {
         </div>
       </div>
 
+      ${activeAccts.length ? `
       <!-- Spin Button -->
       <div class="text-center mb-8" id="dt-spin-area">
         <button onclick="dtSpin()" id="dt-spin-btn" class="px-10 py-4 rounded-2xl text-lg font-black bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 transition-all shadow-lg shadow-orange-500/30 uppercase tracking-wider">
@@ -7442,16 +7442,16 @@ function renderDontTouch() {
         </button>
       </div>
 
-      <!-- Result + Tasks Area -->
+      <!-- Result Area -->
       <div id="dt-result" class="hidden">
-        <div id="dt-result-header" class="glass rounded-2xl p-6 mb-4 text-center"></div>
-        <div id="dt-tasks" class="space-y-3"></div>
+        <div id="dt-result-header" class="glass rounded-2xl p-8 text-center"></div>
         <div class="text-center mt-6" id="dt-done-area" style="display:none;">
           <button onclick="dtFinish()" class="px-8 py-3 rounded-2xl text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg shadow-green-500/30 uppercase tracking-wider">
             I'M DONE — SPIN AGAIN
           </button>
         </div>
       </div>
+      ` : ''}
     </div>
   `;
 
@@ -7547,112 +7547,16 @@ function dtSpin() {
     // Show result
     result.classList.remove('hidden');
     document.getElementById('dt-result-header').innerHTML = `
-      <div class="text-orange-400 text-xs uppercase tracking-widest font-bold mb-2">YOUR MISSION</div>
-      <div class="text-3xl font-black text-white mb-1">${winnerName}</div>
-      <div class="text-dark-400 text-sm">Complete the tasks below before you can spin again</div>
+      <div class="text-orange-400 text-xs uppercase tracking-widest font-bold mb-3">YOUR MISSION</div>
+      <div class="text-4xl font-black text-white mb-2">${winnerName}</div>
+      <div class="text-dark-400 text-sm">Focus on this account. Click "I'm Done" when you're finished.</div>
     `;
+    document.getElementById('dt-done-area').style.display = 'block';
 
-    // Fetch Asana tasks
-    dtLoadAsanaTasks(winnerName);
-
-    btn.textContent = 'LOCKED — FINISH YOUR TASKS';
+    btn.textContent = 'LOCKED — FINISH YOUR ACCOUNT';
     btn.disabled = false;
     btn.classList.remove('opacity-50');
   }, 6500);
-}
-
-async function dtLoadAsanaTasks(accountName) {
-  const tasksEl = document.getElementById('dt-tasks');
-  const doneArea = document.getElementById('dt-done-area');
-  if (!tasksEl) return;
-  tasksEl.innerHTML = '<div class="text-center py-6 text-dark-400"><span class="inline-block w-4 h-4 border-2 border-brand-400 border-t-transparent rounded-full animate-spin mr-2" style="vertical-align:middle;"></span>Loading tasks from Asana...</div>';
-  if (doneArea) doneArea.style.display = 'none';
-
-  if (!ASANA_PAT) {
-    tasksEl.innerHTML = '<div class="glass rounded-xl p-4 text-center text-dark-400">Add your Asana Personal Access Token to the ASANA_PAT variable in index.html</div>';
-    if (doneArea) doneArea.style.display = 'block';
-    return;
-  }
-
-  try {
-    // Search tasks across pod overview projects that mention this account
-    const searchTerms = accountName.split(' ').slice(0, 3).join(' '); // first 3 words for fuzzy match
-    let allTasks = [];
-    for (const projGid of ASANA_PROJECT_GIDS) {
-      const url = `https://app.asana.com/api/1.0/workspaces/${ASANA_WORKSPACE_GID}/tasks/search?text=${encodeURIComponent(searchTerms)}&projects.any=${projGid}&completed=false&opt_fields=name,assignee.name,due_on,memberships.section.name,notes&limit=50`;
-      const resp = await fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + ASANA_PAT }
-      });
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json.data) allTasks = allTasks.concat(json.data);
-      }
-    }
-
-    // Also search tasks assigned to Cole mentioning this account
-    const myUrl = `https://app.asana.com/api/1.0/workspaces/${ASANA_WORKSPACE_GID}/tasks/search?text=${encodeURIComponent(searchTerms)}&assignee.any=${ASANA_USER_GID}&completed=false&opt_fields=name,assignee.name,due_on,memberships.section.name,notes&limit=50`;
-    const myResp = await fetch(myUrl, { headers: { 'Authorization': 'Bearer ' + ASANA_PAT } });
-    if (myResp.ok) {
-      const myJson = await myResp.json();
-      if (myJson.data) allTasks = allTasks.concat(myJson.data);
-    }
-
-    // Dedupe by gid
-    const seen = new Set();
-    allTasks = allTasks.filter(t => {
-      if (seen.has(t.gid)) return false;
-      seen.add(t.gid);
-      return true;
-    });
-
-    // Filter to tasks that actually mention this account (case-insensitive)
-    const lower = accountName.toLowerCase();
-    const keywords = lower.split(/\s+/).filter(w => w.length > 2);
-    allTasks = allTasks.filter(t => {
-      const name = (t.name || '').toLowerCase();
-      return keywords.some(kw => name.includes(kw));
-    });
-
-    if (!allTasks.length) {
-      tasksEl.innerHTML = `
-        <div class="glass rounded-xl p-6 text-center">
-          <div class="text-2xl mb-2">&#9989;</div>
-          <div class="text-white font-bold mb-1">No open tasks for ${accountName}</div>
-          <div class="text-dark-400 text-sm">Check Asana directly or do an audit of this account</div>
-        </div>`;
-      if (doneArea) doneArea.style.display = 'block';
-      return;
-    }
-
-    let html = `<div class="text-xs text-dark-400 uppercase tracking-wider font-semibold mb-3">${allTasks.length} open task${allTasks.length !== 1 ? 's' : ''} for ${accountName}</div>`;
-    allTasks.forEach(task => {
-      const assignee = task.assignee ? task.assignee.name : 'Unassigned';
-      const due = task.due_on || '';
-      const section = (task.memberships && task.memberships.length) ? task.memberships[0].section.name : '';
-      const isOverdue = due && due < getTodayStr();
-      html += `
-        <div class="bg-dark-800/60 rounded-xl p-4 border border-dark-600/30 hover:border-dark-500/50 transition-all">
-          <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0">
-              <div class="text-sm font-semibold text-white">${task.name}</div>
-              <div class="flex gap-3 mt-1.5 text-[11px]">
-                <span class="text-dark-400">Assignee: <span class="text-dark-200">${assignee}</span></span>
-                ${section ? `<span class="text-dark-400">Section: <span class="text-dark-200">${section}</span></span>` : ''}
-                ${due ? `<span class="${isOverdue ? 'text-red-400' : 'text-dark-400'}">Due: <span class="${isOverdue ? 'text-red-400 font-semibold' : 'text-dark-200'}">${due}${isOverdue ? ' (overdue)' : ''}</span></span>` : ''}
-              </div>
-            </div>
-            <a href="https://app.asana.com/0/0/${task.gid}/f" target="_blank" class="flex-shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-semibold bg-dark-700/60 text-dark-300 border border-dark-600/50 hover:text-white hover:border-dark-500 transition-all">Open in Asana</a>
-          </div>
-        </div>`;
-    });
-    tasksEl.innerHTML = html;
-    if (doneArea) doneArea.style.display = 'block';
-
-  } catch (e) {
-    console.error('Asana fetch error:', e);
-    tasksEl.innerHTML = `<div class="glass rounded-xl p-4 text-center text-red-400">Failed to load Asana tasks: ${e.message}</div>`;
-    if (doneArea) doneArea.style.display = 'block';
-  }
 }
 
 function dtFinish() {
