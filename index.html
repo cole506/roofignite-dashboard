@@ -7485,10 +7485,12 @@ function renderDontTouch() {
     .map(function(a) { return a.name; })
     .filter(function(v, i, arr) { return arr.indexOf(v) === i; });
   // Remove accounts completed today
-  var todayKey = 'dt_done_' + new Date().toISOString().slice(0, 10);
+  var todayDate = new Date().toISOString().slice(0, 10);
+  var todayKey = 'dt_done_' + todayDate;
   var doneToday = [];
   try { doneToday = JSON.parse(localStorage.getItem(todayKey) || '[]'); } catch(e) {}
   var activeAccts = allMgrAccts.filter(function(n) { return doneToday.indexOf(n) === -1; });
+  var breaksToday = parseInt(localStorage.getItem('dt_breaks_' + todayDate) || '0', 10);
 
   var html = '<div class="max-w-4xl mx-auto py-8">';
   html += '<div class="text-center mb-8">';
@@ -7528,18 +7530,20 @@ function renderDontTouch() {
   html += '</div>';
   el.innerHTML = html;
 
-  if (activeAccts.length) dtBuildStrip(activeAccts);
+  if (activeAccts.length) dtBuildStrip(activeAccts, breaksToday);
 }
 
-function dtBuildStrip(accounts) {
+function dtBuildStrip(accounts, breaksUsed) {
   const strip = document.getElementById('dt-strip');
   if (!strip || !accounts.length) return;
   const CARD_W = 212;
-  // Build the pool: all accounts + 2 gold break cards
+  // Build the pool: all accounts + remaining break cards (max 2 per day)
   const BREAK_LABEL = '15 MIN BREAK';
   var pool = accounts.slice();
-  pool.push(BREAK_LABEL);
-  pool.push(BREAK_LABEL);
+  var breaksRemaining = Math.max(0, 2 - (breaksUsed || 0));
+  for (var b = 0; b < breaksRemaining; b++) {
+    pool.push(BREAK_LABEL);
+  }
   // Shuffle the pool for each repeat
   function shuffle(arr) {
     var a = arr.slice();
@@ -7707,11 +7711,19 @@ function dtSpin() {
 function dtFinish() {
   // Save completed account for today
   if (dtCurrentAccount) {
-    var todayKey = 'dt_done_' + new Date().toISOString().slice(0, 10);
-    var doneToday = [];
-    try { doneToday = JSON.parse(localStorage.getItem(todayKey) || '[]'); } catch(e) {}
-    if (doneToday.indexOf(dtCurrentAccount) === -1) doneToday.push(dtCurrentAccount);
-    localStorage.setItem(todayKey, JSON.stringify(doneToday));
+    var todayDate = new Date().toISOString().slice(0, 10);
+    var todayKey = 'dt_done_' + todayDate;
+    if (dtCurrentAccount === '15 MIN BREAK') {
+      // Track break count separately (allows up to 2 per day)
+      var breakKey = 'dt_breaks_' + todayDate;
+      var breaks = parseInt(localStorage.getItem(breakKey) || '0', 10);
+      localStorage.setItem(breakKey, breaks + 1);
+    } else {
+      var doneToday = [];
+      try { doneToday = JSON.parse(localStorage.getItem(todayKey) || '[]'); } catch(e) {}
+      if (doneToday.indexOf(dtCurrentAccount) === -1) doneToday.push(dtCurrentAccount);
+      localStorage.setItem(todayKey, JSON.stringify(doneToday));
+    }
   }
   dtSpinLocked = false;
   dtCurrentAccount = null;
