@@ -7469,8 +7469,8 @@ function handleSignOut() {
 // GAMBLE MODE — CS2 CASE OPENING FOCUS TOOL
 // ═══════════════════════════════════════════════
 
-let dtSpinLocked = false;
-let dtCurrentAccount = null;
+let dtSpinLocked = localStorage.getItem('dt_spin_locked') === 'true';
+let dtCurrentAccount = localStorage.getItem('dt_current_account') || null;
 
 function renderDontTouch() {
   const el = document.getElementById('view-donttouch');
@@ -7506,7 +7506,24 @@ function renderDontTouch() {
   }
   html += '</div>';
 
-  if (!activeAccts.length) {
+  // Restore locked state if we had an in-progress account
+  if (dtSpinLocked && dtCurrentAccount) {
+    var isBreak = dtCurrentAccount === '15 MIN BREAK';
+    html += '<div class="glass rounded-2xl p-8 text-center mb-6">';
+    if (isBreak) {
+      html += '<div class="text-yellow-400 text-xs uppercase tracking-widest font-bold mb-3">&#127881; GOLD &#127881;</div>';
+      html += '<div class="text-4xl font-black text-yellow-300 mb-2">15 Minute Break!</div>';
+      html += '<div class="text-dark-400 text-sm">You earned it. Step away, grab coffee, touch grass.</div>';
+    } else {
+      html += '<div class="text-orange-400 text-xs uppercase tracking-widest font-bold mb-3">YOUR MISSION</div>';
+      html += '<div class="text-4xl font-black text-white mb-2">' + dtCurrentAccount + '</div>';
+      html += '<div class="text-dark-400 text-sm">Focus on this account. Click "I\'m Done" when you\'re finished.</div>';
+    }
+    html += '</div>';
+    html += '<div class="text-center mb-8">';
+    html += '<button onclick="dtFinish()" class="px-8 py-3 rounded-2xl text-sm font-bold bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg shadow-green-500/30 uppercase tracking-wider">I\'M DONE — SPIN AGAIN</button>';
+    html += '</div>';
+  } else if (!activeAccts.length) {
     html += '<div class="text-center py-12 text-dark-400">No accounts for ' + savedDtManager + '</div>';
   } else {
     // Case opening strip
@@ -7684,6 +7701,8 @@ function dtSpin() {
 
     dtSpinLocked = true;
     dtCurrentAccount = winnerName;
+    localStorage.setItem('dt_spin_locked', 'true');
+    localStorage.setItem('dt_current_account', winnerName);
 
     // Show result
     var isBreak = winnerName === '15 MIN BREAK';
@@ -7727,6 +7746,8 @@ function dtFinish() {
   }
   dtSpinLocked = false;
   dtCurrentAccount = null;
+  localStorage.removeItem('dt_spin_locked');
+  localStorage.removeItem('dt_current_account');
   // Re-render to rebuild strip without completed accounts
   renderDontTouch();
 }
