@@ -1519,6 +1519,7 @@ function parseSheetData(data, podName) {
     adAccountId:   colIdx(colMap, 'ad account id', 'ad account', 'ad acct', 'ad acct id', 'meta id', 'fb id', 'facebook id', 'account id'),
     cpcMedian:     colIdx(colMap, 'cpc median', 'cpc goal'),
     cpcMultiplier: colIdx(colMap, 'cpc multiplier'),
+    fatigueStatus: colIdx(colMap, 'fatigue status', 'fatigue', 'fatigue score', 'creative fatigue'),
   };
   console.log(`[${podName}] Resolved column indices:`, COL);
   console.log(`[${podName}] Ad Account ID column resolved to index: ${COL.adAccountId}. Column map keys:`, Object.keys(colMap).join(', '));
@@ -1722,6 +1723,7 @@ function parseSheetData(data, podName) {
         billingNotes:   COL.billingNotes >= 0 ? getStr(row, 'billingNotes') : '',
         cpcMedian:      COL.cpcMedian >= 0 ? getNum(row, COL.cpcMedian) : null,
         cpcMultiplier:  COL.cpcMultiplier >= 0 ? getNum(row, COL.cpcMultiplier) : null,
+        fatigueStatus:  COL.fatigueStatus >= 0 ? getStr(row, 'fatigueStatus') : '',
       };
 
       cycles.push(cycleData);
@@ -2319,6 +2321,34 @@ function healthScoreColor(score) {
   if (score >= 60) return { bg: 'rgba(234,179,8,0.2)', text: '#eab308' };
   if (score >= 40) return { bg: 'rgba(249,115,22,0.2)', text: '#f97316' };
   return { bg: 'rgba(239,68,68,0.2)', text: '#ef4444' };
+}
+
+// Fatigue Score Color (higher = worse, inverse of health)
+// Green (0-39), Yellow (40-59), Orange (60-79), Red (80-100)
+function fatigueScoreColor(score) {
+  if (score === null || score === undefined) return { bg: 'rgba(100,116,139,0.2)', text: '#94a3b8' };
+  if (score >= 80) return { bg: 'rgba(239,68,68,0.2)', text: '#ef4444' };
+  if (score >= 60) return { bg: 'rgba(249,115,22,0.2)', text: '#f97316' };
+  if (score >= 40) return { bg: 'rgba(234,179,8,0.2)', text: '#eab308' };
+  return { bg: 'rgba(34,197,94,0.2)', text: '#22c55e' };
+}
+
+// Parse fatigue status string (e.g. "55" or "55/Orange" or just a number) into a score
+function parseFatigueScore(statusStr) {
+  if (!statusStr) return null;
+  const s = String(statusStr).trim();
+  if (!s) return null;
+  const num = parseInt(s, 10);
+  if (!isNaN(num) && num >= 0 && num <= 100) return num;
+  const match = s.match(/(\d+)/);
+  if (match) return parseInt(match[1], 10);
+  return null;
+}
+
+// Get fatigue score for an account from its active cycle data
+function getFatigueScore(acct, cycle) {
+  if (cycle && cycle.fatigueStatus) return parseFatigueScore(cycle.fatigueStatus);
+  return null;
 }
 
 // ═══════════════════════════════════════════════
@@ -3085,6 +3115,7 @@ function renderAccountTable(active, inactive, mgrName) {
             <tr class="border-b border-dark-600 text-dark-400 text-[10px] uppercase tracking-wider" style="background:rgba(15,23,42,0.5);">
               <th class="text-center py-3 px-3 font-medium">HP</th>
               <th class="text-left py-3 px-3 font-medium">Account</th>
+              <th class="text-center py-3 px-3 font-medium">FTG</th>
               <th class="text-left py-3 px-3 font-medium mobile-hide">Cycle</th>
               <th class="text-right py-3 px-3 font-medium">Leads</th>
               <th class="text-right py-3 px-3 font-medium mobile-hide">L2B</th>
@@ -3107,6 +3138,8 @@ function renderAccountTable(active, inactive, mgrName) {
               const cpaGoal = a.cpaGoal || (c && c.cpaGoal);
               const hs = getHealthScore(a, c);
               const hc = healthScoreColor(hs);
+              const fs = getFatigueScore(a, c);
+              const fc = fatigueScoreColor(fs);
               const l2b = getLeadToBookedRate(a.name, 45);
               const bkPace = c ? getBookingPacing(c) : null;
               return `
@@ -3116,6 +3149,7 @@ function renderAccountTable(active, inactive, mgrName) {
                     <div class="text-white font-medium">${a.name}</div>
                     <div class="text-dark-400 text-xs">${a.manager}</div>
                   </td>
+                  <td class="py-3 px-3 text-center">${fs !== null ? `<span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold" style="background:${fc.bg};color:${fc.text};">${fs}</span>` : '<span class="text-dark-500 text-xs">—</span>'}</td>
                   <td class="py-3 px-3 text-dark-300 text-xs mobile-hide">${c ? c.cycle : '—'}</td>
                   <td class="py-3 px-3 text-right text-white">${c ? fmt(c.totalLeads) : '—'}</td>
                   <td class="py-3 px-3 text-right mobile-hide">${l2b !== null ? `<span class="${l2b >= 0.375 ? 'metric-good' : 'metric-warn'}">${(l2b*100).toFixed(0)}%</span>` : '<span class="text-dark-500">—</span>'}</td>
@@ -3137,6 +3171,7 @@ function renderAccountTable(active, inactive, mgrName) {
               <tr class="table-row border-b border-dark-700/50 opacity-40 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                 <td class="py-3 px-3 text-center"><span class="text-dark-500 text-xs">—</span></td>
                 <td class="py-3 px-3"><div class="text-dark-300 font-medium">${a.name} <span class="badge badge-gray ml-1">INACTIVE</span></div><div class="text-dark-500 text-xs">${a.manager}</div></td>
+                <td class="py-3 px-3 text-center"><span class="text-dark-500 text-xs">—</span></td>
                 <td class="py-3 px-3 text-dark-500 text-xs" colspan="14">No active cycle</td>
               </tr>
             `).join('')}
@@ -3183,9 +3218,14 @@ function renderAccountDetail(name, adAccountId) {
         <div class="flex items-center gap-4">
           ${(() => {
             const hs = getHealthScore(acct, activeCyc);
-            if (hs === null) return '<div class="w-14 h-14 rounded-2xl bg-dark-700/50 flex items-center justify-center text-dark-500 text-lg font-bold border border-dark-600">—</div>';
-            const hc = healthScoreColor(hs);
-            return '<div class="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-extrabold shadow-lg" style="background:'+hc.bg+';color:'+hc.text+';border:2px solid '+hc.text+'22;">'+hs+'</div>';
+            const hsBadge = hs === null
+              ? '<div class="w-14 h-14 rounded-2xl bg-dark-700/50 flex items-center justify-center text-dark-500 text-lg font-bold border border-dark-600">—</div>'
+              : (() => { const hc = healthScoreColor(hs); return '<div class="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-extrabold shadow-lg" style="background:'+hc.bg+';color:'+hc.text+';border:2px solid '+hc.text+'22;"><div class="text-center"><div class="text-lg font-extrabold leading-none">'+hs+'</div><div class="text-[8px] opacity-60 mt-0.5">HP</div></div></div>'; })();
+            const fs = getFatigueScore(acct, activeCyc);
+            const fsBadge = fs === null
+              ? ''
+              : (() => { const fc = fatigueScoreColor(fs); return '<div class="w-14 h-14 rounded-2xl flex items-center justify-center text-lg font-extrabold shadow-lg" style="background:'+fc.bg+';color:'+fc.text+';border:2px solid '+fc.text+'22;"><div class="text-center"><div class="text-lg font-extrabold leading-none">'+fs+'</div><div class="text-[8px] opacity-60 mt-0.5">FTG</div></div></div>'; })();
+            return hsBadge + fsBadge;
           })()}
           <div>
             <div class="flex items-center gap-3">
@@ -6093,7 +6133,7 @@ async function createNewClient() {
     cpa: null, amountSpent: null, linkCTR: null, linkCPC: null,
     cpm: null, frequency: null, surveyPct: null,
     cpcMedian: null, cpcMultiplier: null,
-    accountManager: mgr, notes: '', goodToBill: '', billed: '', billingNotes: ''
+    accountManager: mgr, notes: '', goodToBill: 'No', billed: 'No', billingNotes: ''
   };
 
   const newAcct = {
@@ -7039,7 +7079,7 @@ async function executeAddCycle(accountName) {
     amountSpent: null,
     linkCTR: null, linkCPC: null, cpm: null, frequency: null, surveyPct: null,
     cpcMedian: null, cpcMultiplier: prev?.cpcMultiplier || null,
-    accountManager: acct.manager, notes: '', goodToBill: '', billed: '', billingNotes: ''
+    accountManager: acct.manager, notes: '', goodToBill: 'No', billed: 'No', billingNotes: ''
   };
 
   // Close modal
