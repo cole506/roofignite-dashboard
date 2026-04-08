@@ -1,582 +1,3 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>RoofIgnite Command Center</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>😊</text></svg>">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js"></script>
-<script>
-tailwind.config = {
-  theme: {
-    extend: {
-      colors: {
-        dark: { 50:'#f8fafc',100:'#e2e8f0',200:'#cbd5e1',300:'#94a3b8',400:'#64748b',500:'#475569',600:'#334155',700:'#1e293b',800:'#0f172a',900:'#020617' },
-        brand: { 50:'#fff7ed',100:'#ffedd5',200:'#fed7aa',300:'#fdba74',400:'#fb923c',500:'#f97316',600:'#ea580c',700:'#c2410c' },
-        success:'#22c55e', warning:'#eab308', danger:'#ef4444',
-      }
-    }
-  }
-}
-</script>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-  * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
-
-  /* ══════ BACKGROUND & BASE ══════ */
-  body {
-    background: #060b18;
-    background-image:
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(99,102,241,0.12), transparent),
-      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(249,115,22,0.08), transparent),
-      radial-gradient(ellipse 40% 30% at 10% 60%, rgba(59,130,246,0.06), transparent);
-    color: #e2e8f0;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  /* ══════ SCROLLBARS ══════ */
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.3); border-radius: 10px; }
-  ::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.5); }
-
-  /* ══════ GLASS MORPHISM ══════ */
-  .glass {
-    background: linear-gradient(135deg, rgba(15,23,42,0.8), rgba(30,41,59,0.6));
-    backdrop-filter: blur(20px) saturate(1.2);
-    -webkit-backdrop-filter: blur(20px) saturate(1.2);
-    border: 1px solid rgba(148,163,184,0.08);
-    transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
-  }
-  .glass:hover {
-    border-color: rgba(148,163,184,0.15);
-  }
-
-  .glow { box-shadow: 0 0 30px rgba(249,115,22,0.12), 0 0 60px rgba(249,115,22,0.05); }
-
-  /* ══════ KPI CARDS ══════ */
-  .kpi-card {
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-  }
-  .kpi-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, rgba(249,115,22,0.4), transparent);
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-  .kpi-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.3), 0 0 0 1px rgba(249,115,22,0.1);
-  }
-  .kpi-card:hover::before { opacity: 1; }
-
-  /* ══════ ANIMATIONS ══════ */
-  .pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-  .fade-in { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-
-  .slide-in { animation: slideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-  @keyframes slideIn { from { opacity: 0; transform: translateX(-20px); } to { opacity: 1; transform: translateX(0); } }
-
-  .scale-in { animation: scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-  @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
-
-  @keyframes progressPulse {
-    0% { opacity: 0.4; transform: translateX(-60%); }
-    50% { opacity: 1; transform: translateX(0); }
-    100% { opacity: 0.4; transform: translateX(60%); }
-  }
-
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-  .shimmer-loading {
-    background: linear-gradient(90deg, rgba(30,41,59,0.5) 25%, rgba(51,65,85,0.5) 50%, rgba(30,41,59,0.5) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-  }
-
-  @keyframes glow-pulse {
-    0%, 100% { box-shadow: 0 0 8px rgba(249,115,22,0.2); }
-    50% { box-shadow: 0 0 20px rgba(249,115,22,0.4); }
-  }
-
-  /* Staggered card animations */
-  .stagger-1 { animation-delay: 0.05s; }
-  .stagger-2 { animation-delay: 0.1s; }
-  .stagger-3 { animation-delay: 0.15s; }
-  .stagger-4 { animation-delay: 0.2s; }
-  .stagger-5 { animation-delay: 0.25s; }
-  .stagger-6 { animation-delay: 0.3s; }
-  .stagger-7 { animation-delay: 0.35s; }
-
-  /* ══════ STATUS COLORS ══════ */
-  .status-green { color: #34d399; }
-  .status-red { color: #f87171; }
-  .status-yellow { color: #fbbf24; }
-
-  /* ══════ TABLES ══════ */
-  .table-row { transition: background 0.2s, box-shadow 0.2s; }
-  .table-row:hover { background: rgba(249,115,22,0.04); box-shadow: inset 3px 0 0 rgba(249,115,22,0.5); }
-
-  /* ══════ SIDEBAR ══════ */
-  .sidebar {
-    width: 260px; min-width: 260px;
-    background: linear-gradient(180deg, rgba(15,23,42,0.95), rgba(6,11,24,0.98));
-    border-right: 1px solid rgba(148,163,184,0.06);
-  }
-  .nav-item { position: relative; transition: all 0.2s; border-radius: 10px; margin: 2px 8px; }
-  .nav-item:hover { background: rgba(148,163,184,0.06); }
-  .nav-item.active { background: rgba(249,115,22,0.08); }
-  .nav-item.active::before {
-    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-    width: 3px; height: 55%; background: linear-gradient(180deg, #f97316, #fb923c);
-    border-radius: 0 4px 4px 0;
-    box-shadow: 0 0 10px rgba(249,115,22,0.3);
-  }
-
-  /* ══════ SELECT / FORM ══════ */
-  select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 12px center;
-    transition: all 0.2s;
-  }
-  select:focus { outline: none; border-color: #f97316; box-shadow: 0 0 0 3px rgba(249,115,22,0.12); }
-
-  /* ══════ CHARTS ══════ */
-  .chart-container {
-    position: relative; height: 220px; border-radius: 12px;
-    background: rgba(15,23,42,0.4);
-    border: 1px solid rgba(148,163,184,0.05);
-  }
-
-  /* ══════ BADGES ══════ */
-  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; letter-spacing: 0.01em; }
-  .badge-green { background: rgba(34,197,94,0.12); color: #34d399; border: 1px solid rgba(34,197,94,0.15); }
-  .badge-red { background: rgba(239,68,68,0.12); color: #f87171; border: 1px solid rgba(239,68,68,0.15); }
-  .badge-yellow { background: rgba(234,179,8,0.12); color: #fbbf24; border: 1px solid rgba(234,179,8,0.15); }
-  .badge-blue { background: rgba(59,130,246,0.12); color: #60a5fa; border: 1px solid rgba(59,130,246,0.15); }
-  .badge-gray { background: rgba(148,163,184,0.1); color: #94a3b8; border: 1px solid rgba(148,163,184,0.1); }
-
-  /* ══════ METRICS ══════ */
-  .metric-good { color: #34d399; }
-  .metric-bad { color: #f87171; }
-  .metric-warn { color: #fbbf24; }
-  .metric-neutral { color: #e2e8f0; }
-  .lead-booked { color: #34d399; }
-  .lead-client { color: #fbbf24; }
-  .lead-cancelled { color: #f87171; }
-  .lead-open { color: #e2e8f0; }
-
-  .metric-cell-green { background: rgba(34,197,94,0.1); color: #34d399; border-radius: 4px; }
-  .metric-cell-yellow { background: rgba(234,179,8,0.1); color: #fbbf24; border-radius: 4px; }
-  .metric-cell-red { background: rgba(239,68,68,0.1); color: #f87171; border-radius: 4px; }
-
-  /* ══════ FILTER BADGES ══════ */
-  .filter-badge {
-    display: inline-flex; align-items: center; padding: 5px 16px; border-radius: 9999px;
-    font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    border: 1.5px solid transparent; user-select: none; letter-spacing: 0.01em;
-  }
-  .filter-badge:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-  .filter-badge.active { border-color: rgba(255,255,255,0.8); box-shadow: 0 0 16px rgba(255,255,255,0.15); }
-  .filter-badge.fb-green { background: rgba(34,197,94,0.15); color: #34d399; }
-  .filter-badge.fb-red { background: rgba(239,68,68,0.15); color: #f87171; }
-  .filter-badge.fb-white { background: rgba(226,232,240,0.1); color: #e2e8f0; }
-  .filter-badge.fb-yellow { background: rgba(251,191,36,0.15); color: #fbbf24; }
-  .filter-badge.fb-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
-
-  /* ══════ CYCLE ROWS ══════ */
-  .cycle-row-clickable { cursor: pointer; transition: all 0.2s; }
-  .cycle-row-clickable:hover { background: rgba(59,130,246,0.08) !important; box-shadow: inset 3px 0 0 rgba(59,130,246,0.4); }
-
-  /* ══════ PACING BAR ══════ */
-  .pacing-bar { height: 8px; border-radius: 4px; background: rgba(100,116,139,0.15); overflow: hidden; }
-  .pacing-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
-
-  /* ══════ HEALTH RING ══════ */
-  .health-ring {
-    width: 46px; height: 46px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 13px; font-weight: 800;
-    box-shadow: 0 0 0 2px rgba(0,0,0,0.2);
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  .health-ring:hover { transform: scale(1.1); }
-
-  /* ══════ FUNNEL ══════ */
-  .funnel-bar {
-    height: 28px; border-radius: 6px; transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-    display: flex; align-items: center; padding: 0 10px; font-size: 11px; font-weight: 600;
-  }
-
-  /* ══════ TABS ══════ */
-  .tab-btn {
-    padding: 7px 18px; border-radius: 10px; font-size: 13px; cursor: pointer;
-    transition: all 0.25s; font-weight: 500;
-  }
-  .tab-btn.active { background: linear-gradient(135deg, rgba(249,115,22,0.15), rgba(249,115,22,0.08)); color: #fb923c; font-weight: 600; box-shadow: 0 0 0 1px rgba(249,115,22,0.2); }
-  .tab-btn:not(.active) { color: #94a3b8; }
-  .tab-btn:not(.active):hover { color: #e2e8f0; background: rgba(100,116,139,0.08); }
-
-  /* ══════ META VIEW TOGGLES ══════ */
-  .meta-view-toggle {
-    min-width: 72px; min-height: 30px; font-size: 11px !important; font-weight: 500;
-    transition: all 0.2s; border-radius: 8px;
-  }
-  .meta-view-toggle:hover { opacity: 0.85; transform: translateY(-1px); }
-  .meta-view-toggle.active { font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-
-  /* ══════ BACK BUTTON ══════ */
-  .back-btn {
-    display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px;
-    border-radius: 10px; font-size: 13px; color: #94a3b8; font-weight: 500;
-    transition: all 0.2s; border: 1px solid transparent;
-  }
-  .back-btn:hover { background: rgba(100,116,139,0.12); color: #e2e8f0; border-color: rgba(148,163,184,0.1); }
-
-  /* ══════ SECTION DIVIDER ══════ */
-  .section-divider {
-    height: 1px; margin: 28px 0;
-    background: linear-gradient(90deg, transparent, rgba(148,163,184,0.12), transparent);
-  }
-
-  /* ══════ HEALTH SCROLL ══════ */
-  .health-scroll { max-height: 300px; overflow-y: auto; padding-right: 4px; }
-
-  /* ══════ SMOOTH VIEW TRANSITIONS ══════ */
-  .view-container { animation: viewEnter 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-  @keyframes viewEnter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-
-  /* ══════ CARD GROUP HOVER LIFT ══════ */
-  .glass-lift { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-  .glass-lift:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(148,163,184,0.08); }
-
-  /* ══════ METRIC NUMBER TRANSITIONS ══════ */
-  .metric-value { transition: color 0.3s; }
-
-  /* ══════ FOCUS RING FOR ACCESSIBILITY ══════ */
-  button:focus-visible, select:focus-visible, .nav-item:focus-visible { outline: 2px solid rgba(249,115,22,0.5); outline-offset: 2px; border-radius: 8px; }
-
-  /* ══════ LOADING SKELETON ══════ */
-  .skeleton { background: linear-gradient(90deg, rgba(30,41,59,0.6) 0%, rgba(51,65,85,0.4) 50%, rgba(30,41,59,0.6) 100%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
-
-  /* ══════ SECTION HEADER ══════ */
-  .section-title {
-    font-size: 18px; font-weight: 700; color: #f1f5f9;
-    display: flex; align-items: center; gap: 10px;
-  }
-  .section-title::before {
-    content: '';
-    width: 4px; height: 20px;
-    background: linear-gradient(180deg, #f97316, #fb923c);
-    border-radius: 2px;
-    flex-shrink: 0;
-  }
-
-  /* ══════ RESPONSIVE ══════ */
-  @media (max-width: 1400px) { .kpi-grid-7 { grid-template-columns: repeat(4, 1fr) !important; } }
-  @media (max-width: 1100px) { .kpi-grid-7 { grid-template-columns: repeat(3, 1fr) !important; } }
-  @media (max-width: 900px) { .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; } }
-  @media (max-width: 640px) { .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; } }
-
-  /* ══════ SAFE AREA (notched devices) ══════ */
-  @supports (padding: max(0px)) {
-    body {
-      padding-left: env(safe-area-inset-left);
-      padding-right: env(safe-area-inset-right);
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-  }
-
-  /* ══════ RESPONSIVE UTILITY CLASSES ══════ */
-  .mobile-hide { }
-  .mobile-only { display: none !important; }
-
-  /* ══════ MOBILE ══════ */
-  @media (max-width: 767px) {
-    .sidebar {
-      transform: translateX(-100%);
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      z-index: 200;
-      width: 85vw; max-width: 300px; min-width: unset;
-    }
-    .sidebar.open { transform: translateX(0); }
-    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 199; }
-    .sidebar-overlay.active { display: block; }
-    .main-content { margin-left: 0 !important; padding: 12px !important; padding-top: 68px !important; }
-    .mobile-header { display: flex !important; }
-    .chart-container { height: 170px; }
-    .modal-inner { max-width: 100% !important; max-height: 92vh !important; margin: 6px; border-radius: 14px; }
-    .section-title { font-size: 15px; }
-    .section-title::before { width: 3px !important; height: 16px !important; }
-    .section-divider { margin: 16px 0; }
-    .health-ring { width: 38px; height: 38px; font-size: 11px; }
-    .filter-badge { padding: 6px 10px; font-size: 11px; min-height: 40px; display: inline-flex; align-items: center; }
-    .tab-btn { padding: 10px 14px; min-height: 44px; font-size: 12px; }
-    .badge { font-size: 10px; padding: 2px 8px; }
-    .back-btn { min-height: 44px; }
-    .nav-item { min-height: 44px; display: flex; align-items: center; }
-    .mobile-hide { display: none !important; }
-    .mobile-only { display: revert !important; }
-
-    /* Touch-friendly buttons and inputs */
-    button, select, input, .nav-item a { min-height: 44px; }
-    select { font-size: 16px !important; /* prevents iOS zoom on focus */ }
-    input[type="text"], input[type="email"], input[type="search"], input[type="number"], textarea {
-      font-size: 16px !important; min-height: 44px;
-    }
-
-    /* Table scroll hint */
-    .table-scroll-hint { position: relative; }
-    .table-scroll-hint::after {
-      content: '';
-      position: absolute; top: 0; right: 0; bottom: 0; width: 30px;
-      background: linear-gradient(90deg, transparent, rgba(6,11,24,0.8));
-      pointer-events: none; z-index: 5;
-    }
-
-    /* Glass cards reduce padding */
-    .glass { padding: 12px; }
-
-    /* KPI / metric cards */
-    .kpi-grid-7 { gap: 8px !important; }
-
-    /* Cycle comparison grid */
-    #cycle-comp-cards { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
-
-    /* Funnel bar text */
-    .funnel-bar { font-size: 10px; height: 24px; padding: 0 6px; }
-  }
-
-  /* ══════ VERY SMALL PHONES (≤374px) ══════ */
-  @media (max-width: 374px) {
-    .main-content { padding: 8px !important; padding-top: 64px !important; }
-    .filter-badge { padding: 5px 8px; font-size: 10px; }
-    .section-title { font-size: 13px; }
-    .kpi-grid-7 { grid-template-columns: 1fr !important; }
-    #cycle-comp-cards { grid-template-columns: 1fr !important; }
-    .chart-container { height: 150px; }
-    .tab-btn { padding: 8px 10px; font-size: 11px; }
-    .glass { padding: 8px; }
-  }
-
-  /* ══════ SMALL PHONES (375-479px) ══════ */
-  @media (min-width: 375px) and (max-width: 479px) {
-    .kpi-grid-7 { grid-template-columns: repeat(2, 1fr) !important; }
-  }
-
-  /* ══════ LANDSCAPE MOBILE ══════ */
-  @media (orientation: landscape) and (max-height: 500px) {
-    .main-content { padding-top: 56px !important; }
-    .chart-container { height: 140px; }
-    .modal-inner { max-height: 95vh !important; }
-    .health-scroll { max-height: 180px; }
-    .mobile-header { padding-top: 4px !important; padding-bottom: 4px !important; }
-  }
-
-  /* ══════ TABLET (768-1023px) ══════ */
-  @media (min-width: 768px) and (max-width: 1023px) {
-    .kpi-grid-7 { grid-template-columns: repeat(3, 1fr) !important; }
-  }
-
-  @media (min-width: 768px) {
-    .mobile-header { display: none !important; }
-    .sidebar-overlay { display: none !important; }
-  }
-
-  /* ══════ FANCY BORDERS ══════ */
-  .gradient-border {
-    position: relative;
-  }
-  .gradient-border::after {
-    content: '';
-    position: absolute; inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, rgba(249,115,22,0.2), transparent 40%, transparent 60%, rgba(59,130,246,0.15));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
-
-  /* ══════ TOOLTIP ══════ */
-  .tooltip-container { position: relative; }
-  .tooltip-container:hover .tooltip-text { opacity: 1; transform: translateY(0); pointer-events: auto; }
-  .tooltip-text {
-    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(4px);
-    background: rgba(15,23,42,0.95); border: 1px solid rgba(148,163,184,0.15);
-    padding: 6px 12px; border-radius: 8px; font-size: 11px; color: #e2e8f0;
-    white-space: nowrap; pointer-events: none; opacity: 0; transition: all 0.2s;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 50;
-  }
-
-  /* ══════ LOADING SPINNER ══════ */
-  .spinner {
-    width: 40px; height: 40px;
-    border: 3px solid rgba(249,115,22,0.1);
-    border-top-color: #f97316;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style>
-</head>
-<body class="min-h-screen">
-
-<!-- Login Gate -->
-<div id="login-gate" class="fixed inset-0 z-[999] flex items-center justify-center" style="background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #020617 100%);">
-  <div class="text-center max-w-full sm:max-w-md mx-auto px-4 sm:px-6">
-    <!-- Logo -->
-    <div class="mb-8">
-      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-500/20">
-        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-      </div>
-      <h1 class="text-2xl font-extrabold text-white tracking-tight">RoofIgnite</h1>
-      <p class="text-dark-400 text-sm mt-1">Command Center</p>
-    </div>
-
-    <!-- Sign-in prompt -->
-    <p class="text-dark-300 text-sm mb-6">Sign in with your <span class="text-brand-400 font-semibold">@roofignite.com</span> account to continue</p>
-
-    <!-- Google Sign-In button container -->
-    <div id="google-signin-btn" class="flex justify-center mb-4"></div>
-
-    <!-- Error message -->
-    <div id="login-error" class="hidden mt-4 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3"></div>
-
-    <!-- Loading state for returning users -->
-    <div id="login-loading" class="hidden mt-4 text-dark-400 text-sm flex items-center justify-center gap-2">
-      <div class="w-4 h-4 border-2 border-brand-500/30 border-t-brand-500 rounded-full animate-spin"></div>
-      Verifying session...
-    </div>
-  </div>
-</div>
-
-<div id="app" class="flex min-h-screen hidden">
-  <!-- Mobile Header -->
-  <div class="mobile-header fixed top-0 left-0 right-0 z-[150] items-center justify-between px-3 py-2 border-b border-dark-600/30" style="background:rgba(6,11,24,0.95);backdrop-filter:blur(12px);display:none;">
-    <button onclick="toggleSidebar()" class="p-2 rounded-lg text-dark-200 hover:text-white hover:bg-dark-700/50 transition-all flex-shrink-0">
-      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-    </button>
-    <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-7 max-w-[120px] object-contain" />
-    <button onclick="refreshData()" class="p-2 rounded-lg text-dark-200 hover:text-white hover:bg-dark-700/50 transition-all flex-shrink-0">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-    </button>
-  </div>
-  <!-- Sidebar Overlay -->
-  <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
-
-  <!-- Sidebar -->
-  <aside class="sidebar fixed left-0 top-0 h-screen flex flex-col z-[200]">
-    <div class="p-5 border-b border-dark-600/50">
-      <div class="flex items-center justify-center">
-        <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-12 w-auto" />
-      </div>
-    </div>
-
-    <nav class="flex-1 py-4 px-2 space-y-0.5 overflow-y-auto">
-      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-1">Overview</div>
-      <button onclick="navigate('dashboard')" id="nav-dashboard" class="nav-item active w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/></svg>
-        <span class="font-medium">Dashboard</span>
-      </button>
-
-      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Managers</div>
-      <div id="sidebar-managers"></div>
-
-      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Pods</div>
-      <div id="sidebar-pods"></div>
-
-      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Quick Jump</div>
-      <div class="px-3">
-        <select id="account-select" onchange="navigateToAccount(this.value)" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-dark-200 px-3 py-2.5 appearance-none pr-8 focus:outline-none focus:border-brand-500">
-          <option value="">Search accounts…</option>
-        </select>
-      </div>
-
-      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Finance</div>
-      <button onclick="navigate('billing')" id="nav-billing" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        <span class="font-medium">Billing Tracker</span>
-      </button>
-
-      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Focus</div>
-      <button onclick="navigate('donttouch')" id="nav-donttouch" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-        <span class="font-medium">Gamble Mode</span>
-      </button>
-
-      <div class="text-[9px] uppercase tracking-[0.15em] text-dark-400 font-semibold px-4 mb-2 mt-5">Admin</div>
-      <button onclick="navigate('admin')" id="nav-admin" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <svg class="w-[18px] h-[18px] opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-        <span class="font-medium">Manage</span>
-      </button>
-    </nav>
-
-    <div class="p-4 border-t border-dark-600/30">
-      <div class="flex items-center gap-2.5 text-xs text-dark-400">
-        <div id="data-status" class="w-2 h-2 rounded-full bg-yellow-500 pulse"></div>
-        <span id="data-status-text" class="font-medium">Connecting…</span>
-      </div>
-      <button id="refresh-data-btn" onclick="refreshData()" class="mt-3 w-full text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1.5 justify-center py-1.5 rounded-lg hover:bg-brand-500/5 transition-all font-medium">
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-        Refresh Data
-      </button>
-    </div>
-    <!-- Signed-in user + sign out -->
-    <div id="sidebar-user" class="p-4 border-t border-dark-600/30 hidden">
-      <div class="flex items-center gap-2.5">
-        <img id="sidebar-user-pic" class="w-7 h-7 rounded-full" src="" alt="" />
-        <div class="flex-1 min-w-0">
-          <div id="sidebar-user-name" class="text-xs text-dark-200 font-medium truncate"></div>
-          <div id="sidebar-user-email" class="text-[10px] text-dark-500 truncate"></div>
-        </div>
-        <button onclick="handleSignOut()" title="Sign out" class="text-dark-500 hover:text-red-400 transition-colors flex-shrink-0">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-        </button>
-      </div>
-    </div>
-  </aside>
-
-  <!-- Main Content -->
-  <main class="flex-1 ml-0 md:ml-[260px] p-4 md:p-8 pt-[72px] md:pt-8 main-content" style="height:100vh;overflow-y:auto">
-    <div id="loading-state" class="flex items-center justify-center h-96">
-      <div class="text-center fade-in">
-        <img src="data:image/png;base64,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" alt="RoofIgnite" class="h-16 w-auto mx-auto mb-6" />
-        <div class="relative mx-auto mb-4" style="width:40px;height:40px;">
-          <div style="position:absolute;inset:0;border-radius:50%;border:3px solid rgba(100,116,139,0.15);"></div>
-          <div style="position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:#d4a843;animation:spin 0.8s linear infinite;"></div>
-        </div>
-        <p class="text-dark-300 text-sm">Loading Command Center…</p>
-      </div>
-    </div>
-    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
-    <div id="view-dashboard" class="hidden fade-in"></div>
-    <div id="view-pod" class="hidden fade-in"></div>
-    <div id="view-manager" class="hidden fade-in"></div>
-    <div id="view-account" class="hidden fade-in"></div>
-    <div id="view-billing" class="hidden fade-in"></div>
-    <div id="view-admin" class="hidden fade-in"></div>
-    <div id="view-donttouch" class="hidden fade-in"></div>
-  </main>
-</div>
-
-<script>
 // ═══════════════════════════════════════════════
 // DATA LAYER — Google Sheets Integration
 // ═══════════════════════════════════════════════
@@ -1054,7 +475,7 @@ function showAdDetailModal(adIndex) {
     return `<div id="trunc-${uid}">` +
       `<div style="font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;">${escHtml(preview)}…</div>` +
       `<button onclick="event.stopPropagation();document.getElementById('trunc-${uid}').innerHTML='<div style=\\'font-size:13px;color:#cbd5e1;line-height:1.6;white-space:pre-wrap;\\'>${escHtml(text).replace(/'/g,'\\&#39;').replace(/\n/g,'\\n')}</div>'" ` +
-      `style="color:#f97316;font-size:11px;font-weight:600;background:none;border:none;cursor:pointer;padding:4px 0;margin-top:2px;">Show more</button>` +
+      `style="color:#d4a843;font-size:11px;font-weight:600;background:none;border:none;cursor:pointer;padding:4px 0;margin-top:2px;">Show more</button>` +
       `</div>`;
   }
 
@@ -1110,7 +531,7 @@ function showAdDetailModal(adIndex) {
   if (copy.cta) {
     content += `<div style="margin-bottom:12px;">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;margin-bottom:4px;">Call to Action</div>
-      <div style="display:inline-block;background:rgba(249,115,22,0.15);color:#fdba74;font-size:12px;font-weight:600;padding:4px 12px;border-radius:6px;">${escHtml(copy.cta)}</div>
+      <div style="display:inline-block;background:rgba(212,168,67,0.15);color:#fdba74;font-size:12px;font-weight:600;padding:4px 12px;border-radius:6px;">${escHtml(copy.cta)}</div>
     </div>`;
   }
 
@@ -1840,9 +1261,57 @@ function getDate(row, idx) {
   return String(v);
 }
 
+const DATA_CACHE_KEY = 'roofignite_data_cache';
+const DATA_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+function saveDataCache() {
+  try {
+    sessionStorage.setItem(DATA_CACHE_KEY, JSON.stringify({
+      ts: Date.now(),
+      allAccounts, allCycles, allLeads, managerPodMap, SHEETS
+    }));
+  } catch(e) { /* sessionStorage full or unavailable */ }
+}
+
+function loadDataCache() {
+  try {
+    const raw = sessionStorage.getItem(DATA_CACHE_KEY);
+    if (!raw) return false;
+    const cached = JSON.parse(raw);
+    if (Date.now() - cached.ts > DATA_CACHE_TTL) return false;
+    allAccounts = cached.allAccounts;
+    allCycles = cached.allCycles;
+    allLeads = cached.allLeads;
+    managerPodMap = cached.managerPodMap;
+    if (cached.SHEETS) Object.assign(SHEETS, cached.SHEETS);
+    return true;
+  } catch(e) { return false; }
+}
+
 async function loadAllData(opts) {
   const silent = opts && opts.silent;
-  if (!silent) document.getElementById('loading-state').classList.remove('hidden');
+  if (!silent) document.getElementById('loading-state')?.classList.remove('hidden');
+
+  // v2: Try loading from sessionStorage cache for instant page transitions
+  if (!opts?.forceRefresh && loadDataCache()) {
+    console.log('[Cache] Loaded data from sessionStorage cache');
+    // Populate sidebar and account dropdown from cache
+    renderSidebarManagers();
+    renderSidebarPods();
+    // Populate account dropdown
+    const sel = document.getElementById('account-select');
+    if (sel) {
+      const active = allAccounts.filter(a => a.cycles && a.cycles.some(c => c.cycleEndDate >= getTodayStr())).sort((a,b) => a.name.localeCompare(b.name));
+      const inactive = allAccounts.filter(a => !active.includes(a)).sort((a,b) => a.name.localeCompare(b.name));
+      sel.innerHTML = '<option value="">Search accounts…</option>'
+        + active.map(a => `<option value="${a.name}|||${a.adAccountId||''}">${a.name}</option>`).join('')
+        + (inactive.length ? '<optgroup label="── Inactive ──">' + inactive.map(a => `<option value="${a.name}|||${a.adAccountId||''}">${a.name}</option>`).join('') + '</optgroup>' : '');
+    }
+    if (!silent) document.getElementById('loading-state')?.classList.add('hidden');
+    // Refresh data in background (silently update cache for next navigation)
+    setTimeout(() => loadAllData({ silent: true, forceRefresh: true }), 100);
+    return;
+  }
 
   // Auto-detect pod tabs from Google Sheet (so manually-added pods appear)
   if (APPS_SCRIPT_URL) {
@@ -1989,16 +1458,11 @@ async function loadAllData(opts) {
     }
   });
 
-  if (!silent) document.getElementById('loading-state').classList.add('hidden');
+  if (!silent) document.getElementById('loading-state')?.classList.add('hidden');
 
-  // Restore saved navigation state (or default to dashboard)
-  const savedNav = JSON.parse(localStorage.getItem('nav_state') || 'null');
-  if (savedNav && savedNav.view) {
-    try { navigate(savedNav.view, savedNav.param || undefined); }
-    catch(e) { navigate('dashboard'); }
-  } else {
-    navigate('dashboard');
-  }
+  // v2: Save to cache for instant page transitions
+  saveDataCache();
+  console.log('[Cache] Data saved to sessionStorage');
 }
 
 let _refreshBusy = false;
@@ -2319,7 +1783,7 @@ function healthScoreColor(score) {
   if (score === null) return { bg: 'rgba(100,116,139,0.2)', text: '#94a3b8' };
   if (score >= 80) return { bg: 'rgba(34,197,94,0.2)', text: '#22c55e' };
   if (score >= 60) return { bg: 'rgba(234,179,8,0.2)', text: '#eab308' };
-  if (score >= 40) return { bg: 'rgba(249,115,22,0.2)', text: '#f97316' };
+  if (score >= 40) return { bg: 'rgba(212,168,67,0.2)', text: '#d4a843' };
   return { bg: 'rgba(239,68,68,0.2)', text: '#ef4444' };
 }
 
@@ -2328,7 +1792,7 @@ function healthScoreColor(score) {
 function fatigueScoreColor(score) {
   if (score === null || score === undefined) return { bg: 'rgba(100,116,139,0.2)', text: '#94a3b8' };
   if (score >= 80) return { bg: 'rgba(239,68,68,0.2)', text: '#ef4444' };
-  if (score >= 60) return { bg: 'rgba(249,115,22,0.2)', text: '#f97316' };
+  if (score >= 60) return { bg: 'rgba(212,168,67,0.2)', text: '#d4a843' };
   if (score >= 40) return { bg: 'rgba(234,179,8,0.2)', text: '#eab308' };
   return { bg: 'rgba(34,197,94,0.2)', text: '#22c55e' };
 }
@@ -3244,6 +2708,10 @@ function renderAccountDetail(name, adAccountId) {
             <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
             Add Cycle
           </button>
+          <button onclick="openCreativeForgeModal('${esc(name)}')" class="flex items-center gap-1.5 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold text-dark-200 hover:text-white bg-gradient-to-r from-purple-500/20 to-purple-600/20 hover:from-purple-500/30 hover:to-purple-600/30 border border-purple-500/30 transition-all">
+            <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Creative Forge
+          </button>
         </div>
       </div>
     </div>
@@ -3920,7 +3388,7 @@ async function renderCycleCompCards() {
     { key: 'bookings', label: 'Bookings', valA: aggA.bookings, valB: aggB.bookings, fmt: 'n', lower: false, color: '#22c55e' },
     { key: 'spend',    label: 'Spend',    valA: aggA.spend,    valB: aggB.spend,    fmt: '$', lower: null,  color: '#fbbf24' },
     { key: 'cpl',      label: 'CPL',      valA: aggA.cpl,      valB: aggB.cpl,      fmt: '$', lower: true,  color: '#a78bfa' },
-    { key: 'cpa',      label: 'CPA',      valA: aggA.cpa,      valB: aggB.cpa,      fmt: '$', lower: true,  color: '#f97316' },
+    { key: 'cpa',      label: 'CPA',      valA: aggA.cpa,      valB: aggB.cpa,      fmt: '$', lower: true,  color: '#d4a843' },
   ];
 
   const fmtV = (v, type) => {
@@ -4018,7 +3486,7 @@ function renderAccountCPAChart(cycles, goalCPA) {
     data: {
       labels,
       datasets: [
-        { label: 'CPA', data: cycles.map(c => c.cpa), borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,0.08)', fill: true, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: '#f97316', pointBorderColor: '#1e293b', pointBorderWidth: 2, borderWidth: 2.5 },
+        { label: 'CPA', data: cycles.map(c => c.cpa), borderColor: '#d4a843', backgroundColor: 'rgba(212,168,67,0.08)', fill: true, tension: 0.4, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: '#d4a843', pointBorderColor: '#1e293b', pointBorderWidth: 2, borderWidth: 2.5 },
         ...(goalCPA ? [{ label: 'Goal', data: cycles.map(() => goalCPA), borderColor: 'rgba(148,163,184,0.35)', borderDash: [6,4], pointRadius: 0, fill: false, borderWidth: 1.5 }] : [])
       ]
     },
@@ -5153,7 +4621,7 @@ function renderSidebarManagers() {
     const acctCount = allAccounts.filter(a => a.manager === m).length;
     return `
       <button onclick="navigate('manager', '${esc(m)}')" id="nav-mgr-${key}" class="nav-item w-full flex items-center gap-3 px-4 py-2.5 text-sm text-dark-200 hover:text-white transition-all">
-        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-${c.from}/20 to-${c.to}/20 flex items-center justify-center text-[10px] font-bold text-${c.text} border border-${c.border}/20">${initial}</div>
+        <div class="w-6 h-6 rounded-full bg-gradient-to-br from-${c.from}/20 to-${c.to}/20 flex items-center justify-center text-[10px] font-bold text-${c.text}">${initial}</div>
         <span class="font-medium">${m}</span>
         <span class="ml-auto text-[10px] text-dark-500">${acctCount}</span>
         <span id="alert-badge-${key}" class="badge badge-red hidden text-[10px]">0</span>
@@ -5227,7 +4695,7 @@ function renderAdminView() {
           <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
           <span class="mobile-hide">New</span> Mgr
         </button>
-        <button onclick="adminShowNewClient=true;renderAdminView()" class="flex items-center gap-1.5 bg-gradient-to-r from-brand-500 to-brand-600 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold hover:from-brand-600 hover:to-brand-700 transition-all shadow-lg shadow-brand-500/20">
+        <button onclick="openNewClientModal()" class="flex items-center gap-1.5 bg-gradient-to-r from-brand-500 to-brand-600 text-white px-3 md:px-5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold hover:from-brand-600 hover:to-brand-700 transition-all shadow-lg shadow-brand-500/20">
           <svg class="w-3.5 h-3.5 md:w-4 md:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
           <span class="mobile-hide">New</span> Client
         </button>
@@ -5278,6 +4746,7 @@ function renderAdminView() {
 
     ${adminShowNewManager ? renderNewManagerForm() : ''}
     ${adminShowNewClient ? renderNewClientForm(managers) : ''}
+    <!-- New Client Modal rendered separately -->
 
     <!-- Greg Control Center -->
     <div class="glass rounded-2xl p-5 mb-6">
@@ -6155,6 +5624,26 @@ async function createNewClient() {
     } else {
       showToast(`⚠️ "${name}" created locally, but failed to save to Sheet`, 'error');
     }
+
+    // Auto-create Drive folder structure
+    try {
+      // Check if folder already exists (possible dupe from another client or old data)
+      const checkResult = await writeToSheet('checkClientFolder', { clientName: name }, { silent: true });
+      if (checkResult.ok && checkResult.exists) {
+        // Folder exists — ask user to confirm
+        if (confirm(`A folder named "${name}" already exists in Master Creatives. Use the existing folder? Click Cancel to skip folder creation.`)) {
+          // Ensure subfolders exist in the existing folder
+          await writeToSheet('createClientFolder', { clientName: name }, { silent: true });
+          showToast('Drive folders ready ✓', 'success');
+        }
+      } else {
+        // No existing folder — create it
+        await writeToSheet('createClientFolder', { clientName: name }, { silent: true });
+        showToast('Drive folders created ✓', 'success');
+      }
+    } catch(e) {
+      console.warn('Drive folder creation failed:', e);
+    }
   } else {
     showToast(`Created "${name}" under ${mgr} (local only — connect Apps Script to save)`, 'warning');
   }
@@ -6904,8 +6393,10 @@ async function quickEditCycle(accountName, cycleName) {
   if (c.dailyBudget !== undefined) acct.dailyBudget = c.dailyBudget;
   if (c.monthlyBudget !== undefined) acct.monthlyBudget = c.monthlyBudget;
 
-  // Re-render to show changes
-  navigate('account', { name: accountName, adAccountId: acct.adAccountId });
+  // Re-render to show changes (don't navigate — that reloads the page and loses local edits)
+  if (document.getElementById('view-account')) {
+    renderAccountDetail(accountName, acct.adAccountId);
+  }
 
   if (APPS_SCRIPT_URL) {
     const result = await writeToSheet('updateCycle', {
@@ -6933,7 +6424,9 @@ async function saveCpcSettings(accountName, cycleName) {
   const multVal = document.getElementById('qe-cpc-mult')?.value;
   c.cpcMultiplier = multVal !== '' ? parseFloat(multVal) || null : null;
 
-  navigate('account', { name: accountName, adAccountId: acct.adAccountId });
+  if (document.getElementById('view-account')) {
+    renderAccountDetail(accountName, acct.adAccountId);
+  }
 
   if (APPS_SCRIPT_URL) {
     const result = await writeToSheet('updateCycle', {
@@ -6965,7 +6458,9 @@ async function saveGregGoal(accountName, cycleName) {
   c.gregGoal = parseFloat(val) || null;
   acct.gregGoal = c.gregGoal;
 
-  navigate('account', { name: accountName, adAccountId: acct.adAccountId });
+  if (document.getElementById('view-account')) {
+    renderAccountDetail(accountName, acct.adAccountId);
+  }
 
   if (APPS_SCRIPT_URL) {
     const result = await writeToSheet('updateCycle', {
@@ -7089,9 +6584,9 @@ async function executeAddCycle(accountName) {
   acct.cycles.push(newCycle);
 
   // Re-render whatever view we're on without breaking it
-  if (currentView === 'account') {
+  if (document.getElementById('view-account')) {
     renderAccountDetail(accountName);
-  } else {
+  } else if (document.getElementById('view-admin')) {
     renderAdminView();
   }
 
@@ -7154,7 +6649,7 @@ const WRITE_ACTION_LABELS = {
   deletePod:            'Deleting pod',
 };
 // Read-only actions that should NOT show the blocking modal
-const READ_ONLY_ACTIONS = ['getSheetList', 'getSlackConfig', 'getSlackNotifyToggles', 'getPodRegistry'];
+const READ_ONLY_ACTIONS = ['getSheetList', 'getSlackConfig', 'getSlackNotifyToggles', 'getPodRegistry', 'listCreativeFiles', 'getClientLocale', 'checkClientFolder', 'getCreativeQueue', 'getMetaToken'];
 
 function showWriteProgressModal_(action) {
   const label = WRITE_ACTION_LABELS[action] || 'Saving changes';
@@ -7163,14 +6658,14 @@ function showWriteProgressModal_(action) {
   overlay.className = 'fixed inset-0 z-[999] flex items-center justify-center';
   overlay.style.cssText = 'background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);';
   overlay.innerHTML = `
-    <div class="glass rounded-2xl p-8 max-w-sm w-full mx-4 text-center scale-in" style="border:1px solid rgba(249,115,22,0.2);box-shadow:0 0 40px rgba(249,115,22,0.1);">
+    <div class="glass rounded-2xl p-8 max-w-sm w-full mx-4 text-center scale-in" style="border:1px solid rgba(212,168,67,0.2);box-shadow:0 0 40px rgba(212,168,67,0.1);">
       <div class="relative mx-auto mb-5" style="width:48px;height:48px;">
-        <div style="width:48px;height:48px;border:3px solid rgba(100,116,139,0.2);border-top-color:#f97316;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <div style="width:48px;height:48px;border:3px solid rgba(100,116,139,0.2);border-top-color:#d4a843;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
       </div>
       <p class="text-white text-sm font-semibold mb-1">${label}...</p>
       <p class="text-dark-400 text-xs">Syncing with Google Sheets — do not close this page</p>
       <div class="mt-4 w-full bg-dark-700/50 rounded-full h-1 overflow-hidden">
-        <div class="h-full rounded-full" style="background:linear-gradient(90deg,#f97316,#fb923c);animation:progressPulse 1.5s ease-in-out infinite;width:100%;"></div>
+        <div class="h-full rounded-full" style="background:linear-gradient(90deg,#d4a843,#e0bc5e);animation:progressPulse 1.5s ease-in-out infinite;width:100%;"></div>
       </div>
     </div>
   `;
@@ -7452,11 +6947,13 @@ function onAuthSuccess(user, freshLogin) {
     document.getElementById('sidebar-user-name').textContent = user.name;
     document.getElementById('sidebar-user-email').textContent = user.email;
     const pic = document.getElementById('sidebar-user-pic');
-    if (user.picture) { pic.src = user.picture; } else { pic.classList.add('hidden'); }
+    if (user.picture) { pic.src = user.picture; pic.style.display = ''; } else { pic.style.display = 'none'; }
   }
 
-  // Load dashboard data (no auto-refresh — use the Refresh Data button in sidebar)
-  loadAllData();
+  // v2: Each page registers its init function on window._onAuthReady
+  if (typeof window._onAuthReady === 'function') {
+    window._onAuthReady();
+  }
 }
 
 function handleSignOut() {
@@ -7555,9 +7052,14 @@ function renderDontTouch() {
       html += '<div class="text-4xl font-black text-yellow-300 mb-2">15 Minute Break!</div>';
       html += '<div class="text-dark-400 text-sm">You earned it. Step away, grab coffee, touch grass.</div>';
     } else {
+      var acctObj = allAccounts.find(function(a) { return a.name === dtCurrentAccount; });
+      var acctLink = 'account.html?name=' + encodeURIComponent(dtCurrentAccount) + '&adAccountId=' + encodeURIComponent((acctObj && acctObj.adAccountId) || '');
       html += '<div class="text-orange-400 text-xs uppercase tracking-widest font-bold mb-3">YOUR MISSION</div>';
       html += '<div class="text-4xl font-black text-white mb-2">' + dtCurrentAccount + '</div>';
-      html += '<div class="text-dark-400 text-sm">Focus on this account. Click "I\'m Done" when you\'re finished.</div>';
+      html += '<div class="text-dark-400 text-sm mb-5">Focus on this account. Click "I\'m Done" when you\'re finished.</div>';
+      html += '<a href="' + acctLink + '" class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-brand-500/20 border border-brand-500/30 text-brand-400 hover:bg-brand-500/30 transition-all">';
+      html += '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>';
+      html += 'Go to Account</a>';
     }
     html += '</div>';
     html += '<div class="text-center mb-8">';
@@ -7569,8 +7071,8 @@ function renderDontTouch() {
     // Case opening strip
     html += '<div class="glass rounded-2xl p-6 mb-6 overflow-hidden">';
     html += '<div class="relative" style="height:120px;">';
-    html += '<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:20;width:3px;height:120px;background:linear-gradient(to bottom,#f97316,#f97316 85%,transparent);"></div>';
-    html += '<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);z-index:21;width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:14px solid #f97316;"></div>';
+    html += '<div style="position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:20;width:3px;height:120px;background:linear-gradient(to bottom,#d4a843,#d4a843 85%,transparent);"></div>';
+    html += '<div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);z-index:21;width:0;height:0;border-left:10px solid transparent;border-right:10px solid transparent;border-top:14px solid #d4a843;"></div>';
     html += '<div id="dt-strip" style="display:flex;position:absolute;top:0;left:0;height:120px;transition:none;will-change:transform;"></div>';
     html += '</div></div>';
     // Spin button
@@ -7714,21 +7216,21 @@ function dtSpin() {
   // Fast ticks with sound
   let tickInterval = setInterval(() => {
     playTick(800 + Math.random() * 400, 0.06);
-    strip.parentElement.style.boxShadow = '0 0 20px rgba(249,115,22,0.3)';
+    strip.parentElement.style.boxShadow = '0 0 20px rgba(212,168,67,0.3)';
     setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 50);
   }, 80);
 
   // Slow down ticks
   setTimeout(() => { clearInterval(tickInterval); tickInterval = setInterval(() => {
     playTick(600 + Math.random() * 200, 0.1);
-    strip.parentElement.style.boxShadow = '0 0 30px rgba(249,115,22,0.4)';
+    strip.parentElement.style.boxShadow = '0 0 30px rgba(212,168,67,0.4)';
     setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 100);
   }, 200); }, 3000);
 
   // Even slower near the end
   setTimeout(() => { clearInterval(tickInterval); tickInterval = setInterval(() => {
     playTick(500, 0.12);
-    strip.parentElement.style.boxShadow = '0 0 35px rgba(249,115,22,0.5)';
+    strip.parentElement.style.boxShadow = '0 0 35px rgba(212,168,67,0.5)';
     setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 150);
   }, 400); }, 5000);
 
@@ -7736,7 +7238,7 @@ function dtSpin() {
   setTimeout(() => {
     clearInterval(tickInterval);
     playWinSound();
-    strip.parentElement.style.boxShadow = '0 0 40px rgba(249,115,22,0.6)';
+    strip.parentElement.style.boxShadow = '0 0 40px rgba(212,168,67,0.6)';
     setTimeout(() => { strip.parentElement.style.boxShadow = ''; }, 500);
 
     dtSpinLocked = true;
@@ -7753,10 +7255,15 @@ function dtSpin() {
         '<div class="text-4xl font-black text-yellow-300 mb-2">15 Minute Break!</div>' +
         '<div class="text-dark-400 text-sm">You earned it. Step away, grab coffee, touch grass.</div>';
     } else {
+      var acctObj = allAccounts.find(function(a) { return a.name === winnerName; });
+      var acctLink = 'account.html?name=' + encodeURIComponent(winnerName) + '&adAccountId=' + encodeURIComponent((acctObj && acctObj.adAccountId) || '');
       document.getElementById('dt-result-header').innerHTML =
         '<div class="text-orange-400 text-xs uppercase tracking-widest font-bold mb-3">YOUR MISSION</div>' +
         '<div class="text-4xl font-black text-white mb-2">' + winnerName + '</div>' +
-        '<div class="text-dark-400 text-sm">Focus on this account. Click "I\'m Done" when you\'re finished.</div>';
+        '<div class="text-dark-400 text-sm mb-5">Focus on this account. Click "I\'m Done" when you\'re finished.</div>' +
+        '<a href="' + acctLink + '" class="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold bg-brand-500/20 border border-brand-500/30 text-brand-400 hover:bg-brand-500/30 transition-all">' +
+        '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>' +
+        'Go to Account</a>';
     }
     document.getElementById('dt-done-area').style.display = 'block';
 
@@ -7793,9 +7300,899 @@ function dtFinish() {
 }
 
 // ═══════════════════════════════════════════════
-// INIT
+// INIT — v2: disabled, each page handles its own init
 // ═══════════════════════════════════════════════
-checkExistingSession();
-</script>
-</body>
-</html>
+// checkExistingSession();
+// ═══════════════════════════════════════════════
+// CREATIVE FORGE MODAL
+// ═══════════════════════════════════════════════
+
+let _cfModalClient = null;
+let _cfLocaleCache = {};
+
+const CF_SECTIONS = [
+  { key: 'reps', label: 'Approved Reps', subfolder: 'Approved AI References/Reps', hint: 'Photos of company representatives' },
+  { key: 'logos', label: 'Approved Logos', subfolder: 'Approved AI References/Logos', hint: 'Company logo files' },
+  { key: 'vehicles', label: 'Approved Vehicles', subfolder: 'Approved AI References/Vehicles', hint: 'Company truck/vehicle photos' },
+  { key: 'topPerformers', label: 'Top Performers', subfolder: 'Top Performers', hint: 'Best-performing ad creatives', noUpload: true },
+];
+
+async function openCreativeForgeModal(clientName) {
+  _cfModalClient = clientName;
+
+  // Create modal overlay
+  const modal = document.createElement('div');
+  modal.id = 'cf-modal';
+  modal.className = 'fixed inset-0 z-[500] flex items-start justify-center overflow-y-auto';
+  modal.style.background = 'rgba(0,0,0,0.7)';
+  modal.style.backdropFilter = 'blur(4px)';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  modal.innerHTML = `
+    <div class="w-full max-w-4xl mx-4 my-8 rounded-2xl" style="background:linear-gradient(135deg,rgba(15,23,42,0.95),rgba(30,41,59,0.9));border:1px solid rgba(148,163,184,0.1);">
+      <div class="flex items-center justify-between p-6 border-b border-dark-600/30">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Creative Forge
+          </h2>
+          <p class="text-dark-400 text-sm mt-1">${clientName}</p>
+        </div>
+        <button onclick="document.getElementById('cf-modal').remove()" class="text-dark-400 hover:text-white transition-colors p-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="cf-modal-body" class="p-6">
+        <div class="flex items-center justify-center py-12">
+          <div class="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin"></div>
+          <span class="ml-3 text-dark-400 text-sm">Loading creative assets...</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Load content
+  await loadCreativeForgeContent(clientName);
+}
+
+async function loadCreativeForgeContent(clientName) {
+  const body = document.getElementById('cf-modal-body');
+  if (!body) return;
+
+  // Check if folder exists first, only create if needed
+  const checkResult = await writeToSheet('checkClientFolder', { clientName }, { silent: true });
+  if (checkResult.ok && !checkResult.exists) {
+    // Folder doesn't exist - create it
+    const ensureResult = await writeToSheet('createClientFolder', { clientName }, { silent: true });
+    if (!ensureResult.ok) {
+      body.innerHTML = `
+        <div class="text-center py-12">
+          <svg class="w-12 h-12 text-dark-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+          <p class="text-dark-300 text-lg font-semibold mb-2">Could not set up folders for "${clientName}"</p>
+          <p class="text-dark-500 text-sm mb-6">${ensureResult.error || 'Unknown error'}</p>
+          <button onclick="loadCreativeForgeContent('${esc(clientName)}')" class="px-6 py-3 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/20 transition-all">
+            Retry
+          </button>
+        </div>
+      `;
+      return;
+    }
+  }
+
+  // Load locale from cache or fetch from sheet
+  let locale = _cfLocaleCache[clientName];
+  if (locale === undefined) {
+    try {
+      const localeResult = await writeToSheet('getClientLocale', { clientName }, { silent: true });
+      locale = (localeResult.ok && localeResult.locale) ? localeResult.locale : '';
+      _cfLocaleCache[clientName] = locale;
+    } catch(e) {
+      locale = '';
+    }
+  }
+
+  // Build the sections
+  let html = `
+    <!-- Locale Setting -->
+    <div class="mb-6">
+      <label class="text-xs uppercase tracking-wider text-dark-400 font-semibold mb-2 block">Client Location / Locale</label>
+      <div class="flex gap-2">
+        <input type="text" id="cf-locale-input" value="${locale}" placeholder="e.g. Fort Lauderdale, Florida (South Florida)" class="flex-1 bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-dark-200 px-4 py-2.5 focus:outline-none focus:border-purple-500 transition-colors" />
+        <button onclick="saveCreativeForgeLocale('${esc(clientName)}')" class="px-4 py-2 rounded-xl text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-all">Save</button>
+      </div>
+    </div>
+    <hr class="border-dark-600/30 mb-6">
+  `;
+
+  // Add each image section
+  for (const section of CF_SECTIONS) {
+    html += `
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="text-sm font-semibold text-white">${section.label}</h3>
+          <p class="text-xs text-dark-500">${section.hint}</p>
+        </div>
+        ${section.noUpload ? '' : `<label class="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-all cursor-pointer">
+          <svg class="w-3.5 h-3.5 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          Upload
+          <input type="file" accept="image/*" multiple class="hidden" onchange="handleCreativeUpload(event, '${esc(clientName)}', '${section.subfolder}', '${section.key}')" />
+        </label>`}
+      </div>
+      <div id="cf-grid-${section.key}" class="grid grid-cols-4 md:grid-cols-6 gap-3">
+        <div class="col-span-full text-center py-4 text-dark-500 text-xs">Loading...</div>
+      </div>
+    </div>
+    `;
+  }
+
+  // Add Generate section
+  html += `
+    <hr class="border-dark-600/30 mb-6">
+    <div class="mb-4">
+      <h3 class="text-lg font-bold text-white mb-1 flex items-center gap-2">
+        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Generate Creatives
+      </h3>
+      <p class="text-xs text-dark-500 mb-4">Add a generation job to the queue</p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1 block">Image Count</label>
+          <input type="number" id="cf-gen-count" value="12" min="1" max="30" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-3 py-2 focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1 block">Priority</label>
+          <select id="cf-gen-priority" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-3 py-2 focus:outline-none focus:border-emerald-500">
+            <option value="normal">Normal</option>
+            <option value="rush">Rush (front of queue)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1 block">Scene Type</label>
+          <select id="cf-gen-scene" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-3 py-2 focus:outline-none focus:border-emerald-500">
+            <option value="auto">Auto (from top performers)</option>
+            <option value="selfies">Selfies only</option>
+            <option value="property">Property only</option>
+            <option value="homes">Homes only (no people/trucks)</option>
+            <option value="crew">Crew only</option>
+            <option value="mixed">Mixed (all types)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1 block">Season</label>
+          <select id="cf-gen-season" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-3 py-2 focus:outline-none focus:border-emerald-500">
+            <option value="auto">Auto (current)</option>
+            <option value="spring">Spring</option>
+            <option value="summer">Summer</option>
+            <option value="fall">Fall</option>
+            <option value="winter">Winter</option>
+          </select>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1 block">Notes (optional)</label>
+        <input type="text" id="cf-gen-notes" placeholder="e.g. focus on tile roofs, more drone shots..." class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-dark-200 px-3 py-2 focus:outline-none focus:border-emerald-500" />
+      </div>
+      <button onclick="submitCreativeForgeJob('${esc(clientName)}')" class="w-full px-4 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/20 transition-all">
+        <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        Add to Queue
+      </button>
+    </div>
+
+    <!-- Queue Status -->
+    <div id="cf-queue-status" class="mb-4">
+      <h4 class="text-xs uppercase tracking-wider text-dark-400 font-semibold mb-2">Recent Jobs</h4>
+      <div class="text-xs text-dark-500">Loading queue...</div>
+    </div>
+  `;
+
+  body.innerHTML = html;
+
+  // Load files for each section in parallel
+  await Promise.all(CF_SECTIONS.map(s => loadCreativeSection(clientName, s.subfolder, s.key)));
+
+  // Load queue status
+  loadCreativeQueueStatus(clientName);
+}
+
+async function loadCreativeSection(clientName, subfolder, key) {
+  const grid = document.getElementById('cf-grid-' + key);
+  if (!grid) return;
+
+  const result = await writeToSheet('listCreativeFiles', { clientName, subfolder }, { silent: true });
+
+  if (!result.ok) {
+    grid.innerHTML = '<div class="col-span-full text-center py-4 text-red-400 text-xs">Error loading files</div>';
+    return;
+  }
+
+  const files = result.files || [];
+  if (files.length === 0) {
+    grid.innerHTML = '<div class="col-span-full text-center py-4 text-dark-500 text-xs">No files yet — upload some above</div>';
+    return;
+  }
+
+  grid.innerHTML = files.map(f => `
+    <div class="relative group rounded-xl overflow-hidden border border-dark-600/30 hover:border-purple-500/30 transition-all" style="aspect-ratio:1;">
+      <img src="${f.thumbnailUrl}" alt="${f.name}" class="w-full h-full object-cover" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'><rect fill=\\'%231e293b\\' width=\\'100\\' height=\\'100\\'/><text x=\\'50\\' y=\\'55\\' text-anchor=\\'middle\\' fill=\\'%2364748b\\' font-size=\\'12\\'>No preview</text></svg>'" />
+      <button onclick="event.stopPropagation();deleteCreativeFile('${f.id}', '${esc(clientName)}', '${subfolder}', '${key}')" style="position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:#ef4444;color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;z-index:20;border:none;cursor:pointer;line-height:1;" title="Delete">×</button>
+      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onclick="event.stopPropagation();showImagePreview('${f.thumbnailUrl.replace('=w200','=w800')}', '${esc(f.name)}')">
+        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/></svg>
+      </div>
+      <div class="absolute bottom-0 left-0 right-0 bg-black/60 px-2 py-1 text-[10px] text-dark-200 truncate">${f.name}</div>
+    </div>
+  `).join('');
+}
+
+async function handleCreativeUpload(event, clientName, subfolder, key) {
+  const files = event.target.files;
+  if (!files || files.length === 0) return;
+
+  const grid = document.getElementById('cf-grid-' + key);
+  if (grid) {
+    const spinner = document.createElement('div');
+    spinner.className = 'col-span-full text-center py-2 text-purple-400 text-xs';
+    spinner.innerHTML = '<div class="w-4 h-4 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin inline-block mr-2"></div>Uploading...';
+    grid.prepend(spinner);
+  }
+
+  for (const file of files) {
+    try {
+      const base64 = await fileToBase64(file);
+      await writeToSheet('uploadCreativeFile', {
+        clientName,
+        subfolder,
+        fileName: file.name,
+        base64,
+        mimeType: file.type
+      });
+    } catch (e) {
+      showToast('Upload failed: ' + e.message, 'error');
+    }
+  }
+
+  // Refresh the section
+  await loadCreativeSection(clientName, subfolder, key);
+  showToast(files.length + ' file(s) uploaded', 'success');
+  event.target.value = ''; // reset input
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      // Remove data:image/...;base64, prefix
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function deleteCreativeFile(fileId, clientName, subfolder, key) {
+  if (!confirm('Delete this file?')) return;
+
+  const result = await writeToSheet('deleteCreativeFile', { fileId });
+  if (result.ok) {
+    showToast('File deleted', 'success');
+    await loadCreativeSection(clientName, subfolder, key);
+  } else {
+    showToast('Delete failed: ' + (result.error || 'Unknown error'), 'error');
+  }
+}
+
+async function createClientFolderAndRefresh(clientName) {
+  const btn = event.target.closest('button');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block mr-2"></div>Creating...';
+  }
+
+  const result = await writeToSheet('createClientFolder', { clientName });
+  if (result.ok) {
+    showToast('Folder created for ' + clientName, 'success');
+    await loadCreativeForgeContent(clientName);
+  } else {
+    showToast('Failed: ' + (result.error || 'Unknown error'), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Create Folder'; }
+  }
+}
+
+async function saveCreativeForgeLocale(clientName) {
+  const input = document.getElementById('cf-locale-input');
+  if (!input) return;
+  const locale = input.value.trim();
+  _cfLocaleCache[clientName] = locale;
+
+  const result = await writeToSheet('saveClientLocale', { clientName, locale });
+  if (result.ok) {
+    showToast('Location saved', 'success');
+  } else {
+    showToast('Save failed: ' + (result.error || 'Unknown error'), 'error');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// CREATIVE FORGE QUEUE SUBMIT + STATUS
+// ═══════════════════════════════════════════════
+
+async function submitCreativeForgeJob(clientName) {
+  const count = parseInt(document.getElementById('cf-gen-count')?.value) || 12;
+  const priority = document.getElementById('cf-gen-priority')?.value || 'normal';
+  const scene = document.getElementById('cf-gen-scene')?.value || 'auto';
+  const season = document.getElementById('cf-gen-season')?.value || 'auto';
+  const notes = document.getElementById('cf-gen-notes')?.value || '';
+
+  // Find the account's manager
+  const acct = allAccounts.find(a => a.name === clientName);
+  const manager = acct ? acct.manager : '';
+
+  // Get current user
+  const user = JSON.parse(localStorage.getItem('roofignite_user') || '{}');
+  const requestedBy = user.name || user.email || 'Unknown';
+
+  const btn = event?.target?.closest('button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Adding to queue...'; }
+
+  const result = await writeToSheet('addToCreativeQueue', {
+    clientName,
+    requestedBy,
+    imageCount: count,
+    sceneOverride: scene,
+    season,
+    priority,
+    notes,
+    manager,
+  });
+
+  if (result.ok) {
+    showToast(`Queued: ${count} images for ${clientName} (${priority}${season !== 'auto' ? ', ' + season : ''})`, 'success');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg> Add to Queue'; }
+    loadCreativeQueueStatus(clientName);
+  } else {
+    showToast('Queue failed: ' + (result.error || ''), 'error');
+    if (btn) { btn.disabled = false; btn.textContent = 'Add to Queue'; }
+  }
+}
+
+async function loadCreativeQueueStatus(clientName) {
+  const container = document.getElementById('cf-queue-status');
+  if (!container) return;
+
+  const result = await writeToSheet('getCreativeQueue', { clientName }, { silent: true });
+  if (!result.ok || !result.jobs || result.jobs.length === 0) {
+    container.innerHTML = '<h4 class="text-xs uppercase tracking-wider text-dark-400 font-semibold mb-2">Recent Jobs</h4><div class="text-xs text-dark-500">No jobs yet</div>';
+    return;
+  }
+
+  const statusColors = {
+    queued: 'bg-yellow-500/20 text-yellow-400',
+    processing: 'bg-blue-500/20 text-blue-400',
+    complete: 'bg-emerald-500/20 text-emerald-400',
+    failed: 'bg-red-500/20 text-red-400',
+  };
+
+  const statusIcons = {
+    queued: '⏳',
+    processing: '⚡',
+    complete: '✅',
+    failed: '❌',
+  };
+
+  // Show last 5 jobs
+  const jobs = result.jobs.slice(0, 5);
+
+  container.innerHTML = '<h4 class="text-xs uppercase tracking-wider text-dark-400 font-semibold mb-2">Recent Jobs</h4>' +
+    jobs.map(j => {
+      const status = (j.Status || 'queued').toLowerCase();
+      const color = statusColors[status] || statusColors.queued;
+      const icon = statusIcons[status] || '⏳';
+      const time = j['Requested At'] ? new Date(j['Requested At']).toLocaleString() : '';
+      return `<div class="flex items-center justify-between py-2 px-3 rounded-lg bg-dark-800/40 mb-1.5">
+        <div class="flex items-center gap-2">
+          <span class="text-sm">${icon}</span>
+          <div>
+            <span class="text-xs text-dark-200">${j['Image Count'] || 12} images</span>
+            ${j.Version ? '<span class="text-xs text-emerald-400 ml-2">' + j.Version + '</span>' : ''}
+            ${j.Error ? '<span class="text-xs text-red-400 ml-2">' + j.Error.substring(0, 40) + '</span>' : ''}
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-dark-500">${time}</span>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${color}">${status}</span>
+        </div>
+      </div>`;
+    }).join('');
+
+  // Auto-refresh if any job is processing
+  if (jobs.some(j => (j.Status || '').toLowerCase() === 'processing')) {
+    setTimeout(() => loadCreativeQueueStatus(clientName), 10000);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// IMAGE PREVIEW LIGHTBOX
+// ═══════════════════════════════════════════════
+
+function showImagePreview(url, name) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);';
+  overlay.setAttribute('data-lightbox', 'true');
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div class="relative max-w-4xl max-h-[90vh] mx-4">
+      <button onclick="this.closest('[data-lightbox]').remove()" class="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-dark-700 border border-dark-600 text-white flex items-center justify-center hover:bg-dark-600 transition-all z-10">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+      <img src="${url}" alt="${name}" class="max-w-full max-h-[85vh] rounded-xl shadow-2xl" />
+      <p class="text-center text-dark-300 text-sm mt-3">${name}</p>
+    </div>
+  `;
+
+  // Append inside CF modal if open (same stacking context), otherwise body
+  const cfModal = document.getElementById('cf-modal');
+  (cfModal || document.body).appendChild(overlay);
+}
+
+// ═══════════════════════════════════════════════
+// NEW CLIENT MODAL (2-step)
+// ═══════════════════════════════════════════════
+
+let _newClientStep = 1;
+let _newClientName = '';
+
+function openNewClientModal() {
+  _newClientStep = 1;
+  _newClientName = '';
+  const managers = getManagers();
+
+  const modal = document.createElement('div');
+  modal.id = 'new-client-modal';
+  modal.className = 'fixed inset-0 z-[500] flex items-start justify-center overflow-y-auto';
+  modal.style.background = 'rgba(0,0,0,0.7)';
+  modal.style.backdropFilter = 'blur(4px)';
+  modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+  modal.innerHTML = `
+    <div class="w-full max-w-3xl mx-4 my-8 rounded-2xl" style="background:linear-gradient(135deg,rgba(15,23,42,0.95),rgba(30,41,59,0.9));border:1px solid rgba(148,163,184,0.1);">
+      <div class="flex items-center justify-between p-6 border-b border-dark-600/30">
+        <div>
+          <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+            New Client
+          </h2>
+          <p class="text-dark-400 text-sm mt-1" id="ncm-step-label">Step 1 of 2 — Client Details</p>
+        </div>
+        <button onclick="document.getElementById('new-client-modal').remove()" class="text-dark-400 hover:text-white transition-colors p-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="ncm-body" class="p-6">
+        ${renderNewClientStep1(managers)}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+function renderNewClientStep1(managers) {
+  if (!managers) managers = getManagers();
+  return `
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Client Name *</label>
+        <input id="ncm-name" type="text" placeholder="e.g. Apex Roofing" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        <div class="text-[9px] text-red-400/80 mt-1">Must match the logbook name EXACTLY</div>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Account Manager *</label>
+        <select id="ncm-manager" onchange="ncmUpdatePod()" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
+          ${managers.map(m => '<option value="' + m + '">' + m + '</option>').join('')}
+        </select>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Pod *</label>
+        <select id="ncm-pod" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500">
+          ${Object.keys(SHEETS).map(p => {
+            const label = p.replace(/ - RoofIgnite/i, '');
+            const autoSelected = (managerPodMap[managers[0]] === p) ? 'selected' : '';
+            return '<option value="' + p + '" ' + autoSelected + '>' + label + '</option>';
+          }).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Meta Ad Account ID</label>
+        <input id="ncm-adid" type="text" placeholder="e.g. 1234567890" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+      </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Booked Goal</label>
+        <input id="ncm-booked" type="number" placeholder="6" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Daily Budget ($)</label>
+        <input id="ncm-daily" type="number" placeholder="50" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+        <div class="text-[9px] text-dark-500 mt-1">Monthly = daily × 28</div>
+      </div>
+      <div>
+        <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Cycle Start Date</label>
+        <input id="ncm-start" type="date" value="${new Date().toISOString().split('T')[0]}" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-white px-4 py-2.5 focus:outline-none focus:border-brand-500" />
+      </div>
+    </div>
+    <div class="flex justify-end gap-3">
+      <button onclick="document.getElementById('new-client-modal').remove()" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-300 hover:text-white bg-dark-700/50 border border-dark-600/30 transition-all">Cancel</button>
+      <button onclick="ncmGoToStep2()" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-brand-500 to-brand-600 hover:from-brand-600 hover:to-brand-700 shadow-lg shadow-brand-500/20 transition-all">Next → Creative Forge</button>
+    </div>
+  `;
+}
+
+function ncmUpdatePod() {
+  const mgr = document.getElementById('ncm-manager')?.value;
+  const podSelect = document.getElementById('ncm-pod');
+  if (podSelect && mgr && managerPodMap[mgr]) {
+    const autoPod = managerPodMap[mgr];
+    if (podSelect.querySelector('option[value="' + autoPod + '"]')) {
+      podSelect.value = autoPod;
+    }
+  }
+}
+
+async function ncmGoToStep2() {
+  // Validate step 1
+  const name = document.getElementById('ncm-name')?.value?.trim();
+  if (!name) { showToast('Please enter a client name', 'error'); return; }
+  if (allAccounts.find(a => a.name.toLowerCase() === name.toLowerCase())) {
+    showToast('Client already exists in the sheet', 'error'); return;
+  }
+
+  _newClientName = name;
+  _newClientStep = 2;
+
+  const stepLabel = document.getElementById('ncm-step-label');
+  if (stepLabel) stepLabel.textContent = 'Step 2 of 2 — Creative Forge Setup';
+
+  const body = document.getElementById('ncm-body');
+  if (!body) return;
+
+  body.innerHTML = `
+    <div class="mb-5">
+      <p class="text-dark-300 text-sm">Set up Creative Forge for <strong class="text-white">${name}</strong>. You can skip this and add later from the account page.</p>
+    </div>
+
+    <!-- Locale -->
+    <div class="mb-5">
+      <label class="text-[10px] uppercase tracking-wider text-dark-400 font-semibold mb-1.5 block">Client Location / Locale</label>
+      <input type="text" id="ncm-locale" placeholder="e.g. Fort Lauderdale, Florida (South Florida)" class="w-full bg-dark-800/80 border border-dark-600/50 rounded-xl text-sm text-dark-200 px-4 py-2.5 focus:outline-none focus:border-purple-500 transition-colors" />
+    </div>
+
+    <!-- Upload sections -->
+    <div class="mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <div><h3 class="text-sm font-semibold text-white">Approved Reps</h3><p class="text-xs text-dark-500">Photos of company representatives</p></div>
+        <label class="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-all cursor-pointer">
+          + Upload <input type="file" accept="image/*" multiple class="hidden" onchange="ncmStageFiles(event, 'reps')" />
+        </label>
+      </div>
+      <div id="ncm-preview-reps" class="flex flex-wrap gap-2 min-h-[40px]"><span class="text-xs text-dark-500">No files selected</span></div>
+    </div>
+
+    <div class="mb-5">
+      <div class="flex items-center justify-between mb-2">
+        <div><h3 class="text-sm font-semibold text-white">Approved Logos</h3><p class="text-xs text-dark-500">Company logo files</p></div>
+        <label class="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-all cursor-pointer">
+          + Upload <input type="file" accept="image/*" multiple class="hidden" onchange="ncmStageFiles(event, 'logos')" />
+        </label>
+      </div>
+      <div id="ncm-preview-logos" class="flex flex-wrap gap-2 min-h-[40px]"><span class="text-xs text-dark-500">No files selected</span></div>
+    </div>
+
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <div><h3 class="text-sm font-semibold text-white">Approved Vehicles</h3><p class="text-xs text-dark-500">Company truck/vehicle photos</p></div>
+        <label class="px-3 py-1.5 rounded-lg text-xs font-semibold text-purple-400 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 transition-all cursor-pointer">
+          + Upload <input type="file" accept="image/*" multiple class="hidden" onchange="ncmStageFiles(event, 'vehicles')" />
+        </label>
+      </div>
+      <div id="ncm-preview-vehicles" class="flex flex-wrap gap-2 min-h-[40px]"><span class="text-xs text-dark-500">No files selected</span></div>
+    </div>
+
+    <div class="flex justify-between gap-3">
+      <button onclick="ncmBackToStep1()" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-300 hover:text-white bg-dark-700/50 border border-dark-600/30 transition-all">← Back</button>
+      <div class="flex gap-3">
+        <button onclick="ncmFinish(true)" class="px-5 py-2 rounded-xl text-sm font-medium text-dark-400 hover:text-white bg-dark-700/50 border border-dark-600/30 transition-all">Add Later</button>
+        <button onclick="ncmFinish(false)" class="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/20 transition-all">Create Client</button>
+      </div>
+    </div>
+  `;
+}
+
+// Staged files for new client upload
+let _ncmStagedFiles = { reps: [], logos: [], vehicles: [] };
+
+function ncmStageFiles(event, category) {
+  const files = Array.from(event.target.files || []);
+  _ncmStagedFiles[category] = [..._ncmStagedFiles[category], ...files];
+
+  const grid = document.getElementById('ncm-preview-' + category);
+  if (!grid) return;
+
+  grid.innerHTML = _ncmStagedFiles[category].map((f, i) => {
+    const url = URL.createObjectURL(f);
+    return '<div class="relative rounded-lg overflow-hidden border border-dark-600/30 w-20 h-20">' +
+      '<img src="' + url + '" class="w-full h-full object-cover" />' +
+      '<button onclick="_ncmStagedFiles.' + category + '.splice(' + i + ',1);ncmRefreshPreview(\'' + category + '\')" class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500/80 text-white flex items-center justify-center text-[10px] hover:bg-red-500">×</button>' +
+      '<div class="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-[7px] text-dark-200 truncate">' + f.name + '</div>' +
+    '</div>';
+  }).join('') || '<span class="text-xs text-dark-500">No files selected</span>';
+
+  event.target.value = '';
+}
+
+function ncmRefreshPreview(category) {
+  ncmStageFiles({ target: { files: [] } }, '___'); // dummy to not add files
+  // Re-render the grid
+  const grid = document.getElementById('ncm-preview-' + category);
+  if (!grid) return;
+  grid.innerHTML = _ncmStagedFiles[category].map((f, i) => {
+    const url = URL.createObjectURL(f);
+    return '<div class="relative rounded-lg overflow-hidden border border-dark-600/30 w-20 h-20">' +
+      '<img src="' + url + '" class="w-full h-full object-cover" />' +
+      '<button onclick="_ncmStagedFiles.' + category + '.splice(' + i + ',1);ncmRefreshPreview(\'' + category + '\')" class="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-red-500/80 text-white flex items-center justify-center text-[10px] hover:bg-red-500">×</button>' +
+      '<div class="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-[7px] text-dark-200 truncate">' + f.name + '</div>' +
+    '</div>';
+  }).join('') || '<span class="text-xs text-dark-500">No files selected</span>';
+}
+
+function ncmBackToStep1() {
+  _newClientStep = 1;
+  const stepLabel = document.getElementById('ncm-step-label');
+  if (stepLabel) stepLabel.textContent = 'Step 1 of 2 — Client Details';
+  const body = document.getElementById('ncm-body');
+  if (body) body.innerHTML = renderNewClientStep1();
+  // Restore name if we had it
+  if (_newClientName) {
+    const nameInput = document.getElementById('ncm-name');
+    if (nameInput) nameInput.value = _newClientName;
+  }
+}
+
+async function ncmFinish(skipCreativeForge) {
+  // Read step 1 values (might be from stored state or re-read)
+  const modal = document.getElementById('new-client-modal');
+  const name = _newClientName;
+  if (!name) { showToast('No client name', 'error'); return; }
+
+  // Read step 1 values from the modal if we're still on step 1, otherwise use defaults
+  // These were validated in ncmGoToStep2
+  const mgr = document.getElementById('ncm-manager')?.value || getManagers()[0];
+  const pod = document.getElementById('ncm-pod')?.value || Object.keys(SHEETS)[0];
+  const adId = (document.getElementById('ncm-adid')?.value || '').trim().replace(/^act_/i, '');
+  const bookedGoal = parseFloat(document.getElementById('ncm-booked')?.value) || null;
+  const dailyBudget = parseFloat(document.getElementById('ncm-daily')?.value) || null;
+  const startDate = document.getElementById('ncm-start')?.value || new Date().toISOString().split('T')[0];
+  const endDate = new Date(new Date(startDate).getTime() + 28 * 86400000).toISOString().split('T')[0];
+
+  // If we're on step 2, read step 1 values won't work (they're gone). Store them in step transition.
+  // Actually we need to store them. Let me use the _ncmStep1Data approach.
+
+  const locale = document.getElementById('ncm-locale')?.value?.trim() || '';
+
+  // Show progress
+  const btn = event?.target?.closest('button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+
+  // Create the client in the sheet
+  const cycle1 = {
+    account: name, adAccountId: adId, pod, manager: mgr,
+    cycle: 'Cycle 1', cycleStartDate: startDate, cycleEndDate: endDate,
+    bookedGoal, gregGoal: bookedGoal, cpaGoal: null, dailyBudget, monthlyBudget: dailyBudget ? dailyBudget * 28 : null,
+    totalLeads: null, osaPct: null, bookedAppts: null, estBookedAppts: null,
+    cpa: null, amountSpent: null, linkCTR: null, linkCPC: null,
+    cpm: null, frequency: null, surveyPct: null,
+    cpcMedian: null, cpcMultiplier: null,
+    accountManager: mgr, notes: '', goodToBill: 'No', billed: 'No', billingNotes: ''
+  };
+
+  const newAcct = {
+    name, manager: mgr, pod, adAccountId: adId, section: '',
+    isPaused: false, status: 'Q1 Onboarded',
+    bookedGoal, gregGoal: bookedGoal, cpaGoal: null, dailyBudget, monthlyBudget: dailyBudget ? dailyBudget * 28 : null,
+    cycleStartDate: startDate, cycleEndDate: endDate,
+    cycles: [cycle1]
+  };
+
+  allAccounts.push(newAcct);
+
+  if (APPS_SCRIPT_URL) {
+    const result = await writeToSheet('createClient', newAcct);
+    if (result.ok) {
+      showToast('Client created in sheet ✓', 'success');
+    } else {
+      showToast('Sheet save failed: ' + (result.error || ''), 'error');
+    }
+
+    // Create Drive folders (check for dupes)
+    const checkResult = await writeToSheet('checkClientFolder', { clientName: name }, { silent: true });
+    if (checkResult.ok && checkResult.exists) {
+      if (confirm('A folder named "' + name + '" already exists in Master Creatives. Use the existing folder?')) {
+        await writeToSheet('createClientFolder', { clientName: name }, { silent: true });
+      }
+    } else {
+      await writeToSheet('createClientFolder', { clientName: name }, { silent: true });
+      showToast('Drive folders created ✓', 'success');
+    }
+
+    // Save locale if provided
+    if (!skipCreativeForge && locale) {
+      await writeToSheet('saveClientLocale', { clientName: name, locale }, { silent: true });
+    }
+
+    // Upload staged files
+    if (!skipCreativeForge) {
+      const uploadMap = { reps: 'Approved AI References/Reps', logos: 'Approved AI References/Logos', vehicles: 'Approved AI References/Vehicles' };
+      for (const [category, subfolder] of Object.entries(uploadMap)) {
+        for (const file of _ncmStagedFiles[category]) {
+          try {
+            const base64 = await fileToBase64(file);
+            await writeToSheet('uploadCreativeFile', {
+              clientName: name, subfolder, fileName: file.name, base64, mimeType: file.type
+            });
+          } catch(e) {
+            console.warn('Upload failed:', file.name, e);
+          }
+        }
+      }
+      const totalUploaded = _ncmStagedFiles.reps.length + _ncmStagedFiles.logos.length + _ncmStagedFiles.vehicles.length;
+      if (totalUploaded > 0) showToast(totalUploaded + ' file(s) uploaded ✓', 'success');
+    }
+  }
+
+  // Reset staged files
+  _ncmStagedFiles = { reps: [], logos: [], vehicles: [] };
+
+  // Close modal and refresh admin
+  if (modal) modal.remove();
+  saveDataCache();
+  renderAdminView();
+}
+
+// Store step 1 data when transitioning to step 2
+let _ncmStep1Data = {};
+const _origNcmGoToStep2 = ncmGoToStep2;
+ncmGoToStep2 = async function() {
+  // Store step 1 values before they disappear
+  _ncmStep1Data = {
+    manager: document.getElementById('ncm-manager')?.value,
+    pod: document.getElementById('ncm-pod')?.value,
+    adId: document.getElementById('ncm-adid')?.value,
+    bookedGoal: document.getElementById('ncm-booked')?.value,
+    dailyBudget: document.getElementById('ncm-daily')?.value,
+    startDate: document.getElementById('ncm-start')?.value,
+  };
+  await _origNcmGoToStep2();
+};
+
+// Override ncmFinish to use stored step 1 data
+const _origNcmFinish = ncmFinish;
+ncmFinish = async function(skipCreativeForge) {
+  // Patch the DOM with stored values if we're on step 2
+  if (_newClientStep === 2 && _ncmStep1Data.manager) {
+    // These elements don't exist on step 2, so we inject hidden ones
+    const body = document.getElementById('ncm-body');
+    if (body && !document.getElementById('ncm-manager')) {
+      body.insertAdjacentHTML('beforeend',
+        '<input type="hidden" id="ncm-manager" value="' + (_ncmStep1Data.manager || '') + '">' +
+        '<input type="hidden" id="ncm-pod" value="' + (_ncmStep1Data.pod || '') + '">' +
+        '<input type="hidden" id="ncm-adid" value="' + (_ncmStep1Data.adId || '') + '">' +
+        '<input type="hidden" id="ncm-booked" value="' + (_ncmStep1Data.bookedGoal || '') + '">' +
+        '<input type="hidden" id="ncm-daily" value="' + (_ncmStep1Data.dailyBudget || '') + '">' +
+        '<input type="hidden" id="ncm-start" value="' + (_ncmStep1Data.startDate || '') + '">'
+      );
+    }
+  }
+  await _origNcmFinish(skipCreativeForge);
+};
+
+// V2 OVERRIDES
+var _origNav = typeof navigate !== 'undefined' ? navigate : function(){};
+navigate = function(view, param) {
+  switch(view) {
+    case 'dashboard': window.location = 'dashboard.html'; break;
+    case 'pod': window.location = 'dashboard.html?view=pod&param=' + encodeURIComponent(param); break;
+    case 'manager': window.location = 'dashboard.html?view=manager&param=' + encodeURIComponent(param); break;
+    case 'account': window.location = 'account.html?name=' + encodeURIComponent(param.name) + '&adAccountId=' + encodeURIComponent(param.adAccountId || ''); break;
+    case 'billing': window.location = 'billing.html'; break;
+    case 'admin': window.location = 'admin.html'; break;
+    case 'donttouch': window.location = 'donttouch.html'; break;
+    default: window.location = 'dashboard.html'; break;
+  }
+};
+var _origNavAccount = typeof navigateToAccount !== 'undefined' ? navigateToAccount : function(){};
+navigateToAccount = function(val) {
+  if (!val) return;
+  var parts = val.split('|||');
+  window.location = 'account.html?name=' + encodeURIComponent(parts[0]) + '&adAccountId=' + encodeURIComponent(parts[1] || '');
+};
+// Auth override removed — real Google Sign-In gate is active
+
+// Safe render wrappers — only render if the view container exists on the page
+var _origRenderAdmin = renderAdminView;
+renderAdminView = function() {
+  if (document.getElementById('view-admin')) _origRenderAdmin();
+};
+var _origRenderDashboard = renderDashboard;
+renderDashboard = function() {
+  if (document.getElementById('view-dashboard')) _origRenderDashboard();
+};
+var _origRenderBilling = renderBilling;
+renderBilling = function() {
+  if (document.getElementById('view-billing')) _origRenderBilling();
+};
+var _origRenderDontTouch = renderDontTouch;
+renderDontTouch = function() {
+  if (document.getElementById('view-donttouch')) _origRenderDontTouch();
+};
+
+// ═══════════════════════════════════════════════
+// V2: SIDEBAR FIXES
+// ═══════════════════════════════════════════════
+
+// 1. Highlight active page in sidebar based on current URL
+(function highlightActivePage() {
+  const page = window.location.pathname.split('/').pop() || 'dashboard.html';
+  const params = new URLSearchParams(window.location.search);
+  const view = params.get('view');
+  const param = params.get('param');
+
+  // Remove all existing active classes
+  document.querySelectorAll('.nav-item.active').forEach(el => el.classList.remove('active'));
+
+  // Set active based on current page
+  if (page === 'dashboard.html' && !view) {
+    document.getElementById('nav-dashboard')?.classList.add('active');
+  } else if (page === 'dashboard.html' && view === 'manager' && param) {
+    const key = param.toLowerCase().replace(/\s+/g, '-');
+    document.getElementById('nav-mgr-' + key)?.classList.add('active');
+  } else if (page === 'dashboard.html' && view === 'pod' && param) {
+    const podId = 'nav-pod-' + param.replace(/\s+/g, '-');
+    document.getElementById(podId)?.classList.add('active');
+  } else if (page === 'billing.html') {
+    document.getElementById('nav-billing')?.classList.add('active');
+  } else if (page === 'admin.html') {
+    document.getElementById('nav-admin')?.classList.add('active');
+  } else if (page === 'donttouch.html') {
+    document.getElementById('nav-donttouch')?.classList.add('active');
+  }
+})();
+
+// 2. Re-highlight after sidebar managers/pods are rendered (they get rebuilt by loadAllData)
+var _origRenderSidebarManagers = renderSidebarManagers;
+renderSidebarManagers = function() {
+  _origRenderSidebarManagers();
+  // Re-apply active highlight for manager pages
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('view') === 'manager' && params.get('param')) {
+    const key = params.get('param').toLowerCase().replace(/\s+/g, '-');
+    document.getElementById('nav-mgr-' + key)?.classList.add('active');
+  }
+};
+var _origRenderSidebarPods = renderSidebarPods;
+renderSidebarPods = function() {
+  _origRenderSidebarPods();
+  // Re-apply active highlight for pod pages
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('view') === 'pod' && params.get('param')) {
+    const podId = 'nav-pod-' + params.get('param').replace(/\s+/g, '-');
+    document.getElementById(podId)?.classList.add('active');
+  }
+};
+
+// Sidebar collapse removed — sidebar is always visible on desktop
