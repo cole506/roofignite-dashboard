@@ -916,6 +916,8 @@ function parseSheetData(data, podName) {
   // Columns A, B, C (indices 0, 1, 2) are structural — account name, cycle label, ad account id
   // Everything else is looked up dynamically
   const COL = {
+    account:       colIdx(colMap, 'account', 'account name', 'client'),
+    cycle:         colIdx(colMap, 'cycle', 'cycle label'),
     cycleStart:    colIdx(colMap, 'cycle start date', 'cycle start', 'start date'),
     cycleEnd:      colIdx(colMap, 'cycle end date', 'cycle end', 'end date'),
     bookedGoal:    colIdx(colMap, 'booked appointment goal', 'booked appt goal', 'appt goal', 'appointment goal'),
@@ -975,12 +977,14 @@ function parseSheetData(data, podName) {
   }
 
   // === PRE-SCAN: Identify real account names by finding cellA values that appear in cycle rows ===
+  const iAccount = COL.account >= 0 ? COL.account : 0;
+  const iCycle   = COL.cycle >= 0 ? COL.cycle : 1;
   const knownAccountNames = new Set();
   for (let pi = 1; pi < rows.length; pi++) {
     const pr = rows[pi];
     if (!pr.c) continue;
-    const pA = pr.c[0] ? String(pr.c[0].v || '').trim() : '';
-    const pB = pr.c[1] ? String(pr.c[1].v || '').trim() : '';
+    const pA = pr.c[iAccount] ? String(pr.c[iAccount].v || '').trim() : '';
+    const pB = pr.c[iCycle] ? String(pr.c[iCycle].v || '').trim() : '';
     const pBL = pB.toLowerCase();
     if (pA && pB && (pBL.startsWith('cycle') || (pBL.includes('winter') && pBL.includes('cycle')))) {
       knownAccountNames.add(pA);
@@ -995,9 +999,10 @@ function parseSheetData(data, podName) {
     const row = rows[i];
     if (!row.c) continue;
 
-    const cellA = row.c[0] ? (row.c[0].v || '') : '';
-    const cellB = row.c[1] ? (row.c[1].v || '') : '';
-    const cellCraw = row.c[2] ? (row.c[2].f || row.c[2].v || '') : '';
+    const cellA = row.c[iAccount] ? (row.c[iAccount].v || '') : '';
+    const cellB = row.c[iCycle] ? (row.c[iCycle].v || '') : '';
+    const adIdColIdx = COL.adAccountId >= 0 ? COL.adAccountId : 2;
+    const cellCraw = row.c[adIdColIdx] ? (row.c[adIdColIdx].f || row.c[adIdColIdx].v || '') : '';
     const cellC = String(cellCraw).replace(/,/g, '');
 
     if (!cellA && !cellB && !cellC) continue;
@@ -1030,16 +1035,16 @@ function parseSheetData(data, podName) {
       adIdSources.push({src: 'named_col_' + COL.adAccountId, raw: s1});
       if (!adIdRaw) { const t = s1.replace(/[\s,]/g,'').replace(/^act_/i, ''); if (t.length > 3 && /^\d+$/.test(t)) adIdRaw = s1; }
     }
-    // Source 2: Column C (index 2) — traditional ad ID column
-    if (row.c[2]) {
-      const s2 = extractAdIdFromCell(row.c[2]);
-      adIdSources.push({src: 'col_C', raw: s2});
+    // Source 2: Ad Account ID column (resolved by header name)
+    if (adIdColIdx >= 0 && row.c[adIdColIdx]) {
+      const s2 = extractAdIdFromCell(row.c[adIdColIdx]);
+      adIdSources.push({src: 'col_adId_' + adIdColIdx, raw: s2});
       if (!adIdRaw) { const t = s2.replace(/[\s,]/g,'').replace(/^act_/i, ''); if (t.length > 3 && /^\d+$/.test(t)) adIdRaw = s2; }
     }
     // Source 3: Scan all cells in the row for anything that looks like a Meta ad account ID (12-17 digit number)
     if (!adIdRaw) {
       for (let ci = 0; ci < row.c.length; ci++) {
-        if (ci === 0 || ci === 1) continue; // skip name and cycle label
+        if (ci === iAccount || ci === iCycle) continue; // skip name and cycle label
         const cell = row.c[ci];
         if (!cell) continue;
         const cv = extractAdIdFromCell(cell);
