@@ -1739,71 +1739,26 @@ function getPreviousCycle(accountName, adAccountId, currentCycle) {
 function getHealthScore(acct, cycle) {
   if (!cycle) return null;
 
-  // ── PACE COMPONENT (90 pts) ──
-  let paceScore = null;
+  // Score = pace % (projected bookings vs goal)
   const bkPacing = getBookingPacing(cycle);
-  if (bkPacing) {
-    // Use pctOfGoal for a smooth 0–90 scale
-    // 100%+ of goal → 90, scales linearly down to 0
-    const pct = Math.min(bkPacing.pctOfGoal, 1.2); // cap at 120%
-    paceScore = Math.round(Math.min(90, pct * 90));
+  if (bkPacing && bkPacing.pctOfGoal !== undefined) {
+    return Math.round(bkPacing.pctOfGoal * 100);
   }
 
-  // If we have no pace data, fall back to est booked vs goal
-  if (paceScore === null && cycle.estBookedAppts !== null && cycle.bookedGoal) {
-    const ratio = Math.min(cycle.estBookedAppts / cycle.bookedGoal, 1.2);
-    paceScore = Math.round(Math.min(90, ratio * 90));
+  // Fallback: est booked vs goal
+  if (cycle.estBookedAppts !== null && cycle.bookedGoal && cycle.bookedGoal > 0) {
+    return Math.round((cycle.estBookedAppts / cycle.bookedGoal) * 100);
   }
 
-  if (paceScore === null) return null;
-
-  // ── SUPPORTING METRICS (10 pts) ──
-  let suppScore = 0;
-  let suppMax = 0;
-
-  // CPA vs Goal (up to 4 pts)
-  const cpaGoal = acct.cpaGoal || cycle.cpaGoal;
-  if (cpaGoal && cycle.cpa && cycle.cpa > 0) {
-    suppMax += 4;
-    const ratio = cycle.cpa / cpaGoal;
-    if (ratio <= 0.85) suppScore += 4;
-    else if (ratio <= 1.0) suppScore += 3;
-    else if (ratio <= 1.2) suppScore += 2;
-    else if (ratio <= 1.5) suppScore += 1;
-  }
-
-  // OSA (up to 2 pts)
-  if (cycle.osaPct !== null) {
-    suppMax += 2;
-    if (cycle.osaPct < 12) suppScore += 2;
-    else if (cycle.osaPct < 20) suppScore += 1;
-  }
-
-  // CTR (up to 2 pts)
-  if (cycle.linkCTR !== null && cycle.linkCTR > 0) {
-    suppMax += 2;
-    if (cycle.linkCTR >= 1.2) suppScore += 2;
-    else if (cycle.linkCTR >= 0.8) suppScore += 1;
-  }
-
-  // Frequency (up to 2 pts)
-  if (cycle.frequency !== null) {
-    suppMax += 2;
-    if (cycle.frequency <= 2.0) suppScore += 2;
-    else if (cycle.frequency <= 2.5) suppScore += 1;
-  }
-
-  const suppFinal = suppMax > 0 ? Math.round((suppScore / suppMax) * 10) : 5; // default 5 if no data
-
-  return Math.min(100, paceScore + suppFinal);
+  return null;
 }
 
 function healthScoreColor(score) {
-  if (score === null) return { bg: 'rgba(100,116,139,0.2)', text: '#94a3b8' };
-  if (score >= 80) return { bg: 'rgba(34,197,94,0.2)', text: '#22c55e' };
-  if (score >= 60) return { bg: 'rgba(234,179,8,0.2)', text: '#eab308' };
-  if (score >= 40) return { bg: 'rgba(212,168,67,0.2)', text: '#d4a843' };
-  return { bg: 'rgba(239,68,68,0.2)', text: '#ef4444' };
+  if (score === null) return { bg: 'rgba(100,116,139,0.2)', text: '#94a3b8' };       // gray — no data
+  if (score > 100)    return { bg: 'rgba(16,185,129,0.25)', text: '#10b981' };        // super green — 101%+
+  if (score >= 80)    return { bg: 'rgba(34,197,94,0.2)', text: '#22c55e' };           // green — 80-100%
+  if (score >= 51)    return { bg: 'rgba(249,115,22,0.2)', text: '#f97316' };          // orange — 51-79%
+  return { bg: 'rgba(220,38,38,0.25)', text: '#dc2626' };                              // super red — ≤50%
 }
 
 // Fatigue Score Color (higher = worse, inverse of health)
