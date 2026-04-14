@@ -1559,13 +1559,15 @@ function fmtDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Extended cycle detection (> 28 days)
+// Extended cycle detection: today is past day 28 of the cycle but still within the cycle
 function isExtendedCycle(cycle) {
   if (!cycle || !cycle.cycleStartDate || !cycle.cycleEndDate) return false;
   const start = parseLocalDate(cycle.cycleStartDate);
   const end = parseLocalDate(cycle.cycleEndDate);
   if (!start || !end) return false;
-  return Math.round((end - start) / 86400000) > 28;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const daysSinceStart = Math.round((today - start) / 86400000);
+  return daysSinceStart > 28 && today <= end;
 }
 
 // Metric coloring helpers
