@@ -47,6 +47,7 @@ function renderAccountDetail(name, adAccountId) {
             <div class="flex items-center gap-3">
               <h1 class="text-2xl font-extrabold text-white">${acct.name}</h1>
               ${isActive ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}
+              ${activeCyc && activeCyc.isExtended ? '<span class="badge badge-purple">Extended</span>' : ''}
             </div>
             <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} · Manager: ${acct.manager} · Ad Account: ${acct.adAccountId || 'N/A'}</p>
           </div>

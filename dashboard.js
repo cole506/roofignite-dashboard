@@ -567,7 +567,7 @@ function renderAccountTable(active, inactive, mgrName) {
                 <tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                   <td class="py-3 px-3 text-center">${hs !== null ? `<span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold" style="background:${hc.bg};color:${hc.text};">${hs}</span>` : '<span class="text-dark-500 text-xs">—</span>'}</td>
                   <td class="py-3 px-3">
-                    <div class="text-white font-medium">${a.name}</div>
+                    <div class="text-white font-medium">${a.name}${c && c.isExtended ? ' <span class="badge badge-purple ml-1">EXTENDED</span>' : ''}</div>
                     <div class="text-dark-400 text-xs">${a.manager}</div>
                   </td>
                   <td class="py-3 px-3 text-center">${fs !== null ? `<span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold" style="background:${fc.bg};color:${fc.text};">${fs}</span>` : '<span class="text-dark-500 text-xs">—</span>'}</td>

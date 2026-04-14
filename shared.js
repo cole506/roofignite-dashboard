@@ -1153,6 +1153,7 @@ function parseSheetData(data, podName) {
         cpcMultiplier:  COL.cpcMultiplier >= 0 ? getNum(row, COL.cpcMultiplier) : null,
         fatigueStatus:  COL.fatigueStatus >= 0 ? getStr(row, 'fatigueStatus') : '',
       };
+      cycleData.isExtended = isExtendedCycle(cycleData);
 
       cycles.push(cycleData);
       let parentAcct = accounts.find(a => a.name === currentAccountName && a.adAccountId === currentAdAccountId);
@@ -1556,6 +1557,15 @@ function fmtDate(dateStr) {
   const d = parseLocalDate(dateStr);
   if (!d) return dateStr;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Extended cycle detection (> 28 days)
+function isExtendedCycle(cycle) {
+  if (!cycle || !cycle.cycleStartDate || !cycle.cycleEndDate) return false;
+  const start = parseLocalDate(cycle.cycleStartDate);
+  const end = parseLocalDate(cycle.cycleEndDate);
+  if (!start || !end) return false;
+  return Math.round((end - start) / 86400000) > 28;
 }
 
 // Metric coloring helpers
