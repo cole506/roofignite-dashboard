@@ -303,7 +303,7 @@ function renderDashboard() {
   document.getElementById('top-performers').innerHTML = onTrackAccts.map(p => `
     <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer" onclick="navigate('account',{name:'${esc(p.account.name)}',adAccountId:'${p.account.adAccountId}'})">
       <div>
-        <div class="text-white text-sm font-medium">${p.account.name}</div>
+        <div class="text-white text-sm font-medium">${p.account.name}${p.cycle && p.cycle.isExtended ? ' <span class="badge badge-purple" style="font-size:9px;">EXT</span>' : ''}</div>
         <div class="text-dark-400 text-xs">${p.account.manager}</div>
       </div>
       <div class="text-right">
@@ -327,7 +327,7 @@ function renderDashboard() {
           <th class="text-left py-2 px-2">Account</th><th class="text-left py-2 px-2">Issues</th><th class="text-center py-2 px-2">Current</th><th class="text-center py-2 px-2">Threshold</th>
         </tr></thead><tbody>${alerts.map(a => a.issues.map((iss, idx) => `
           <tr class="table-row border-b border-dark-700 ${idx === 0 ? '' : 'border-t-0'}" style="cursor:pointer;" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
-            <td class="py-2 px-2 ${idx === 0 ? 'text-white font-medium' : 'text-transparent'}" style="${idx > 0 ? 'font-size:0;' : ''}">${idx === 0 ? a.account.name : ''}</td>
+            <td class="py-2 px-2 ${idx === 0 ? 'text-white font-medium' : 'text-transparent'}" style="${idx > 0 ? 'font-size:0;' : ''}">${idx === 0 ? a.account.name + (a.cycle && a.cycle.isExtended ? ' <span class="badge badge-purple" style="font-size:9px;">EXT</span>' : '') : ''}</td>
             <td class="py-2 px-2"><span class="badge ${iss.type === 'danger' ? 'badge-red' : 'badge-yellow'}" style="font-size:10px;">${iss.type === 'danger' ? '●' : '▲'}</span> <span class="${iss.type === 'danger' ? 'text-red-400' : 'text-yellow-400'} text-xs">${iss.msg}</span></td>
             <td class="py-2 px-2 text-center text-white text-xs">${iss.current || '—'}</td>
             <td class="py-2 px-2 text-center text-dark-300 text-xs">${iss.threshold || '—'}</td>
@@ -339,7 +339,7 @@ function renderDashboard() {
   document.getElementById('needs-attention').innerHTML = attention.map(a => `
     <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
       <div>
-        <div class="text-white text-sm font-medium">${a.account.name}</div>
+        <div class="text-white text-sm font-medium">${a.account.name}${a.active && a.active.isExtended ? ' <span class="badge badge-purple" style="font-size:9px;">EXT</span>' : ''}</div>
         <div class="text-dark-400 text-xs">${a.issues[0].msg}</div>
       </div>
       <span class="badge ${a.issues[0].type === 'danger' ? 'badge-red' : 'badge-yellow'}">${a.issues[0].type === 'danger' ? 'Critical' : 'Warning'}</span>
@@ -359,7 +359,7 @@ function renderDashboard() {
       return `<div class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-dark-700 transition-all" onclick="navigate('account',{name:'${esc(s.account.name)}',adAccountId:'${s.account.adAccountId}'})" title="${s.account.name}: ${s.score}/100">
         <div class="health-ring" style="background:${col.bg};color:${col.text};">${s.score}</div>
         <div>
-          <div class="text-white text-xs font-medium" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.account.name}</div>
+          <div class="text-white text-xs font-medium" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.account.name}${s.cycle && s.cycle.isExtended ? ' <span class="text-purple-400 text-[8px]">EXT</span>' : ''}</div>
           <div class="text-dark-400 text-[10px]">${s.account.manager}</div>
         </div>
       </div>`;
