@@ -2036,7 +2036,12 @@ function navigate(view, param) {
       // Remember where we came from so the back button can return there
       if (currentManager) { _navBackView = 'manager'; _navBackParam = currentManager; }
       else if (currentPod) { _navBackView = 'pod'; _navBackParam = currentPod; }
-      else { _navBackView = 'dashboard'; _navBackParam = null; }
+      else {
+        // Came from dashboard — back button goes to the account's manager view
+        const _acct = allAccounts.find(a => a.name === param.name);
+        if (_acct && _acct.manager && _acct.manager !== 'Unassigned') { _navBackView = 'manager'; _navBackParam = _acct.manager; }
+        else { _navBackView = 'dashboard'; _navBackParam = null; }
+      }
       renderAccountDetail(param.name, param.adAccountId);
       break;
     case 'billing':
