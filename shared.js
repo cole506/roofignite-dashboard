@@ -2367,7 +2367,7 @@ function renderDashboard() {
   document.getElementById('top-performers').innerHTML = onTrackAccts.map(p => `
     <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer" onclick="navigate('account',{name:'${esc(p.account.name)}',adAccountId:'${p.account.adAccountId}'})">
       <div>
-        <div class="text-white text-sm font-medium">${p.account.name}</div>
+        <div class="text-white text-sm font-medium">${p.account.name}${p.cycle && p.cycle.isExtended ? ' <span class="badge badge-purple" style="font-size:9px;">EXT</span>' : ''}</div>
         <div class="text-dark-400 text-xs">${p.account.manager}</div>
       </div>
       <div class="text-right">
@@ -2391,7 +2391,7 @@ function renderDashboard() {
           <th class="text-left py-2 px-2">Account</th><th class="text-left py-2 px-2">Issues</th><th class="text-center py-2 px-2">Current</th><th class="text-center py-2 px-2">Threshold</th>
         </tr></thead><tbody>${alerts.map(a => a.issues.map((iss, idx) => `
           <tr class="table-row border-b border-dark-700 ${idx === 0 ? '' : 'border-t-0'}" style="cursor:pointer;" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
-            <td class="py-2 px-2 ${idx === 0 ? 'text-white font-medium' : 'text-transparent'}" style="${idx > 0 ? 'font-size:0;' : ''}">${idx === 0 ? a.account.name : ''}</td>
+            <td class="py-2 px-2 ${idx === 0 ? 'text-white font-medium' : 'text-transparent'}" style="${idx > 0 ? 'font-size:0;' : ''}">${idx === 0 ? a.account.name + (a.active && a.active.isExtended ? ' <span class="badge badge-purple" style="font-size:9px;">EXT</span>' : '') : ''}</td>
             <td class="py-2 px-2"><span class="badge ${iss.type === 'danger' ? 'badge-red' : 'badge-yellow'}" style="font-size:10px;">${iss.type === 'danger' ? '●' : '▲'}</span> <span class="${iss.type === 'danger' ? 'text-red-400' : 'text-yellow-400'} text-xs">${iss.msg}</span></td>
             <td class="py-2 px-2 text-center text-white text-xs">${iss.current || '—'}</td>
             <td class="py-2 px-2 text-center text-dark-300 text-xs">${iss.threshold || '—'}</td>
@@ -2403,7 +2403,7 @@ function renderDashboard() {
   document.getElementById('needs-attention').innerHTML = attention.map(a => `
     <div class="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-dark-700 cursor-pointer" onclick="navigate('account',{name:'${esc(a.account.name)}',adAccountId:'${a.account.adAccountId}'})">
       <div>
-        <div class="text-white text-sm font-medium">${a.account.name}</div>
+        <div class="text-white text-sm font-medium">${a.account.name}${a.active && a.active.isExtended ? ' <span class="badge badge-purple" style="font-size:9px;">EXT</span>' : ''}</div>
         <div class="text-dark-400 text-xs">${a.issues[0].msg}</div>
       </div>
       <span class="badge ${a.issues[0].type === 'danger' ? 'badge-red' : 'badge-yellow'}">${a.issues[0].type === 'danger' ? 'Critical' : 'Warning'}</span>
@@ -2423,7 +2423,7 @@ function renderDashboard() {
       return `<div class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-dark-700 transition-all" onclick="navigate('account',{name:'${esc(s.account.name)}',adAccountId:'${s.account.adAccountId}'})" title="${s.account.name}: ${s.score}/100">
         <div class="health-ring" style="background:${col.bg};color:${col.text};">${s.score}</div>
         <div>
-          <div class="text-white text-xs font-medium" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.account.name}</div>
+          <div class="text-white text-xs font-medium" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.account.name}${s.cycle && s.cycle.isExtended ? ' <span class="text-purple-400 text-[8px]">EXT</span>' : ''}</div>
           <div class="text-dark-400 text-[10px]">${s.account.manager}</div>
         </div>
       </div>`;
@@ -2531,6 +2531,7 @@ function renderManagerView(mgrName) {
             <div class="flex items-center gap-3">
               <div class="text-white font-medium text-sm">${a.account.name}</div>
               <span class="badge badge-blue text-[10px]">${a.active.cycle}</span>
+              ${a.active && a.active.isExtended ? '<span class="badge badge-purple text-[10px]">EXT</span>' : ''}
             </div>
             <div class="flex flex-wrap gap-1 justify-end">
               ${a.issues.map(i => `<span class="badge ${i.type==='danger'?'badge-red':'badge-yellow'} text-[10px]">${i.msg}</span>`).join('')}
@@ -2631,7 +2632,7 @@ function renderAccountTable(active, inactive, mgrName) {
                 <tr class="table-row border-b border-dark-700/50 cursor-pointer" onclick="navigate('account',{name:'${esc(a.name)}',adAccountId:'${a.adAccountId}'})">
                   <td class="py-3 px-3 text-center">${hs !== null ? `<span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold" style="background:${hc.bg};color:${hc.text};">${hs}</span>` : '<span class="text-dark-500 text-xs">—</span>'}</td>
                   <td class="py-3 px-3">
-                    <div class="text-white font-medium">${a.name}</div>
+                    <div class="text-white font-medium">${a.name}${c && c.isExtended ? ' <span class="badge badge-purple ml-1">EXTENDED</span>' : ''}</div>
                     <div class="text-dark-400 text-xs">${a.manager}</div>
                   </td>
                   <td class="py-3 px-3 text-center">${fs !== null ? `<span class="inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold" style="background:${fc.bg};color:${fc.text};">${fs}</span>` : '<span class="text-dark-500 text-xs">—</span>'}</td>
@@ -2716,6 +2717,7 @@ function renderAccountDetail(name, adAccountId) {
             <div class="flex items-center gap-3">
               <h1 class="text-2xl font-extrabold text-white">${acct.name}</h1>
               ${isActive ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-gray">Inactive</span>'}
+              ${activeCyc && activeCyc.isExtended ? '<span class="badge badge-purple">Extended</span>' : ''}
             </div>
             <p class="text-dark-300 text-sm mt-1">${acct.pod.replace(' - RoofIgnite','')} · Manager: ${acct.manager} · Ad Account: ${acct.adAccountId || 'N/A'}</p>
           </div>
